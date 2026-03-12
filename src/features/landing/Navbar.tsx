@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router";
-import logo from "../../../assets/logo.png";
+import logo from "../../assets/logo.png";
 import { LandingButton } from "./LandingButton";
 
 export function Navbar() {

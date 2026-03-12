@@ -1,4 +1,5 @@
-import { Dispatch, SetStateAction } from "react";
+import type { Dispatch, SetStateAction } from "react";
+import { useNavigate } from "react-router";
 import {
   experienceOptions,
   goalOptions,
@@ -6,8 +7,8 @@ import {
   recommendations,
   reminderTimes,
   roleOptions,
-} from "./content";
-import { ChoiceOption, SelectedAnswers, StepKey } from "./types";
+} from "../content";
+import type { ChoiceOption, SelectedAnswers, StepKey } from "../types";
 
 interface SharedStepProps {
   go: (next: StepKey) => void;
@@ -41,6 +42,7 @@ function ChoiceList({
       {options.map((option) => (
         <button
           key={option.id}
+          type="button"
           className={`option-row ${selectedValue === option.id ? "selected" : ""}`}
           onClick={() => onSelect(option.id)}
         >
@@ -81,7 +83,7 @@ export function WelcomeStep({ go }: SharedStepProps) {
         <br />
         Let&apos;s set up your personalized experience.
       </p>
-      <button className="btn-primary" onClick={() => go("role")}>
+      <button className="btn-primary" type="button" onClick={() => go("role")}>
         Get started
       </button>
     </div>
@@ -114,6 +116,7 @@ export function RoleStep({ go, selected, setSelected }: ChoiceStepProps) {
       <button
         className="btn-primary"
         style={{ marginTop: 6 }}
+        type="button"
         onClick={() => go("goal")}
         disabled={!selected.role}
       >
@@ -149,6 +152,7 @@ export function GoalStep({ go, selected, setSelected }: ChoiceStepProps) {
       <button
         className="btn-primary"
         style={{ marginTop: 6 }}
+        type="button"
         onClick={() => go("experience")}
         disabled={!selected.goal}
       >
@@ -190,6 +194,7 @@ export function ExperienceStep({
       <button
         className="btn-primary"
         style={{ marginTop: 6 }}
+        type="button"
         onClick={() => go("pace")}
         disabled={!selected.experience}
       >
@@ -225,6 +230,7 @@ export function PaceStep({ go, selected, setSelected }: ChoiceStepProps) {
       <button
         className="btn-primary"
         style={{ marginTop: 6 }}
+        type="button"
         onClick={() => go("reminder")}
         disabled={!selected.pace}
       >
@@ -276,12 +282,13 @@ export function ReminderStep({
       <button
         className="btn-primary"
         style={{ marginBottom: 12 }}
+        type="button"
         onClick={() => go("loading")}
       >
         Save and continue
       </button>
       <div style={{ textAlign: "center" }}>
-        <button className="skip-link" onClick={() => go("loading")}>
+        <button className="skip-link" type="button" onClick={() => go("loading")}>
           I&apos;ll do this later
         </button>
       </div>
@@ -364,6 +371,8 @@ export function LoadingStep({ loadingPct }: LoadingStepProps) {
 }
 
 export function RecommendationsStep({ go }: SharedStepProps) {
+  const navigate = useNavigate();
+
   return (
     <div>
       <div style={{ textAlign: "center", marginBottom: 24 }}>
@@ -422,11 +431,11 @@ export function RecommendationsStep({ go }: SharedStepProps) {
       <button
         className="btn-primary"
         style={{ marginBottom: 12 }}
-        onClick={() => go("signup")}
+        type="button"
+        onClick={() => navigate("/")}
       >
         Go to my dashboard
       </button>
-      
     </div>
   );
 }

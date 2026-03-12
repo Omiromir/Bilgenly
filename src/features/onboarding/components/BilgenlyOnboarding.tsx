@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router";
-import { BilgenlyLogo } from "../../features/onboarding/BilgenlyLogo";
-import { progressMap, totalSteps } from "../../features/onboarding/content";
-import { onboardingStyles } from "../../features/onboarding/styles";
+import { BilgenlyLogo } from "./BilgenlyLogo";
+import { progressMap, totalSteps } from "../content";
+import { onboardingStyles } from "../styles";
 import {
   ExperienceStep,
   GoalStep,
@@ -12,17 +11,17 @@ import {
   ReminderStep,
   RoleStep,
   WelcomeStep,
-} from "../../features/onboarding/steps";
+} from "./Steps";
+import type { SelectedAnswers, StepKey } from "../types";
 
-export default function BilgenlyOnboarding() {
-  const navigate = useNavigate();
-  const [step, setStep] = useState("welcome");
-  const [selected, setSelected] = useState({});
+export function BilgenlyOnboarding() {
+  const [step, setStep] = useState<StepKey>("welcome");
+  const [selected, setSelected] = useState<SelectedAnswers>({});
   const [reminderTime, setReminderTime] = useState("12:00 PM");
   const [loadingPct, setLoadingPct] = useState(0);
   const [fadeIn, setFadeIn] = useState(true);
 
-  const go = (next) => {
+  const go = (next: StepKey) => {
     setFadeIn(false);
     setTimeout(() => {
       setStep(next);
@@ -80,31 +79,15 @@ export default function BilgenlyOnboarding() {
           justifyContent: "space-between",
         }}
       >
-        <button
-          onClick={() => navigate("/")}
+        <div
           style={{
             display: "flex",
             alignItems: "center",
             gap: 9,
-            background: "none",
-            border: "none",
-            cursor: "pointer",
-            padding: 0,
           }}
-          type="button"
         >
-          <BilgenlyLogo size={32} />
-          <span
-            style={{
-              fontWeight: 700,
-              fontSize: 18,
-              color: "#1a1a2e",
-              letterSpacing: "-0.02em",
-            }}
-          >
-            Bilgenly
-          </span>
-        </button>
+          <BilgenlyLogo size={30} />
+        </div>
 
         {progress > 0 && (
           <span style={{ fontSize: 12, color: "#888", fontWeight: 500 }}>

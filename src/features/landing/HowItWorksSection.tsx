@@ -1,8 +1,8 @@
 import { StepCard } from './StepCard';
-import step1 from '../../../assets/htw-step1.png';
-import step2 from '../../../assets/htw-step2.png';
-import step3 from '../../../assets/htw-step3.png';
-import step4 from '../../../assets/htw-step4.png';
+import step1 from "../../assets/htw-step1.png";
+import step2 from "../../assets/htw-step2.png";
+import step3 from "../../assets/htw-step3.png";
+import step4 from "../../assets/htw-step4.png";
 
 const steps = [
   {

@@ -1,19 +1,15 @@
-import { ReactNode } from "react";
+import type { ReactNode } from "react";
 import { Link } from "react-router";
-import { BilgenlyLogo } from "../onboarding/BilgenlyLogo";
-import { authStyles } from "./authStyles";
+import { BilgenlyLogo } from "../../features/onboarding/components/BilgenlyLogo";
+import { authStyles } from "../../features/auth/authStyles";
 
 interface AuthLayoutProps {
-  title: string;
-  subtitle: string;
   children: ReactNode;
+  subtitle: string;
+  title: string;
 }
 
-export function AuthLayout({
-  title,
-  subtitle,
-  children,
-}: AuthLayoutProps) {
+export function AuthLayout({ children, subtitle, title }: AuthLayoutProps) {
   return (
     <div className="auth-page">
       <style>{authStyles}</style>

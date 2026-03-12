@@ -1,4 +1,4 @@
-import svgPaths from '../../../imports/svg-lz8yvnizs1';
+import svgPaths from "../../imports/svg-lz8yvnizs1";
 
 export interface BrowserMockupProps {
   url?: string;

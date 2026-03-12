@@ -10,24 +10,26 @@ import {
   Navbar,
   PricingSection,
   RevealOnScroll,
-} from "../components/landing";
+} from "..";
 
-export function LandingPage() {
+export function LandingView() {
   const [selectedAudience, setSelectedAudience] = useState<
     "teachers" | "students"
   >("teachers");
   const [expandedFAQs, setExpandedFAQs] = useState<Set<number>>(new Set());
 
   const handleToggleFAQ = (index: number) => {
-    const nextExpanded = new Set(expandedFAQs);
+    setExpandedFAQs((current) => {
+      const nextExpanded = new Set(current);
 
-    if (nextExpanded.has(index)) {
-      nextExpanded.delete(index);
-    } else {
-      nextExpanded.add(index);
-    }
+      if (nextExpanded.has(index)) {
+        nextExpanded.delete(index);
+      } else {
+        nextExpanded.add(index);
+      }
 
-    setExpandedFAQs(nextExpanded);
+      return nextExpanded;
+    });
   };
 
   return (

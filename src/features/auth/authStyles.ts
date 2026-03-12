@@ -241,6 +241,22 @@ export const authStyles = `
     gap: 28px;
     flex-wrap: wrap;
   }
+  .auth-error {
+  margin-top: 6px;
+  font-size: 14px;
+  color: #dc2626;
+}
+
+.auth-help {
+  margin-top: 6px;
+  font-size: 14px;
+  color: #6b7280;
+}
+
+.auth-input[aria-invalid="true"] {
+  border-color: #dc2626;
+  outline: none;
+}
   @media (max-width: 640px) {
     .auth-page {
       padding: 24px 16px 0;
