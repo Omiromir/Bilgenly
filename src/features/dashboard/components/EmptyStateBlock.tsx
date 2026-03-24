@@ -2,6 +2,10 @@ import type { LucideIcon } from "lucide-react";
 import { Sparkles } from "lucide-react";
 import type { ReactNode } from "react";
 import { cn } from "../../../components/ui/utils";
+import {
+  DashboardSurface,
+  dashboardIconChipVariants,
+} from "./DashboardPrimitives";
 
 interface EmptyStateBlockProps {
   title: string;
@@ -19,14 +23,14 @@ export function EmptyStateBlock({
   className,
 }: EmptyStateBlockProps) {
   return (
-    <div
-      className={cn(
-        "rounded-[24px] border border-dashed border-[var(--dashboard-border)] bg-[var(--dashboard-surface-muted)] p-6",
-        className
-      )}
+    <DashboardSurface
+      variant="muted"
+      radius="lg"
+      padding="md"
+      className={cn("border-dashed border-[var(--dashboard-border)]", className)}
     >
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--dashboard-brand-soft-alt)] text-[var(--dashboard-brand)]">
+        <div className={dashboardIconChipVariants({ tone: "brand", size: "lg" })}>
           <Icon className="h-5 w-5" />
         </div>
         <div className="space-y-2">
@@ -37,6 +41,6 @@ export function EmptyStateBlock({
           {action ? <div className="pt-2">{action}</div> : null}
         </div>
       </div>
-    </div>
+    </DashboardSurface>
   );
 }

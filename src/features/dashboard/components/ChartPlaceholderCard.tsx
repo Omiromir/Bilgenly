@@ -1,4 +1,5 @@
 import { cn } from "../../../components/ui/utils";
+import { DashboardSurface } from "./DashboardPrimitives";
 
 interface ChartPlaceholderCardProps {
   title: string;
@@ -14,17 +15,20 @@ export function ChartPlaceholderCard({
   className,
 }: ChartPlaceholderCardProps) {
   return (
-    <article
-      className={cn(
-        "rounded-[30px] border border-slate-200 bg-white p-6 shadow-sm shadow-slate-200/50",
-        className
-      )}
+    <DashboardSurface
+      asChild
+      radius="xl"
+      padding="md"
+      className={className}
     >
+      <article>
       <div>
-        <h3 className="text-2xl font-semibold tracking-tight text-slate-950">
+        <h3 className="text-2xl font-semibold tracking-tight text-[var(--dashboard-text-strong)]">
           {title}
         </h3>
-        <p className="mt-2 text-sm leading-6 text-slate-500">{description}</p>
+        <p className="mt-2 text-sm leading-6 text-[var(--dashboard-text-soft)]">
+          {description}
+        </p>
       </div>
 
       <div className="mt-8 flex h-48 items-end gap-3 rounded-[24px] bg-[var(--dashboard-surface-muted)] px-4 py-5">
@@ -41,6 +45,7 @@ export function ChartPlaceholderCard({
           </div>
         ))}
       </div>
-    </article>
+      </article>
+    </DashboardSurface>
   );
 }

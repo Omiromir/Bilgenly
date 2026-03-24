@@ -1,5 +1,12 @@
+import type { ReactNode } from "react";
 import { Link } from "react-router";
 import { cn } from "../../../components/ui/utils";
+import {
+  DashboardBadge,
+  DashboardButton,
+  dashboardPageSubtitleClassName,
+  dashboardPageTitleClassName,
+} from "./DashboardPrimitives";
 
 interface DashboardPageHeaderProps {
   eyebrow?: string;
@@ -9,6 +16,8 @@ interface DashboardPageHeaderProps {
   ctaLabel?: string;
   ctaTo?: string;
   className?: string;
+  align?: "start" | "center";
+  actions?: ReactNode;
 }
 
 export function DashboardPageHeader({
@@ -19,42 +28,70 @@ export function DashboardPageHeader({
   ctaLabel,
   ctaTo,
   className,
+  align = "start",
+  actions,
 }: DashboardPageHeaderProps) {
+  const resolvedActions =
+    actions ??
+    (ctaLabel && ctaTo ? (
+      <DashboardButton asChild variant="secondary" size="lg">
+        <Link to={ctaTo}>{ctaLabel}</Link>
+      </DashboardButton>
+    ) : null);
+
   return (
     <div
       className={cn(
-        "flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between",
-        className
+        "flex flex-col gap-4",
+        align === "center"
+          ? "items-center text-center"
+          : "lg:flex-row lg:items-end lg:justify-between",
+        className,
       )}
     >
-      <div className="space-y-3">
+      <div className={cn("space-y-3", align === "center" && "items-center")}>
         {eyebrow ? (
           <p className="text-sm font-semibold uppercase tracking-[0.22em] text-[var(--dashboard-brand)]">
             {eyebrow}
           </p>
         ) : null}
 
-        <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-4xl font-semibold tracking-tight text-[var(--dashboard-text-strong)] md:text-5xl">
+        <div
+          className={cn(
+            "flex flex-wrap items-center gap-3",
+            align === "center" ? "justify-center" : "justify-start",
+          )}
+        >
+          <h1 className={cn(dashboardPageTitleClassName, "md:text-5xl")}>
             {title}
           </h1>
           {badge ? (
-            <span className="dashboard-badge inline-flex rounded-full px-3 py-1 text-sm font-medium">
+            <DashboardBadge size="md">
               {badge}
-            </span>
+            </DashboardBadge>
           ) : null}
         </div>
 
-        <p className="max-w-3xl text-lg leading-8 text-[var(--dashboard-text-soft)]">{subtitle}</p>
+        <p
+          className={cn(
+            dashboardPageSubtitleClassName,
+            "text-lg leading-8",
+            align === "center" ? "mx-auto text-center" : "text-left",
+          )}
+        >
+          {subtitle}
+        </p>
       </div>
 
-      {ctaLabel && ctaTo ? (
-        <Link
-          to={ctaTo}
-          className="dashboard-button-secondary inline-flex items-center justify-center rounded-2xl px-5 py-3 text-sm font-medium shadow-sm transition"
+      {resolvedActions ? (
+        <div
+          className={cn(
+            "shrink-0",
+            align === "center" ? "flex justify-center pt-2" : "flex justify-start lg:justify-end",
+          )}
         >
-          {ctaLabel}
-        </Link>
+          {resolvedActions}
+        </div>
       ) : null}
     </div>
   );

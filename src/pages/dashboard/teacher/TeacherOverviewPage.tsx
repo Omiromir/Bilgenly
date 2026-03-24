@@ -1,6 +1,18 @@
 import { BookOpen, Clock3, Plus } from "lucide-react";
 import { Link } from "react-router";
 import { cn } from "../../../components/ui/utils";
+import { CtaPanel } from "../../../features/dashboard/components/CtaPanel";
+import { DashboardPageHeader } from "../../../features/dashboard/components/DashboardPageHeader";
+import {
+  DashboardButton,
+  DashboardSurface,
+  dashboardIconTextRowClassName,
+  dashboardPageClassName,
+  dashboardSectionStackClassName,
+  dashboardSplitGridClassName,
+  dashboardStatsGridClassName,
+  dashboardTextToneClassName,
+} from "../../../features/dashboard/components/DashboardPrimitives";
 import { SectionCard } from "../../../features/dashboard/components/SectionCard";
 import { StatCard } from "../../../features/dashboard/components/StatCard";
 import {
@@ -10,74 +22,62 @@ import {
 } from "../../../features/dashboard/mock/teacherOverview";
 
 const insightToneClassName = {
-  blue: "text-[var(--dashboard-brand)]",
-  amber: "text-[var(--dashboard-warning)]",
-  emerald: "text-[var(--dashboard-success)]",
+  blue: dashboardTextToneClassName.brand,
+  amber: dashboardTextToneClassName.warning,
+  emerald: dashboardTextToneClassName.success,
 } as const;
 
 export function TeacherOverviewPage() {
   return (
-    <div className="space-y-7">
-      <div>
-        <h1 className="text-[3.25rem] font-semibold tracking-[-0.04em] text-[var(--dashboard-text-strong)]">
-          Welcome back, Professor!
-        </h1>
-        <p className="mt-2 text-[1.05rem] text-slate-500">
-          Here&apos;s what&apos;s happening with your classes today.
-        </p>
-      </div>
+    <div className={dashboardPageClassName}>
+      <DashboardPageHeader
+        title="Welcome back, Professor!"
+        subtitle="Here's what's happening with your classes today."
+      />
 
-      <section className="dashboard-hero overflow-hidden rounded-[30px] px-10 py-11 text-white">
-        <div className="flex items-center justify-between gap-8">
-          <div className="max-w-[760px]">
-            <h2 className="text-[2.05rem] font-semibold tracking-[-0.03em]">
-              Generate a New Quiz with AI
-            </h2>
-            <p className="mt-4 text-[1.05rem] leading-8 text-white/90">
-              Upload your lecture materials or paste text content. Our AI will
-              generate comprehensive quiz questions in under a minute.
-            </p>
-
-            <Link
-              to="/dashboard/teacher/generate-quiz"
-              className="mt-9 inline-flex items-center gap-3 rounded-[18px] bg-white px-8 py-4 text-[1.05rem] font-medium text-[var(--dashboard-brand)] shadow-sm transition hover:bg-[var(--dashboard-surface-muted)]"
-            >
+      <CtaPanel
+        title="Generate a New Quiz with AI"
+        description="Upload your lecture materials or paste text content. Our AI will generate comprehensive quiz questions in under a minute."
+        variant="gradient"
+        actions={
+          <DashboardButton asChild variant="inverse" size="xl">
+            <Link to="/dashboard/teacher/generate-quiz">
               <Plus className="h-5 w-5" />
               Create Quiz from PDF
             </Link>
-          </div>
+          </DashboardButton>
+        }
+        aside={<div className="hidden h-40 w-40 rounded-[28px] bg-white/12 lg:block" />}
+      />
 
-          <div className="hidden lg:block">
-            <div className="h-40 w-40 rounded-[28px] bg-white/12" />
-          </div>
-        </div>
-      </section>
-
-      <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+      <div className={dashboardStatsGridClassName}>
         {teacherOverviewStats.map((stat) => (
           <StatCard key={stat.title} {...stat} />
         ))}
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[1fr_1fr]">
+      <div className={dashboardSplitGridClassName}>
         <SectionCard title="Recent Quizzes">
-          <div className="space-y-4">
+          <div className={dashboardSectionStackClassName}>
             {teacherRecentQuizzes.map((quiz) => (
-              <article
+              <DashboardSurface
+                asChild
                 key={quiz.title}
-                className="rounded-[22px] border border-slate-200 p-5"
+                radius="md"
+                padding="sm"
               >
+                <article>
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <h3 className="text-[1.15rem] font-semibold text-[var(--dashboard-text-strong)]">
                       {quiz.title}
                     </h3>
-                    <div className="mt-3 flex flex-wrap gap-5 text-sm text-slate-500">
-                      <span className="inline-flex items-center gap-2">
+                    <div className="mt-3 flex flex-wrap gap-5 text-sm text-[var(--dashboard-text-soft)]">
+                      <span className={dashboardIconTextRowClassName}>
                         <BookOpen className="h-4 w-4" />
                         {quiz.questionCount}
                       </span>
-                      <span className="inline-flex items-center gap-2">
+                      <span className={dashboardIconTextRowClassName}>
                         <Clock3 className="h-4 w-4" />
                         {quiz.className}
                       </span>
@@ -89,37 +89,35 @@ export function TeacherOverviewPage() {
                 </div>
 
                 <div className="mt-5 flex gap-3">
-                  <button
-                    type="button"
-                    className="dashboard-button-primary flex-1 rounded-[14px] px-4 py-3 text-sm font-medium transition"
-                  >
+                  <DashboardButton type="button" size="lg" className="flex-1">
                     View Details
-                  </button>
-                  <button
-                    type="button"
-                    className="dashboard-button-secondary rounded-[14px] px-4 py-3 text-sm font-medium transition"
-                  >
+                  </DashboardButton>
+                  <DashboardButton type="button" variant="secondary" size="lg">
                     Edit
-                  </button>
+                  </DashboardButton>
                 </div>
-              </article>
+                </article>
+              </DashboardSurface>
             ))}
           </div>
         </SectionCard>
 
         <SectionCard title="Topics Students Struggle With">
-          <div className="space-y-4">
+          <div className={dashboardSectionStackClassName}>
             {teacherInsights.map((insight) => (
-              <article
+              <DashboardSurface
+                asChild
                 key={insight.title}
-                className="rounded-[22px] border border-slate-200 p-5"
+                radius="md"
+                padding="sm"
               >
+                <article>
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <h3 className="text-[1.15rem] font-semibold text-[var(--dashboard-text-strong)]">
                       {insight.title}
                     </h3>
-                    <p className="mt-2 text-sm leading-6 text-slate-500">
+                    <p className="mt-2 text-sm leading-6 text-[var(--dashboard-text-soft)]">
                       {insight.detail}
                     </p>
                   </div>
@@ -132,7 +130,8 @@ export function TeacherOverviewPage() {
                     {insight.value}
                   </span>
                 </div>
-              </article>
+                </article>
+              </DashboardSurface>
             ))}
           </div>
         </SectionCard>

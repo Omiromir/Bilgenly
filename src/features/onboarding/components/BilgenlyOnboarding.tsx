@@ -73,7 +73,7 @@ export function BilgenlyOnboarding() {
     <div
       className="onboarding-page"
       style={{
-        minHeight: "100vh",
+        minHeight: "100dvh",
         background: "#f8f7ff",
         display: "flex",
         flexDirection: "column",
@@ -89,7 +89,7 @@ export function BilgenlyOnboarding() {
           className="welcome-screen"
           style={{
             width: "100%",
-            minHeight: "100vh",
+            minHeight: "100dvh",
             display: "flex",
             flexDirection: "column",
             padding: "28px 0 40px",

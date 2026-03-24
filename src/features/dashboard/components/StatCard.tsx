@@ -1,5 +1,9 @@
 import type { LucideIcon } from "lucide-react";
 import { cn } from "../../../components/ui/utils";
+import {
+  DashboardSurface,
+  dashboardIconChipVariants,
+} from "./DashboardPrimitives";
 
 interface StatCardProps {
   title: string;
@@ -17,25 +21,29 @@ export function StatCard({
   iconClassName,
 }: StatCardProps) {
   return (
-    <article className="dashboard-card rounded-[28px] border p-6">
+    <DashboardSurface asChild radius="xl" padding="md">
+      <article>
       <div className="flex items-start justify-between gap-4">
         <div className="space-y-2">
           <p className="text-sm text-[var(--dashboard-text-soft)]">{title}</p>
-          <p className="text-4xl font-semibold tracking-tight text-[var(--dashboard-text-strong)]">
+          <p className="text-[2.35rem] font-semibold tracking-tight text-[var(--dashboard-text-strong)]">
             {value}
           </p>
-          <p className="text-sm text-[var(--dashboard-brand)]">{change}</p>
+          {change ? (
+            <p className="text-sm text-[var(--dashboard-brand)]">{change}</p>
+          ) : null}
         </div>
 
         <div
           className={cn(
-            "flex h-14 w-14 items-center justify-center rounded-2xl",
-            iconClassName ?? "bg-slate-900 text-white"
+            dashboardIconChipVariants({ tone: "dark", size: "lg" }),
+            iconClassName,
           )}
         >
           <Icon className="h-6 w-6" />
         </div>
       </div>
-    </article>
+      </article>
+    </DashboardSurface>
   );
 }

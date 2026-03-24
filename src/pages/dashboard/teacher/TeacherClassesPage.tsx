@@ -1,5 +1,14 @@
-import { EllipsisVertical, Search, UserPlus, Users } from "lucide-react";
+import { EllipsisVertical, UserPlus, Users } from "lucide-react";
+import { DashboardPageHeader } from "../../../features/dashboard/components/DashboardPageHeader";
+import {
+  DashboardButton,
+  DashboardSearchField,
+  DashboardSurface,
+  dashboardPageClassName,
+  dashboardSectionStackClassName,
+} from "../../../features/dashboard/components/DashboardPrimitives";
 import { SectionCard } from "../../../features/dashboard/components/SectionCard";
+import { StatCard } from "../../../features/dashboard/components/StatCard";
 import { useDashboardPageMeta } from "../../../features/dashboard/hooks/useDashboardPageMeta";
 import {
   teacherClasses,
@@ -11,71 +20,45 @@ export function TeacherClassesPage() {
   const meta = useDashboardPageMeta();
 
   return (
-    <div className="space-y-7">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div>
-          <h1 className="text-[3rem] font-semibold tracking-[-0.04em] text-[var(--dashboard-text-strong)]">
-            {meta?.title ?? "Classes"}
-          </h1>
-          <p className="mt-2 text-[1.05rem] text-slate-500">
-            Manage your classes and students
-          </p>
-        </div>
-
-        <button
-          type="button"
-          className="dashboard-button-primary inline-flex items-center gap-2 rounded-[14px] px-6 py-3 text-sm font-medium transition"
-        >
-          <span className="text-lg leading-none">+</span>
-          Create Class
-        </button>
-      </div>
+    <div className={dashboardPageClassName}>
+      <DashboardPageHeader
+        title={meta?.title ?? "Classes"}
+        subtitle="Manage your classes and students"
+        actions={
+          <DashboardButton type="button" size="lg">
+            <span className="text-lg leading-none">+</span>
+            Create Class
+          </DashboardButton>
+        }
+      />
 
       <div className="grid gap-5 md:grid-cols-3">
         {teacherClassSummary.map((item) => (
-          <article
+          <StatCard
             key={item.label}
-            className="dashboard-card rounded-[24px] border p-6"
-          >
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="text-sm text-slate-500">{item.label}</p>
-                <p className="mt-2 text-[2.2rem] font-semibold tracking-[-0.03em] text-[var(--dashboard-text-strong)]">
-                  {item.value}
-                </p>
-                {item.change ? (
-                  <p className="mt-2 text-sm text-[var(--dashboard-brand)]">{item.change}</p>
-                ) : null}
-              </div>
-              <div
-                className={`flex h-11 w-11 items-center justify-center rounded-2xl text-white ${item.iconColor}`}
-              >
-                <Users className="h-5 w-5" />
-              </div>
-            </div>
-          </article>
+            title={item.label}
+            value={item.value}
+            change={item.change ?? ""}
+            icon={Users}
+            iconClassName={item.iconColor}
+          />
         ))}
       </div>
 
-      <SectionCard title="Your Classes">
+      <SectionCard
+        title="Your Classes"
+        actions={
+          <DashboardSearchField
+            containerClassName="w-full min-w-0 sm:w-[260px]"
+            placeholder="Search classes..."
+          />
+        }
+      >
         <div className="space-y-0">
-          <div className="flex justify-end border-b border-slate-200 pb-6">
-            <div className="relative w-full max-w-[260px]">
-              <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
-              <input
-                type="search"
-                placeholder="Search classes..."
-                className="dashboard-input h-12 w-full rounded-[14px] border border-transparent pl-12 pr-4 text-[1rem] outline-none transition focus:border-[var(--dashboard-brand)] focus:bg-white"
-              />
-            </div>
-          </div>
-
           {teacherClasses.map((item, index) => (
             <article
               key={item.name}
-              className={`flex flex-col gap-5 px-0 py-6 lg:flex-row lg:items-center lg:justify-between ${
-                index < teacherClasses.length - 1 ? "border-b border-slate-200" : ""
-              }`}
+              className={`flex flex-col gap-5 px-0 py-6 lg:flex-row lg:items-center lg:justify-between ${index < teacherClasses.length - 1 ? "border-b border-[var(--dashboard-border-soft)]" : ""}`}
             >
               <div>
                 <div className="flex flex-wrap items-center gap-3">
@@ -89,7 +72,7 @@ export function TeacherClassesPage() {
                   ) : null}
                 </div>
 
-                <div className="mt-3 flex flex-wrap gap-6 text-sm text-slate-500">
+                <div className="mt-3 flex flex-wrap gap-6 text-sm text-[var(--dashboard-text-soft)]">
                   <span>{item.students}</span>
                   <span>{item.quizzes}</span>
                   <span>{item.avgScore}</span>
@@ -97,16 +80,13 @@ export function TeacherClassesPage() {
               </div>
 
               <div className="flex items-center gap-4">
-                <button
-                  type="button"
-                  className="inline-flex items-center gap-2 rounded-[14px] bg-[var(--dashboard-brand-soft-alt)] px-5 py-3 text-sm font-medium text-[var(--dashboard-brand)] transition hover:bg-[var(--dashboard-brand-soft-alt)]/80"
-                >
+                <DashboardButton type="button" variant="soft" size="lg">
                   <UserPlus className="h-4 w-4" />
                   Add Students
-                </button>
+                </DashboardButton>
                 <button
                   type="button"
-                  className="text-slate-400 transition hover:text-slate-600"
+                  className="text-[var(--dashboard-text-faint)] transition hover:text-[var(--dashboard-text)]"
                 >
                   <EllipsisVertical className="h-5 w-5" />
                 </button>
@@ -117,20 +97,19 @@ export function TeacherClassesPage() {
       </SectionCard>
 
       <SectionCard title="Top Performing Students">
-        <div className="space-y-4">
+        <div className={dashboardSectionStackClassName}>
           {teacherTopStudents.map((student) => (
-            <article
-              key={student.name}
-              className="flex items-center justify-between rounded-[18px] border border-slate-200 px-5 py-4"
-            >
+            <DashboardSurface asChild key={student.name} radius="md" padding="sm">
+              <article className="flex items-center justify-between">
               <div>
                 <h3 className="font-semibold text-[var(--dashboard-text-strong)]">{student.name}</h3>
-                <p className="mt-1 text-sm text-slate-500">{student.className}</p>
+                <p className="mt-1 text-sm text-[var(--dashboard-text-soft)]">{student.className}</p>
               </div>
               <span className="text-lg font-semibold text-[var(--dashboard-success)]">
                 {student.score}
               </span>
-            </article>
+              </article>
+            </DashboardSurface>
           ))}
         </div>
       </SectionCard>

@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { cn } from "../../../components/ui/utils";
+import { DashboardSurface } from "./DashboardPrimitives";
 
 interface CtaPanelProps {
   title: string;
@@ -19,15 +20,14 @@ export function CtaPanel({
   variant = "surface",
 }: CtaPanelProps) {
   return (
-    <section
-      className={cn(
-        "overflow-hidden rounded-[34px] p-8 shadow-xl",
-        variant === "gradient"
-          ? "dashboard-hero text-white"
-          : "dashboard-card border text-[var(--dashboard-text-strong)]",
-        className
-      )}
+    <DashboardSurface
+      asChild
+      variant={variant === "gradient" ? "hero" : "card"}
+      radius="2xl"
+      padding="lg"
+      className={cn("overflow-hidden", className)}
     >
+      <section>
       <div className="flex flex-col gap-8 lg:flex-row lg:items-center lg:justify-between">
         <div className="max-w-3xl">
           <h2 className="text-4xl font-semibold tracking-tight">{title}</h2>
@@ -46,6 +46,7 @@ export function CtaPanel({
 
         {aside ? <div className="shrink-0">{aside}</div> : null}
       </div>
-    </section>
+      </section>
+    </DashboardSurface>
   );
 }

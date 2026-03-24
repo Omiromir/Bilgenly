@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { cn } from "../../../components/ui/utils";
+import { DashboardSurface } from "./DashboardPrimitives";
 
 interface ListItemRowProps {
   title: string;
@@ -19,12 +20,16 @@ export function ListItemRow({
   className,
 }: ListItemRowProps) {
   return (
-    <article
+    <DashboardSurface
+      asChild
+      radius="lg"
+      padding="sm"
       className={cn(
-        "dashboard-card rounded-[24px] border p-5 transition hover:border-[var(--dashboard-border)] hover:bg-[var(--dashboard-surface-muted)]",
-        className
+        "transition hover:border-[var(--dashboard-border)] hover:bg-[var(--dashboard-surface-muted)]",
+        className,
       )}
     >
+      <article>
       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div className="space-y-1">
           <h3 className="text-xl font-semibold tracking-tight text-[var(--dashboard-text-strong)]">
@@ -45,6 +50,7 @@ export function ListItemRow({
       </div>
 
       {footer ? <div className="mt-5">{footer}</div> : null}
-    </article>
+      </article>
+    </DashboardSurface>
   );
 }

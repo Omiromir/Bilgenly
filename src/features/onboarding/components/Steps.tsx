@@ -1,5 +1,4 @@
 import type { Dispatch, SetStateAction } from "react";
-import { useNavigate } from "react-router";
 import {
   experienceOptions,
   goalOptions,
@@ -46,7 +45,7 @@ function ChoiceList({
           className={`option-row ${selectedValue === option.id ? "selected" : ""}`}
           onClick={() => onSelect(option.id)}
         >
-          <div>
+          <div className="option-copy">
             <div className="label">{option.label}</div>
             <div className="sub">{option.sub}</div>
           </div>
@@ -59,34 +58,9 @@ function ChoiceList({
 
 export function WelcomeStep({ go }: SharedStepProps) {
   return (
-    <div
-      style={{
-        textAlign: "center",
-        padding: "10px 0",
-        maxWidth: 560,
-        margin: "0 auto",
-      }}
-    >
-      <h1
-        style={{
-          fontWeight: 700,
-          fontSize: 44,
-          color: "#1a1a2e",
-          marginBottom: 16,
-          letterSpacing: "-0.02em",
-          lineHeight: 1.05,
-        }}
-      >
-        Welcome to Bilgenly!
-      </h1>
-      <p
-        style={{
-          fontSize: 18,
-          color: "#777",
-          lineHeight: 1.6,
-          marginBottom: 36,
-        }}
-      >
+    <div className="welcome-step">
+      <h1 className="welcome-title">Welcome to Bilgenly!</h1>
+      <p className="welcome-subtitle">
         Your AI study companion is ready.
         <br />
         Let&apos;s set up your personalized experience.
@@ -106,18 +80,8 @@ export function WelcomeStep({ go }: SharedStepProps) {
 export function RoleStep({ go, selected, setSelected }: ChoiceStepProps) {
   return (
     <div>
-      <h2
-        style={{
-          fontWeight: 700,
-          fontSize: 20,
-          color: "#1a1a2e",
-          marginBottom: 6,
-          letterSpacing: "-0.01em",
-        }}
-      >
-        Which describes you best?
-      </h2>
-      <p style={{ fontSize: 13, color: "#888", marginBottom: 20 }}>
+      <h2 className="step-title">Which describes you best?</h2>
+      <p className="step-subtitle">
         We&apos;ll set up the right dashboard and tools for your role.
       </p>
       <ChoiceList
@@ -141,18 +105,8 @@ export function RoleStep({ go, selected, setSelected }: ChoiceStepProps) {
 export function GoalStep({ go, selected, setSelected }: ChoiceStepProps) {
   return (
     <div>
-      <h2
-        style={{
-          fontWeight: 700,
-          fontSize: 20,
-          color: "#1a1a2e",
-          marginBottom: 6,
-          letterSpacing: "-0.01em",
-        }}
-      >
-        What&apos;s your main goal?
-      </h2>
-      <p style={{ fontSize: 13, color: "#888", marginBottom: 20 }}>
+      <h2 className="step-title">What&apos;s your main goal?</h2>
+      <p className="step-subtitle">
         We&apos;ll focus your experience around what matters most to you.
       </p>
       <ChoiceList
@@ -180,18 +134,10 @@ export function ExperienceStep({
 }: ChoiceStepProps) {
   return (
     <div>
-      <h2
-        style={{
-          fontWeight: 700,
-          fontSize: 20,
-          color: "#1a1a2e",
-          marginBottom: 6,
-          letterSpacing: "-0.01em",
-        }}
-      >
+      <h2 className="step-title">
         How familiar are you with digital learning tools?
       </h2>
-      <p style={{ fontSize: 13, color: "#888", marginBottom: 20 }}>
+      <p className="step-subtitle">
         We&apos;ll adjust the onboarding and interface complexity for you.
       </p>
       <ChoiceList
@@ -217,18 +163,8 @@ export function ExperienceStep({
 export function PaceStep({ go, selected, setSelected }: ChoiceStepProps) {
   return (
     <div>
-      <h2
-        style={{
-          fontWeight: 700,
-          fontSize: 20,
-          color: "#1a1a2e",
-          marginBottom: 6,
-          letterSpacing: "-0.01em",
-        }}
-      >
-        How often do you want to practice?
-      </h2>
-      <p style={{ fontSize: 13, color: "#888", marginBottom: 20 }}>
+      <h2 className="step-title">How often do you want to practice?</h2>
+      <p className="step-subtitle">
         Your points and streaks will be calibrated to your pace.
       </p>
       <ChoiceList
@@ -255,19 +191,9 @@ export function ReminderStep({
   setReminderTime,
 }: ReminderStepProps) {
   return (
-    <div style={{ textAlign: "center" }}>
-      <h2
-        style={{
-          fontWeight: 700,
-          fontSize: 20,
-          color: "#1a1a2e",
-          marginBottom: 8,
-          letterSpacing: "-0.01em",
-        }}
-      >
-        Set a daily study reminder
-      </h2>
-      <p style={{ fontSize: 13, color: "#888", marginBottom: 24 }}>
+    <div className="step-centered">
+      <h2 className="step-title">Set a daily study reminder</h2>
+      <p className="step-subtitle step-subtitle-tight">
         Stay consistent and earn streak points - we&apos;ll nudge you at the right
         time.
       </p>
@@ -306,7 +232,7 @@ export function ReminderStep({
 
 export function LoadingStep({ loadingPct }: LoadingStepProps) {
   return (
-    <div style={{ textAlign: "center", padding: "30px 0" }}>
+    <div className="step-centered loading-step">
       <div
         style={{
           position: "relative",
@@ -360,17 +286,8 @@ export function LoadingStep({ loadingPct }: LoadingStepProps) {
           {loadingPct}%
         </div>
       </div>
-      <h2
-        style={{
-          fontWeight: 700,
-          fontSize: 20,
-          color: "#1a1a2e",
-          letterSpacing: "-0.01em",
-        }}
-      >
-        Building your learning space...
-      </h2>
-      <p style={{ fontSize: 13, color: "#888", marginTop: 8 }}>
+      <h2 className="step-title">Building your learning space...</h2>
+      <p className="step-subtitle step-subtitle-tight">
         Our AI is personalizing your dashboard and quizzes.
       </p>
     </div>
@@ -386,19 +303,9 @@ export function RecommendationsStep({
 }: RecommendationsStepProps) {
   return (
     <div>
-      <div style={{ textAlign: "center", marginBottom: 24 }}>
-        <h2
-          style={{
-            fontWeight: 700,
-            fontSize: 22,
-            color: "#1a1a2e",
-            marginTop: 12,
-            letterSpacing: "-0.02em",
-          }}
-        >
-          You&apos;re all set
-        </h2>
-        <p style={{ fontSize: 13, color: "#888", marginTop: 5 }}>
+      <div className="step-centered recommendations-header">
+        <h2 className="step-title step-title-lg">You&apos;re all set</h2>
+        <p className="step-subtitle step-subtitle-tight">
           Here&apos;s where to start - your AI dashboard is ready.
         </p>
       </div>

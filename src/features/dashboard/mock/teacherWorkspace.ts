@@ -138,7 +138,7 @@ export const teacherClassSummary: TeacherClassSummaryItem[] = [
   {
     label: "Average Class Size",
     value: "28",
-    iconColor: "bg-[var(--dashboard-success-soft)] text-[var(--dashboard-success)]",
+    iconColor: "bg-[var(--dashboard-brand-soft)] text-[var(--dashboard-brand-strong)]",
   },
 ];
 

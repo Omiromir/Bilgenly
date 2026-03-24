@@ -42,7 +42,7 @@ export const studentOverviewStats: OverviewStat[] = [
     value: "88%",
     change: "+5% improvement",
     icon: TrendingUp,
-    iconClassName: "bg-[var(--dashboard-success-soft)] text-[var(--dashboard-success)]",
+    iconClassName: "bg-[var(--dashboard-brand-soft)] text-[var(--dashboard-brand-strong)]",
   },
   {
     title: "Badges Earned",

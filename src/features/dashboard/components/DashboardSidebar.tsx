@@ -1,9 +1,13 @@
-import { PanelLeftClose, PanelLeftOpen, Search, X } from "lucide-react";
+import { PanelLeftClose, PanelLeftOpen, X } from "lucide-react";
 import { NavLink } from "react-router";
 import { useAuth } from "../../../app/providers/AuthProvider";
 import { cn } from "../../../components/ui/utils";
 import { getDashboardNavigation } from "../config/navigation";
 import { BilgenlyLogo } from "../../../components/shared/BilgenlyLogo";
+import {
+  DashboardButton,
+  DashboardSearchField,
+} from "./DashboardPrimitives";
 
 interface DashboardSidebarProps {
   className?: string;
@@ -30,6 +34,10 @@ export function DashboardSidebar({
   const settingsItem = navigation.find((item) =>
     item.path.endsWith("/settings"),
   );
+  const navItemClassName =
+    "flex items-center gap-3 rounded-[18px] px-4 py-3 text-base font-medium text-[var(--dashboard-text-soft)] transition hover:bg-[var(--dashboard-surface-muted)] hover:text-[var(--dashboard-text)]";
+  const collapsedNavItemClassName =
+    "h-14 w-14 justify-center rounded-[18px] px-0 py-0";
 
   return (
     <aside
@@ -40,10 +48,12 @@ export function DashboardSidebar({
       )}
     >
       {!showMobileClose ? (
-        <button
+        <DashboardButton
           type="button"
           onClick={onToggleCollapse}
-          className="absolute -right-4 top-20 z-10 hidden h-8 w-8 items-center justify-center rounded-full border border-[var(--dashboard-border)] bg-white text-[var(--dashboard-text-faint)] shadow-sm transition hover:bg-[var(--dashboard-surface-muted)] hover:text-[var(--dashboard-text)] lg:inline-flex"
+          variant="secondary"
+          size="iconSm"
+          className="absolute -right-4 top-20 z-10 hidden border border-[var(--dashboard-border)] text-[var(--dashboard-text-faint)] lg:inline-flex"
           aria-label={collapsed ? "Expand navigation" : "Collapse navigation"}
         >
           {collapsed ? (
@@ -51,7 +61,7 @@ export function DashboardSidebar({
           ) : (
             <PanelLeftClose className="h-4 w-4" />
           )}
-        </button>
+        </DashboardButton>
       ) : null}
 
       <div
@@ -65,26 +75,21 @@ export function DashboardSidebar({
         </div>
 
         {showMobileClose ? (
-          <button
+          <DashboardButton
             type="button"
             onClick={onClose}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-xl text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 lg:hidden"
+            variant="ghost"
+            size="sm"
+            className="px-0 lg:hidden"
             aria-label="Close navigation"
           >
             <X className="h-5 w-5" />
-          </button>
+          </DashboardButton>
         ) : null}
       </div>
 
       <div className="border-b border-[var(--dashboard-border-soft)] px-4 py-4 lg:hidden">
-        <div className="relative">
-          <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
-          <input
-            type="search"
-            placeholder="Search..."
-            className="dashboard-input h-12 w-full rounded-2xl border pl-12 pr-4 text-sm outline-none transition focus:border-[var(--dashboard-brand)] focus:bg-white"
-          />
-        </div>
+        <DashboardSearchField placeholder="Search..." />
       </div>
 
       <nav
@@ -102,9 +107,8 @@ export function DashboardSidebar({
             title={collapsed ? label : undefined}
             className={({ isActive }) =>
               cn(
-                "flex items-center gap-3 rounded-2xl px-4 py-3 text-base font-medium text-[var(--dashboard-text-soft)] transition hover:bg-[var(--dashboard-surface-muted)] hover:text-[var(--dashboard-text)]",
-                collapsed &&
-                  "h-14 w-14 justify-center rounded-[18px] px-0 py-0 text-[var(--dashboard-text-soft)] hover:bg-[var(--dashboard-surface-muted)]",
+                navItemClassName,
+                collapsed && collapsedNavItemClassName,
                 isActive &&
                   "dashboard-nav-active text-white hover:bg-[var(--dashboard-brand)] hover:text-white",
               )
@@ -134,9 +138,9 @@ export function DashboardSidebar({
                 title={collapsed ? settingsItem.label : undefined}
                 className={({ isActive }) =>
                   cn(
-                    "flex items-center gap-3 rounded-2xl px-4 py-3 text-base font-medium text-[var(--dashboard-text-soft)] transition hover:bg-[var(--dashboard-surface-muted)] hover:text-[var(--dashboard-text)]",
+                    navItemClassName,
                     collapsed &&
-                      "mx-auto h-14 w-14 justify-center rounded-[18px] px-0 py-0 text-[var(--dashboard-text-soft)] hover:bg-[var(--dashboard-surface-muted)]",
+                      cn("mx-auto", collapsedNavItemClassName),
                     isActive &&
                       "dashboard-nav-active text-white hover:bg-[var(--dashboard-brand)] hover:text-white",
                   )

@@ -6,7 +6,15 @@ import {
   Users,
 } from "lucide-react";
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, BarChart, Bar, PieChart, Pie, Cell } from "recharts";
+import { DashboardPageHeader } from "../../../features/dashboard/components/DashboardPageHeader";
+import {
+  DashboardSurface,
+  dashboardPageClassName,
+  dashboardSectionStackClassName,
+  dashboardStatsGridClassName,
+} from "../../../features/dashboard/components/DashboardPrimitives";
 import { SectionCard } from "../../../features/dashboard/components/SectionCard";
+import { StatCard } from "../../../features/dashboard/components/StatCard";
 import { useDashboardPageMeta } from "../../../features/dashboard/hooks/useDashboardPageMeta";
 import {
   teacherAnalyticsSummary,
@@ -22,42 +30,25 @@ export function TeacherAnalyticsPage() {
   const meta = useDashboardPageMeta();
 
   return (
-    <div className="space-y-7">
-      <div>
-        <h1 className="text-[3rem] font-semibold tracking-[-0.04em] text-[var(--dashboard-text-strong)]">
-          {meta?.title ?? "Analytics"}
-        </h1>
-        <p className="mt-2 text-[1.05rem] text-slate-500">
-          Track student performance and identify areas for improvement
-        </p>
-      </div>
+    <div className={dashboardPageClassName}>
+      <DashboardPageHeader
+        title={meta?.title ?? "Analytics"}
+        subtitle="Track student performance and identify areas for improvement"
+      />
 
-      <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+      <div className={dashboardStatsGridClassName}>
         {teacherAnalyticsSummary.map((item, index) => {
           const Icon = summaryIcons[index];
 
           return (
-            <article
+            <StatCard
               key={item.title}
-              className="dashboard-card rounded-[24px] border p-6"
-            >
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-sm text-slate-500">{item.title}</p>
-                  <p className="mt-2 text-[2.15rem] font-semibold tracking-[-0.03em] text-[var(--dashboard-text-strong)]">
-                    {item.value}
-                  </p>
-                  {item.change ? (
-                    <p className="mt-2 text-sm text-[var(--dashboard-brand)]">{item.change}</p>
-                  ) : null}
-                </div>
-                <div
-                  className={`flex h-11 w-11 items-center justify-center rounded-2xl text-white ${item.iconColor}`}
-                >
-                  <Icon className="h-5 w-5" />
-                </div>
-              </div>
-            </article>
+              title={item.title}
+              value={item.value}
+              change={item.change ?? ""}
+              icon={Icon}
+              iconClassName={item.iconColor}
+            />
           );
         })}
       </div>
@@ -128,18 +119,23 @@ export function TeacherAnalyticsPage() {
         </SectionCard>
 
         <SectionCard title="Students Needing Support">
-          <div className="space-y-4">
+          <div className={dashboardSectionStackClassName}>
             {teacherStudentsNeedingSupport.map((student) => (
-              <article
+              <DashboardSurface
+                asChild
                 key={student.name}
-                className="rounded-[16px] border border-[var(--dashboard-border)] bg-[var(--dashboard-brand-soft)] px-5 py-4"
+                variant="accent"
+                radius="md"
+                padding="sm"
+                className="border-[var(--dashboard-border)]"
               >
+                <article>
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <h3 className="text-[1.05rem] font-semibold text-[var(--dashboard-text-strong)]">
                       {student.name}
                     </h3>
-                    <p className="mt-1 text-sm text-slate-500">{student.issue}</p>
+                    <p className="mt-1 text-sm text-[var(--dashboard-text-soft)]">{student.issue}</p>
                   </div>
                   <div className="text-right">
                     <p className="text-[1.8rem] font-semibold text-[var(--dashboard-brand-strong)]">
@@ -153,7 +149,8 @@ export function TeacherAnalyticsPage() {
                     </button>
                   </div>
                 </div>
-              </article>
+                </article>
+              </DashboardSurface>
             ))}
           </div>
         </SectionCard>

@@ -6,7 +6,6 @@ import {
   LogOut,
   Medal,
   Menu,
-  Search,
   Settings,
   User,
   X,
@@ -16,6 +15,13 @@ import { Link } from "react-router";
 import { useAuth } from "../../../app/providers/AuthProvider";
 import { cn } from "../../../components/ui/utils";
 import { notificationItems } from "../mock/sharedUi";
+import {
+  DashboardButton,
+  DashboardSearchField,
+  DashboardSurface,
+  dashboardIconChipVariants,
+  dashboardSectionDividerClassName,
+} from "./DashboardPrimitives";
 
 interface DashboardHeaderProps {
   onOpenSidebar: () => void;
@@ -73,6 +79,8 @@ export function DashboardHeader({ onOpenSidebar }: DashboardHeaderProps) {
   }, [role]);
 
   const unreadCount = notificationItems.filter((item) => item.unread).length;
+  const dropdownBaseClassName =
+    "absolute right-0 top-0 z-30 overflow-hidden transition";
 
   return (
     <header className="dashboard-topbar sticky top-0 z-20 border-b backdrop-blur">
@@ -80,67 +88,77 @@ export function DashboardHeader({ onOpenSidebar }: DashboardHeaderProps) {
         <div className="flex flex-col">
           <div className="flex w-full items-center justify-between gap-4">
             <div className="flex items-center justify-between gap-3 xl:flex-1">
-              <button
+              <DashboardButton
                 type="button"
                 onClick={onOpenSidebar}
-                className="inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-[var(--dashboard-border)] bg-white text-[var(--dashboard-text)] transition hover:bg-[var(--dashboard-surface-muted)] lg:hidden"
+                variant="secondary"
+                size="icon"
+                className="border border-[var(--dashboard-border)] lg:hidden"
                 aria-label="Open navigation"
               >
                 <Menu className="h-5 w-5" />
-              </button>
+              </DashboardButton>
 
-              <div className="relative hidden w-full max-w-xl lg:block">
-                <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
-                <input
-                  type="search"
-                  placeholder="Search..."
-                  className="dashboard-input h-14 w-full rounded-2xl border pl-12 pr-4 text-base outline-none transition focus:border-[var(--dashboard-brand)] focus:bg-white"
-                />
-              </div>
+              <DashboardSearchField
+                containerClassName="hidden w-full max-w-xl lg:block"
+                placeholder="Search..."
+                size="lg"
+              />
             </div>
 
             <div className="flex items-center justify-between gap-4 xl:justify-end">
-              <button
+              <DashboardButton
                 type="button"
                 onClick={() => {
                   setIsNotificationsOpen((current) => !current);
                   setIsProfileOpen(false);
                 }}
-                className="relative inline-flex h-12 w-12 items-center justify-center rounded-2xl text-[var(--dashboard-text)] transition hover:bg-[var(--dashboard-surface-muted)]"
+                variant="ghost"
+                size="icon"
+                className="relative text-[var(--dashboard-text)]"
                 aria-label="Notifications"
               >
                 <Bell className="h-5 w-5" />
                 <span className="absolute right-3 top-3 h-2.5 w-2.5 rounded-full bg-[var(--dashboard-brand)]" />
-              </button>
+              </DashboardButton>
 
-              <button
+              <DashboardButton
                 type="button"
                 onClick={() => {
                   setIsProfileOpen((current) => !current);
                   setIsNotificationsOpen(false);
                 }}
-                className="flex items-center gap-3 rounded-2xl px-3 py-2 transition hover:bg-[var(--dashboard-surface-muted)]"
+                variant="ghost"
+                size="md"
+                className="px-3"
                 aria-label="Profile"
               >
                 <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-950 text-sm font-semibold text-white">
                   {userMeta.name.charAt(0)}
                 </div>
-              </button>
+              </DashboardButton>
             </div>
           </div>
 
           <div className="relative flex justify-end">
-            <div
+            <DashboardSurface
               className={cn(
-                "dashboard-card fixed left-4 right-4 top-[84px] z-30 overflow-hidden rounded-[20px] border shadow-2xl shadow-slate-900/10 transition sm:absolute sm:left-auto sm:right-16 sm:top-0 sm:w-[360px] sm:max-w-[360px] sm:rounded-[24px]",
+                "fixed left-4 right-4 top-[84px] z-30 overflow-hidden rounded-[20px] shadow-2xl shadow-slate-900/10 sm:absolute sm:left-auto sm:right-16 sm:top-0 sm:w-[360px] sm:max-w-[360px] sm:rounded-[24px]",
                 isNotificationsOpen
                   ? "pointer-events-auto opacity-100"
                   : "pointer-events-none opacity-0",
               )}
+              radius="lg"
+              padding="none"
             >
-              <div className="flex items-start justify-between gap-4 border-b border-[var(--dashboard-border-soft)] px-4 py-4 sm:px-5">
+              <div
+                className={cn(
+                  "flex items-start justify-between gap-4 border-b px-4 py-4 sm:px-5",
+                  dashboardSectionDividerClassName,
+                )}
+              >
                 <div>
-                  <h3 className="text-[1.35rem] font-semibold text-[var(--dashboard-text-strong)] sm:text-[1.75rem]">
+                  <h3 className="text-[1.35rem] font-semibold text-[var(--dashboard-text-strong)] sm:text-[1.6rem]">
                     Notifications
                   </h3>
                   <p className="text-sm text-[var(--dashboard-text-soft)]">{unreadCount} unread</p>
@@ -158,12 +176,13 @@ export function DashboardHeader({ onOpenSidebar }: DashboardHeaderProps) {
                   <article
                     key={`${item.title}-${item.time}`}
                     className={cn(
-                      "border-b border-slate-200 px-4 py-4 last:border-b-0 sm:px-5",
+                      "border-b px-4 py-4 last:border-b-0 sm:px-5",
+                      dashboardSectionDividerClassName,
                       item.unread ? "bg-[var(--dashboard-brand-soft-alt)]/60" : "bg-white",
                     )}
                   >
                     <div className="flex items-start gap-3">
-                      <div className="mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[var(--dashboard-brand-soft-alt)] text-[var(--dashboard-brand)]">
+                      <div className={dashboardIconChipVariants({ tone: "brand", size: "md" })}>
                         <NotificationIcon icon={item.icon} />
                       </div>
 
@@ -202,19 +221,25 @@ export function DashboardHeader({ onOpenSidebar }: DashboardHeaderProps) {
 
               <button
                 type="button"
-                className="w-full border-t border-[var(--dashboard-border-soft)] px-5 py-4 text-center text-[15px] font-semibold text-[var(--dashboard-brand)] transition hover:bg-[var(--dashboard-surface-muted)]"
+                className={cn(
+                  "w-full border-t px-5 py-4 text-center text-[15px] font-semibold text-[var(--dashboard-brand)] transition hover:bg-[var(--dashboard-surface-muted)]",
+                  dashboardSectionDividerClassName,
+                )}
               >
                 View all notifications
               </button>
-            </div>
+            </DashboardSurface>
 
-            <div
+            <DashboardSurface
               className={cn(
-                "dashboard-card absolute right-0 top-0 z-30 w-full max-w-[260px] overflow-hidden rounded-[16px] border shadow-2xl shadow-slate-900/10 transition",
+                dropdownBaseClassName,
+                "w-full max-w-[260px] rounded-[16px] shadow-2xl shadow-slate-900/10",
                 isProfileOpen
                   ? "pointer-events-auto opacity-100"
                   : "pointer-events-none opacity-0",
               )}
+              radius="lg"
+              padding="none"
             >
               <div className="flex items-center gap-3 px-4 py-4">
                 <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--dashboard-brand)] text-lg font-semibold text-white">
@@ -239,7 +264,7 @@ export function DashboardHeader({ onOpenSidebar }: DashboardHeaderProps) {
                 </div>
               </div>
 
-              <div className="border-t border-[var(--dashboard-border-soft)] py-2">
+              <div className={cn("border-t py-2", dashboardSectionDividerClassName)}>
                 <Link
                   to={userMeta.profilePath}
                   className="flex w-full items-center gap-3 px-4 py-3 text-[15px] font-medium text-[var(--dashboard-text)] transition hover:bg-[var(--dashboard-surface-muted)]"
@@ -255,7 +280,7 @@ export function DashboardHeader({ onOpenSidebar }: DashboardHeaderProps) {
                   Settings
                 </Link>
               </div>
-              <div className="border-t border-[var(--dashboard-border-soft)] py-2">
+              <div className={cn("border-t py-2", dashboardSectionDividerClassName)}>
                 <button
                   type="button"
                   onClick={signOut}
@@ -265,35 +290,8 @@ export function DashboardHeader({ onOpenSidebar }: DashboardHeaderProps) {
                   Log out
                 </button>
               </div>
-            </div>
+            </DashboardSurface>
           </div>
-
-          {/* <div className="flex flex-col gap-3 rounded-[28px] border border-slate-200 bg-slate-50/80 px-4 py-4 md:flex-row md:items-center md:justify-between">
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-xl font-semibold tracking-tight text-slate-950">
-                  {meta?.title ?? "Dashboard"}
-                </h2>
-                {meta?.badge ? (
-                  <span className="inline-flex rounded-full bg-blue-100 px-2.5 py-1 text-xs font-semibold text-blue-700">
-                    {meta.badge}
-                  </span>
-                ) : null}
-              </div>
-              <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-500">
-                {meta?.subtitle ?? "Workspace overview"}
-              </p>
-            </div>
-
-            {meta?.headerCtaLabel && meta.headerCtaTo ? (
-              <Link
-                to={meta.headerCtaTo}
-                className="inline-flex items-center justify-center rounded-2xl bg-slate-950 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-slate-800"
-              >
-                {meta.headerCtaLabel}
-              </Link>
-            ) : null}
-          </div> */}
         </div>
       </div>
     </header>

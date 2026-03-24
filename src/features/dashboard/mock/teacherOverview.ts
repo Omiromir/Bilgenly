@@ -47,7 +47,7 @@ export const teacherOverviewStats: OverviewStat[] = [
     value: "82%",
     change: "+3% vs last month",
     icon: BarChart3,
-    iconClassName: "bg-[var(--dashboard-brand-soft)] text-[var(--dashboard-brand-strong)]",
+    iconClassName: "bg-[var(--dashboard-brand-soft-alt)] text-[var(--dashboard-brand-strong)]",
   },
   {
     title: "Drafts Needing Review",

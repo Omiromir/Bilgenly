@@ -17,6 +17,16 @@ import type {
   SettingsToggleItem,
 } from "../mock/sharedUi";
 import { Textarea } from "../../../components/ui/textarea";
+import {
+  DashboardButton,
+  DashboardSurface,
+  dashboardIconChipVariants,
+  dashboardInputVariants,
+  dashboardMetaTextClassName,
+  dashboardPageClassName,
+  dashboardTabVariants,
+  dashboardTextareaVariants,
+} from "./DashboardPrimitives";
 
 type SettingsTab = "account" | "security" | "notifications" | "preferences";
 
@@ -45,12 +55,13 @@ export function DashboardSettingsPage({
   const [activeTab, setActiveTab] = useState<SettingsTab>("account");
 
   return (
-    <div className="space-y-8">
+    <div className={dashboardPageClassName}>
       <DashboardPageHeader title={title} subtitle={subtitle} />
 
       <div className="grid gap-6 xl:grid-cols-[402px_minmax(0,1fr)] xl:items-start">
-        <aside className="rounded-[18px] border border-slate-200 bg-white p-2 shadow-sm shadow-slate-200/40">
-          <nav className="space-y-1.5">
+        <DashboardSurface asChild radius="md" padding="none">
+          <aside className="p-2">
+            <nav className="space-y-1.5">
             {tabs.map((tab) => {
               const Icon = tab.icon;
 
@@ -59,20 +70,16 @@ export function DashboardSettingsPage({
                   key={tab.id}
                   type="button"
                   onClick={() => setActiveTab(tab.id)}
-                    className={cn(
-                      "flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-[15px] font-semibold transition",
-                      activeTab === tab.id
-                      ? "dashboard-nav-active"
-                      : "text-[var(--dashboard-text-strong)] hover:bg-[var(--dashboard-surface-muted)]"
-                  )}
+                  className={dashboardTabVariants({ active: activeTab === tab.id })}
                 >
                   <Icon className="h-4 w-4" />
                   {tab.label}
                 </button>
               );
             })}
-          </nav>
-        </aside>
+            </nav>
+          </aside>
+        </DashboardSurface>
 
         <div className="space-y-6">
           {activeTab === "account" ? (
@@ -84,18 +91,12 @@ export function DashboardSettingsPage({
                   ))}
 
                   <div className="flex flex-wrap gap-3 pt-1">
-                    <button
-                      type="button"
-                      className="dashboard-button-primary rounded-xl px-5 py-3 text-sm font-semibold transition"
-                    >
+                    <DashboardButton type="button" size="lg">
                       Save Changes
-                    </button>
-                    <button
-                      type="button"
-                      className="dashboard-button-secondary rounded-xl px-5 py-3 text-sm font-semibold transition"
-                    >
+                    </DashboardButton>
+                    <DashboardButton type="button" variant="secondary" size="lg">
                       Cancel
-                    </button>
+                    </DashboardButton>
                   </div>
                 </div>
               </SettingsPanel>
@@ -121,41 +122,35 @@ export function DashboardSettingsPage({
                   {data.security.passwordFields.map((field) => (
                     <FieldRenderer key={field.label} field={field} password />
                   ))}
-                  <button
-                    type="button"
-                    className="dashboard-button-primary rounded-xl px-5 py-3 text-sm font-semibold transition"
-                  >
+                  <DashboardButton type="button" size="lg">
                     Update Password
-                  </button>
+                  </DashboardButton>
                 </div>
               </SettingsPanel>
 
               <SettingsPanel title="Two-Factor Authentication">
-                <p className="mb-5 text-[15px] leading-6 text-slate-500">
+                <p className="mb-5 text-[15px] leading-6 text-[var(--dashboard-text-soft)]">
                   Add an extra layer of security to your account by enabling
                   two-factor authentication.
                 </p>
-                <div className="flex items-center justify-between gap-4 rounded-[14px] bg-[var(--dashboard-surface-muted)] px-4 py-4">
+                <div className="flex items-center justify-between gap-4 rounded-[16px] bg-[var(--dashboard-surface-muted)] px-4 py-4">
                   <div className="flex items-start gap-3">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
+                    <div className={dashboardIconChipVariants({ tone: "success", size: "sm" })}>
                       <Shield className="h-4 w-4" />
                     </div>
                     <div>
                       <p className="text-[15px] font-semibold text-[var(--dashboard-text-strong)]">
                         {data.security.twoFactor.title}
                       </p>
-                      <p className="text-sm text-slate-500">
+                      <p className="text-sm text-[var(--dashboard-text-soft)]">
                         {data.security.twoFactor.description}
                       </p>
                     </div>
                   </div>
 
-                  <button
-                    type="button"
-                    className="dashboard-button-secondary rounded-xl px-4 py-2.5 text-sm font-medium transition"
-                  >
+                  <DashboardButton type="button" variant="secondary" size="sm">
                     {data.security.twoFactor.actionLabel}
-                  </button>
+                  </DashboardButton>
                 </div>
               </SettingsPanel>
 
@@ -164,13 +159,13 @@ export function DashboardSettingsPage({
                   {data.security.sessions.map((session) => (
                     <div
                       key={session.device}
-                      className="flex items-center justify-between gap-4 rounded-[14px] border border-slate-200 px-4 py-4"
+                      className="flex items-center justify-between gap-4 rounded-[16px] border border-[var(--dashboard-border-soft)] px-4 py-4"
                     >
                       <div>
                         <p className="text-[15px] font-semibold text-[var(--dashboard-text-strong)]">
                           {session.device}
                         </p>
-                        <p className="text-sm text-slate-500">
+                        <p className="text-sm text-[var(--dashboard-text-soft)]">
                           {session.description}
                         </p>
                       </div>
@@ -181,7 +176,7 @@ export function DashboardSettingsPage({
                           className={cn(
                             "text-sm font-medium",
                             session.destructive
-                              ? "text-red-500"
+                              ? "text-[var(--dashboard-danger)]"
                               : "text-[var(--dashboard-text-strong)]"
                           )}
                         >
@@ -227,7 +222,7 @@ export function DashboardSettingsPage({
                           key={theme.label}
                           type="button"
                           className={cn(
-                            "rounded-[14px] border p-4 text-center transition",
+                            "rounded-[16px] border p-4 text-center transition",
                             theme.selected
                               ? "border-[var(--dashboard-brand)] bg-[var(--dashboard-surface-muted)]"
                               : "border-[var(--dashboard-border-soft)] bg-white hover:bg-[var(--dashboard-surface-muted)]"
@@ -282,10 +277,14 @@ function SettingsPanel({
   children: ReactNode;
 }) {
   return (
-    <section className="rounded-[18px] border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/40 sm:p-6">
-      <h2 className="text-[1.05rem] font-semibold text-[var(--dashboard-text-strong)]">{title}</h2>
-      <div className="mt-5">{children}</div>
-    </section>
+    <DashboardSurface asChild radius="md" padding="md">
+      <section className="sm:p-6">
+        <h2 className="text-[1.05rem] font-semibold text-[var(--dashboard-text-strong)]">
+          {title}
+        </h2>
+        <div className="mt-5">{children}</div>
+      </section>
+    </DashboardSurface>
   );
 }
 
@@ -303,7 +302,10 @@ function FieldRenderer({
         <Textarea
           readOnly
           value={field.value}
-          className="min-h-[106px] rounded-[14px] border-0 bg-[var(--dashboard-surface-muted)] px-4 py-4 text-[15px] leading-6 text-[var(--dashboard-text)] shadow-none focus-visible:ring-0"
+          className={cn(
+            dashboardTextareaVariants({ size: "md" }),
+            "min-h-[106px] border-0 shadow-none focus-visible:ring-0",
+          )}
         />
       ) : (
         <Input
@@ -311,7 +313,10 @@ function FieldRenderer({
           readOnly
           value={field.value}
           placeholder={password ? "" : undefined}
-          className="h-14 rounded-[14px] border-0 bg-[var(--dashboard-surface-muted)] px-4 text-[15px] text-[var(--dashboard-text)] shadow-none focus-visible:ring-0"
+          className={cn(
+            dashboardInputVariants({ size: "lg" }),
+            "border-0 shadow-none focus-visible:ring-0",
+          )}
         />
       )}
     </label>
@@ -322,9 +327,14 @@ function SelectLikeField({ label, value }: { label: string; value: string }) {
   return (
     <div className="space-y-2">
       <p className="text-sm font-medium text-[var(--dashboard-text-strong)]">{label}</p>
-      <div className="flex h-14 items-center justify-between rounded-[14px] bg-[var(--dashboard-surface-muted)] px-4 text-[15px] text-[var(--dashboard-text)]">
+      <div
+        className={cn(
+          dashboardInputVariants({ size: "lg" }),
+          "flex items-center justify-between border-0",
+        )}
+      >
         <span>{value}</span>
-        <ChevronDown className="h-4 w-4 text-slate-500" />
+        <ChevronDown className="h-4 w-4 text-[var(--dashboard-text-faint)]" />
       </div>
     </div>
   );
@@ -332,10 +342,10 @@ function SelectLikeField({ label, value }: { label: string; value: string }) {
 
 function ToggleRow({ item }: { item: SettingsToggleItem }) {
   return (
-    <div className="flex items-center justify-between gap-4 rounded-[14px] border border-slate-200 px-4 py-4">
+    <div className="flex items-center justify-between gap-4 rounded-[16px] border border-[var(--dashboard-border-soft)] px-4 py-4">
       <div>
         <p className="text-[15px] font-semibold text-[var(--dashboard-text-strong)]">{item.label}</p>
-        <p className="text-sm text-slate-500">{item.description}</p>
+        <p className={dashboardMetaTextClassName}>{item.description}</p>
       </div>
       <div
         className={cn(
