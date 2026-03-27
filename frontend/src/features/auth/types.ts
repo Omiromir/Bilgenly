@@ -5,9 +5,9 @@ export interface SignInFormValues {
 
 export interface SignUpFormValues {
     email: string;
-    fullName: string;    // ← оставляем как username
+    fullName: string;
     password: string;
-    role: string;        // ← добавьте это поле
+    role: string;
 }
 
 export interface ResetPasswordFormValues {
@@ -23,7 +23,7 @@ export interface SignUpFormErrors {
     email?: string;
     fullName?: string;
     password?: string;
-    role?: string;       // ← добавьте
+    role?: string;
 }
 
 export interface ResetPasswordFormErrors {

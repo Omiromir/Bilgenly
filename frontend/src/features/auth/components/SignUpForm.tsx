@@ -2,6 +2,7 @@ import { type ChangeEvent, type FormEvent, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { signUp } from "../api";
 import { usePasswordVisibility } from "../hooks";
+import type { UserRole } from "../../../lib/auth";
 import type { SignUpFormErrors, SignUpFormValues } from "../types";
 import {
     getPasswordStrength,
@@ -11,26 +12,28 @@ import {
     validateSignUpForm,
     validateStrongPassword,
 } from "../validation";
-import { getDashboardPathByRole } from "../../../lib/auth"; // ← добавьте
+import { getDashboardPathByRole } from "../../../lib/auth";
+import {useAuth} from "../../../app/providers/AuthProvider";
 
 export function SignUpForm() {
     const navigate = useNavigate();
     const { inputType, isVisible, toggleVisibility } = usePasswordVisibility();
+    const { signInAsRole } = useAuth();
     const [values, setValues] = useState<SignUpFormValues>({
         email: "",
         fullName: "",
         password: "",
-        role: "Student", // ← добавьте
+        role: "Student",
     });
     const [errors, setErrors] = useState<SignUpFormErrors>({});
     const [touched, setTouched] = useState<Record<keyof SignUpFormValues, boolean>>({
         email: false,
         fullName: false,
         password: false,
-        role: false, // ← добавьте
+        role: false,
     });
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [serverError, setServerError] = useState<string | null>(null); // ← добавьте
+    const [serverError, setServerError] = useState<string | null>(null);
 
     const passwordStrength = getPasswordStrength(values.password);
 
@@ -70,7 +73,7 @@ export function SignUpForm() {
 
     const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
-        setServerError(null); // ← сбрасываем ошибку сервера
+        setServerError(null);
 
         const normalizedValues: SignUpFormValues = {
             email: normalizeEmail(values.email),
@@ -87,11 +90,11 @@ export function SignUpForm() {
 
         try {
             setIsSubmitting(true);
-            const result = await signUp(normalizedValues); // ← получаем result
+            const result = await signUp(normalizedValues);
+            signInAsRole(result.role.toLowerCase() as UserRole, result.token);
             const dashboardPath = getDashboardPathByRole(result.role.toLowerCase());
-            navigate(dashboardPath); // ← редирект по роли
+            navigate(dashboardPath);
         } catch (error) {
-            // ← показываем ошибку от бэкенда
             setServerError(error instanceof Error ? error.message : "Registration failed");
         } finally {
             setIsSubmitting(false);
@@ -197,7 +200,6 @@ export function SignUpForm() {
                 </div>
             </div>
 
-            {/* Выбор роли */}
             <div className="auth-field">
                 <label className="auth-label" htmlFor="role">I am a...</label>
                 <select

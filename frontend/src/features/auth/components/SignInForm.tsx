@@ -3,15 +3,19 @@ import { Link, useNavigate } from "react-router";
 import { signIn } from "../api";
 import { usePasswordVisibility } from "../hooks";
 import type { SignInFormErrors, SignInFormValues } from "../types";
+import type { UserRole } from "../../../lib/auth";
 import {
   normalizeEmail,
   validateEmail,
   validatePassword,
   validateSignInForm,
 } from "../validation";
+import { getDashboardPathByRole } from "../../../lib/auth";
+import {useAuth} from "../../../app/providers/AuthProvider";
 
 export function SignInForm() {
   const navigate = useNavigate();
+  const { signInAsRole } = useAuth();
   const { inputType, isVisible, toggleVisibility } = usePasswordVisibility();
   const [values, setValues] = useState<SignInFormValues>({
     email: "",
@@ -26,6 +30,7 @@ export function SignInForm() {
   );
   const [rememberMe, setRememberMe] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [serverError, setServerError] = useState<string | null>(null);
 
   const handleChange =
     (field: keyof SignInFormValues) => (event: ChangeEvent<HTMLInputElement>) => {
@@ -62,6 +67,7 @@ export function SignInForm() {
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    setServerError(null);
 
     const normalizedValues: SignInFormValues = {
       email: normalizeEmail(values.email),
@@ -80,13 +86,17 @@ export function SignInForm() {
       return;
     }
 
-    try {
-      setIsSubmitting(true);
-      await signIn({ ...normalizedValues, rememberMe });
-      navigate("/onboarding");
-    } finally {
-      setIsSubmitting(false);
-    }
+      try {
+          setIsSubmitting(true);
+          const result = await signIn({ ...normalizedValues, rememberMe });
+          signInAsRole(result.role.toLowerCase() as UserRole, result.token);
+          const dashboardPath = getDashboardPathByRole(result.role.toLowerCase());
+          navigate(dashboardPath);
+      } catch (error) {
+          setServerError(error instanceof Error ? error.message : "Login failed");
+      } finally {
+          setIsSubmitting(false);
+      }
   };
 
   const canSubmit =

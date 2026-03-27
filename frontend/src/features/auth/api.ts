@@ -4,25 +4,27 @@ import type {
     SignUpFormValues,
 } from "./types";
 
-const API_URL = "http://localhost:5241"; // ← ваш порт бэкенда
+const API_URL = "http://localhost:5241";
+const AUTH_TOKEN_KEY = "bilgenly_token";
+const AUTH_ROLE_KEY = "bilgenly_role";
 
-// Сохранение токена и роли
+
 function saveAuth(token: string, role: string) {
-    localStorage.setItem("token", token);
-    localStorage.setItem("role", role.toLowerCase());
+    localStorage.setItem(AUTH_TOKEN_KEY, token);
+    localStorage.setItem(AUTH_ROLE_KEY, role.toLowerCase());
 }
 
 export function getToken() {
-    return localStorage.getItem("token");
+    return localStorage.getItem(AUTH_TOKEN_KEY);
 }
 
 export function getRole() {
-    return localStorage.getItem("role");
+    return localStorage.getItem(AUTH_ROLE_KEY);
 }
 
 export function logout() {
-    localStorage.removeItem("token");
-    localStorage.removeItem("role");
+    localStorage.removeItem(AUTH_TOKEN_KEY);
+    localStorage.removeItem(AUTH_ROLE_KEY);
 }
 
 export async function signIn(data: SignInFormValues & { rememberMe: boolean }) {
@@ -42,7 +44,7 @@ export async function signIn(data: SignInFormValues & { rememberMe: boolean }) {
 
     const result = await response.json();
     saveAuth(result.token, result.role);
-    return result; // { token, username, email, role }
+    return result;
 }
 
 export async function signUp(data: SignUpFormValues) {
@@ -50,7 +52,7 @@ export async function signUp(data: SignUpFormValues) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-            username: data.fullName,   // fullName → username
+            username: data.fullName,
             email: data.email,
             password: data.password,
             role: data.role ?? "Student",
@@ -68,6 +70,5 @@ export async function signUp(data: SignUpFormValues) {
 }
 
 export async function requestPasswordReset(_: ResetPasswordFormValues) {
-    // Пока заглушка — этот функционал не реализован в бэкенде
     return new Promise((resolve) => window.setTimeout(resolve, 400));
 }

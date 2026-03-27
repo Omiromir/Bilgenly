@@ -12,12 +12,14 @@ interface AuthContextValue {
   role: UserRole | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  token: string | null;
   setRole: (role: UserRole | null) => void;
-  signInAsRole: (role: UserRole) => void;
+  signInAsRole: (role: UserRole, token: string) => void;
   signOut: () => void;
 }
 
 const AUTH_ROLE_KEY = "bilgenly_role";
+const AUTH_TOKEN_KEY = "bilgenly_token";
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
@@ -27,10 +29,12 @@ interface AuthProviderProps {
 
 export function AuthProvider({ children }: AuthProviderProps) {
   const [role, setRoleState] = useState<UserRole | null>(null);
+  const [token, setTokenState] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const savedRole = localStorage.getItem(AUTH_ROLE_KEY) as UserRole | null;
+    const savedToken = localStorage.getItem(AUTH_TOKEN_KEY);
 
     if (
       savedRole === "teacher" ||
@@ -39,7 +43,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
     ) {
       setRoleState(savedRole);
     }
-
+    if (savedToken) {
+          setTokenState(savedToken);
+    }
     setIsLoading(false);
   }, []);
 
@@ -53,24 +59,31 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   };
 
-  const signInAsRole = (nextRole: UserRole) => {
-    setRole(nextRole);
-  };
+    const signInAsRole = (nextRole: UserRole, nextToken: string) => {
+        setRoleState(nextRole);
+        setTokenState(nextToken);
+        localStorage.setItem(AUTH_ROLE_KEY, nextRole);
+        localStorage.setItem(AUTH_TOKEN_KEY, nextToken);
+    };
 
-  const signOut = () => {
-    setRole(null);
-  };
+    const signOut = () => {
+        setRoleState(null);
+        setTokenState(null);
+        localStorage.removeItem(AUTH_ROLE_KEY);
+        localStorage.removeItem(AUTH_TOKEN_KEY);
+    };
 
   const value = useMemo(
     () => ({
       role,
-      isAuthenticated: role !== null,
+        token,
+        isAuthenticated: role !== null && token !== null,
       isLoading,
       setRole,
       signInAsRole,
       signOut,
     }),
-    [role, isLoading]
+      [role, token, isLoading]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
