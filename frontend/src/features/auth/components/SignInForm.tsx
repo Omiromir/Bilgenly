@@ -18,17 +18,18 @@ export function SignInForm() {
     password: "",
   });
   const [errors, setErrors] = useState<SignInFormErrors>({});
-  const [touched, setTouched] = useState<Record<keyof SignInFormValues, boolean>>(
-    {
-      email: false,
-      password: false,
-    }
-  );
+  const [touched, setTouched] = useState<
+    Record<keyof SignInFormValues, boolean>
+  >({
+    email: false,
+    password: false,
+  });
   const [rememberMe, setRememberMe] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleChange =
-    (field: keyof SignInFormValues) => (event: ChangeEvent<HTMLInputElement>) => {
+    (field: keyof SignInFormValues) =>
+    (event: ChangeEvent<HTMLInputElement>) => {
       const nextValue = event.target.value;
 
       setValues((current) => ({
@@ -183,22 +184,13 @@ export function SignInForm() {
 
       <div className="auth-divider">Or</div>
 
-      <div className="auth-stack">
-        <button
-          className="auth-secondary"
-          type="button"
-          onClick={() => navigate("/onboarding")}
-        >
-          Sign In With Google
-        </button>
-        <button
-          className="auth-secondary"
-          type="button"
-          onClick={() => navigate("/onboarding")}
-        >
-          Sign In With Apple
-        </button>
-      </div>
+      <button
+        className="auth-secondary"
+        type="button"
+        onClick={() => navigate("/onboarding")}
+      >
+        Sign In With Google
+      </button>
     </form>
   );
 }

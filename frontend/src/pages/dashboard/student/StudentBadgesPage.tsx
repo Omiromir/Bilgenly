@@ -24,15 +24,19 @@ export function StudentBadgesPage() {
   return (
     <div className={dashboardPageClassName}>
       <DashboardPageHeader
-        title={meta?.title ?? "Badges & Leaderboard"}
-        subtitle="Track your achievements and compete with peers"
+        title={meta?.title ?? "Achievements"}
+        subtitle={meta?.subtitle ?? "Track your achievements and progress in class"}
       />
 
       <CtaPanel
         title="Your Rank: #3"
         description="You're in the top 15% of all students. Keep up the great work."
         variant="gradient"
-        aside={<Trophy className="hidden h-20 w-20 text-white/85 lg:block" />}
+        aside={
+          <div className="hidden h-40 w-40 items-center justify-center rounded-[28px] bg-white/12 lg:flex">
+            <Trophy className="h-20 w-20 text-white/85" />
+          </div>
+        }
         actions={
           <div className="grid gap-10 text-white sm:grid-cols-3">
             {studentBadgeSummary.map((item) => (

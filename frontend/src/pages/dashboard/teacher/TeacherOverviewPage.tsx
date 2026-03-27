@@ -1,5 +1,6 @@
-import { BookOpen, Clock3, Plus } from "lucide-react";
+import { BookOpen, Clock3 } from "lucide-react";
 import { Link } from "react-router";
+import logoPng from "../../../assets/logo.png";
 import { cn } from "../../../components/ui/utils";
 import { CtaPanel } from "../../../features/dashboard/components/CtaPanel";
 import { DashboardPageHeader } from "../../../features/dashboard/components/DashboardPageHeader";
@@ -42,12 +43,19 @@ export function TeacherOverviewPage() {
         actions={
           <DashboardButton asChild variant="inverse" size="xl">
             <Link to="/dashboard/teacher/generate-quiz">
-              <Plus className="h-5 w-5" />
               Create Quiz from PDF
             </Link>
           </DashboardButton>
         }
-        aside={<div className="hidden h-40 w-40 rounded-[28px] bg-white/12 lg:block" />}
+        aside={
+          <div className="hidden h-40 w-40 items-center justify-center rounded-[28px] bg-white/12 lg:flex">
+            <img
+              src={logoPng}
+              alt="Bilgenly"
+              className="h-20 w-20 object-contain opacity-95"
+            />
+          </div>
+        }
       />
 
       <div className={dashboardStatsGridClassName}>

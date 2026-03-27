@@ -1,7 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router";
 import { useAuth } from "../../../app/providers/AuthProvider";
-import { getDashboardPathByRole } from "../../../lib/auth";
 import { BilgenlyLogo } from "../../../components/shared/BilgenlyLogo";
 import { progressMap, totalSteps } from "../content";
 import { onboardingStyles } from "../styles";
@@ -25,7 +23,6 @@ export function BilgenlyOnboarding() {
   const [fadeIn, setFadeIn] = useState(true);
 
   const { signInAsRole } = useAuth();
-  const navigate = useNavigate();
 
   const go = (next: StepKey) => {
     setFadeIn(false);
@@ -63,7 +60,6 @@ export function BilgenlyOnboarding() {
     }
 
     signInAsRole(selected.role);
-    navigate(getDashboardPathByRole(selected.role));
   };
 
   const progress = progressMap[step] || 0;

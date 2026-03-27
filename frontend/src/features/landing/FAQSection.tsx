@@ -29,7 +29,7 @@ export function FAQSection({ expandedItems, onToggle }: FAQSectionProps) {
       variant: '4' as const,
       question: 'What languages do you support?',
       answer:
-        'We currently support English, Spanish, French, German, and Mandarin Chinese, with more languages being added regularly based on user demand.'
+        'We currently support English.'
     },
     {
       variant: '5' as const,
@@ -39,12 +39,6 @@ export function FAQSection({ expandedItems, onToggle }: FAQSectionProps) {
     },
     {
       variant: '6' as const,
-      question: 'What devices and platforms are supported?',
-      answer:
-        'Bilgenly works on all modern browsers (Chrome, Firefox, Safari, Edge) and is fully responsive on desktop, tablet, and mobile devices.'
-    },
-    {
-      variant: '7' as const,
       question: 'What kind of support do you offer?',
       answer:
         'We provide 24/7 email support, comprehensive documentation, video tutorials, and live chat support for premium users.'

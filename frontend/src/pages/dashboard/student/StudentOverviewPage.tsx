@@ -1,5 +1,6 @@
-import { BookOpen, Medal, Play, Sparkles, Timer } from "lucide-react";
+import { BookOpen, Medal, Timer } from "lucide-react";
 import { Link } from "react-router";
+import logoPng from "../../../assets/logo.png";
 import { cn } from "../../../components/ui/utils";
 import { CtaPanel } from "../../../features/dashboard/components/CtaPanel";
 import { DashboardPageHeader } from "../../../features/dashboard/components/DashboardPageHeader";
@@ -42,19 +43,25 @@ export function StudentOverviewPage() {
           <>
             <DashboardButton asChild variant="inverse" size="xl">
               <Link to="/dashboard/student/join-quiz">
-                <Sparkles className="h-5 w-5" />
                 Join Quiz by Code
               </Link>
             </DashboardButton>
             <DashboardButton asChild variant="hero" size="xl">
-              <Link to="/dashboard/student/practice">
-                <Play className="h-5 w-5" />
-                Practice Mode
+              <Link to="/dashboard/student/quiz-library">
+                Open Quiz Library
               </Link>
             </DashboardButton>
           </>
         }
-        aside={<div className="hidden h-40 w-40 rounded-[28px] bg-white/12 lg:block" />}
+        aside={
+          <div className="hidden h-40 w-40 items-center justify-center rounded-[28px] bg-white/12 lg:flex">
+            <img
+              src={logoPng}
+              alt="Bilgenly"
+              className="h-20 w-20 object-contain opacity-95"
+            />
+          </div>
+        }
       />
 
       <div className={dashboardStatsGridClassName}>
@@ -96,7 +103,6 @@ export function StudentOverviewPage() {
                 </div>
 
                   <DashboardButton type="button" size="lg" className="mt-5 w-full">
-                    <Play className="h-4 w-4" />
                     Start Quiz
                   </DashboardButton>
                 </article>

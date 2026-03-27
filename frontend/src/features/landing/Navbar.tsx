@@ -48,31 +48,31 @@ export function Navbar() {
 
         <div className="hidden items-center gap-[35px] font-['Montserrat',sans-serif] text-[16px] text-[#374151] md:flex">
           <a href="#about" className="transition-colors hover:text-[#2191F6]">
-            about us
+            About us
           </a>
           <a
             href="#features"
             className="transition-colors hover:text-[#2191F6]"
           >
-            features
+            Features
           </a>
           <a
             href="#how-it-works"
             className="transition-colors hover:text-[#2191F6]"
           >
-            how it works
+            How it works
           </a>
           <a href="#pricing" className="transition-colors hover:text-[#2191F6]">
-            pricing
+            Pricing
           </a>
           <a href="#faqs" className="transition-colors hover:text-[#2191F6]">
-            faqs
+            Faqs
           </a>
         </div>
 
         <div className="flex items-center gap-3 sm:gap-5">
           <button
-            className="hidden font-['Montserrat',sans-serif] text-[16px] font-bold text-[#4B5563] transition-all duration-200 ease-out hover:-translate-y-[1px] hover:text-[#111827] md:inline lg:text-[20px]"
+            className="hidden font-['Montserrat',sans-serif] text-[16px] font-bold text-[#4B5563] transition-all duration-200 ease-out  hover:text-[#111827] md:inline lg:text-[20px]"
             onClick={() => handleAuthNavigation("/signin")}
             type="button"
           >
@@ -81,7 +81,7 @@ export function Navbar() {
           <LandingButton
             variant="primary"
             size="sm"
-            className="hidden hover:-translate-y-[1px] md:inline-flex"
+            className="hidden  md:inline-flex"
             onClick={() => handleAuthNavigation("/signup")}
           >
             Get started
