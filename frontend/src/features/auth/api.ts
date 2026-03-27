@@ -4,7 +4,7 @@ import type {
     SignUpFormValues,
 } from "./types";
 
-const API_URL = "http://localhost:5241";
+const API_URL = "https://bilgenly-back.onrender.com";
 const AUTH_TOKEN_KEY = "bilgenly_token";
 const AUTH_ROLE_KEY = "bilgenly_role";
 
