@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { BookOpen, Medal, Sparkles, TrendingUp } from "lucide-react";
+import { BookOpen, Flame, Medal, Sparkles, TrendingUp } from "lucide-react";
 import type { OverviewStat } from "./teacherOverview";
 
 export interface StudentAssignment {
@@ -27,7 +27,7 @@ export const studentOverviewStats: OverviewStat[] = [
     title: "Current Streak",
     value: "7 days",
     change: "Best: 12 days",
-    icon: Sparkles,
+    icon: Flame,
     iconClassName: "bg-[var(--dashboard-brand-soft)] text-[var(--dashboard-brand-strong)]",
   },
   {

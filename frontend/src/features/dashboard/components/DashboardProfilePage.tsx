@@ -57,9 +57,9 @@ export function DashboardProfilePage({
           </div>
 
           <div className="px-5 pb-6 sm:px-6">
-            <div className="-mt-12 flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
-              <div className="flex flex-col gap-5 md:flex-row md:items-start">
-                <div className="relative h-[108px] w-[108px] shrink-0 rounded-full bg-white p-1 shadow-sm shadow-slate-300/50">
+            <div className="flex flex-col gap-6 pt-5 lg:flex-row lg:items-start lg:justify-between">
+              <div className="min-w-0 flex flex-col gap-5 md:flex-row md:items-start">
+                <div className="-mt-16 relative h-[108px] w-[108px] shrink-0 rounded-full bg-white p-1 shadow-sm shadow-slate-300/50">
                   <div className="flex h-full w-full items-center justify-center rounded-full bg-white text-[40px] font-semibold text-[var(--dashboard-brand)]">
                     {profile.initials}
                   </div>
@@ -72,9 +72,9 @@ export function DashboardProfilePage({
                   </DashboardButton>
                 </div>
 
-                <div className="space-y-4 pt-2">
+                <div className="min-w-0 flex-1 space-y-4 pt-1 md:pt-5">
                   <div>
-                    <h2 className="text-[2rem] font-semibold tracking-tight text-[var(--dashboard-text-strong)]">
+                    <h2 className="break-words text-[2rem] font-semibold tracking-tight text-[var(--dashboard-text-strong)]">
                       {profile.name}
                     </h2>
                     <p className="text-lg text-[var(--dashboard-text-soft)]">{profile.roleLabel}</p>
@@ -177,9 +177,9 @@ function InfoLine({
   text: string;
 }) {
   return (
-    <span className="inline-flex items-center gap-2">
-      <Icon className="h-4 w-4 text-[var(--dashboard-text-faint)]" />
-      {text}
+    <span className="inline-flex min-w-0 items-center gap-2">
+      <Icon className="h-4 w-4 shrink-0 text-[var(--dashboard-text-faint)]" />
+      <span className="break-words">{text}</span>
     </span>
   );
 }

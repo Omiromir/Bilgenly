@@ -14,27 +14,6 @@ export interface TeacherLibraryItem {
   averageScore: string;
 }
 
-export interface TeacherClassSummaryItem {
-  label: string;
-  value: string;
-  change?: string;
-  iconColor: string;
-}
-
-export interface TeacherClassRow {
-  name: string;
-  students: string;
-  quizzes: string;
-  avgScore: string;
-  active?: boolean;
-}
-
-export interface TeacherTopStudent {
-  name: string;
-  className: string;
-  score: string;
-}
-
 export interface TeacherAnalyticsSummary {
   title: string;
   value: string;
@@ -120,73 +99,6 @@ export const teacherLibraryItems: TeacherLibraryItem[] = [
     date: "Feb 28, 2026",
     status: "archived",
     averageScore: "88%",
-  },
-];
-
-export const teacherClassSummary: TeacherClassSummaryItem[] = [
-  {
-    label: "Total Students",
-    value: "102",
-    change: "+12 this semester",
-    iconColor: "bg-[var(--dashboard-brand-soft-alt)] text-[var(--dashboard-brand)]",
-  },
-  {
-    label: "Active Classes",
-    value: "3",
-    iconColor: "bg-[var(--dashboard-brand-soft-alt)] text-[var(--dashboard-brand)]",
-  },
-  {
-    label: "Average Class Size",
-    value: "28",
-    iconColor: "bg-[var(--dashboard-brand-soft)] text-[var(--dashboard-brand-strong)]",
-  },
-];
-
-export const teacherClasses: TeacherClassRow[] = [
-  {
-    name: "CS101 - Intro to Programming",
-    students: "24 students",
-    quizzes: "8 quizzes",
-    avgScore: "Avg Score: 85%",
-    active: true,
-  },
-  {
-    name: "CS202 - Web Development",
-    students: "31 students",
-    quizzes: "12 quizzes",
-    avgScore: "Avg Score: 78%",
-    active: true,
-  },
-  {
-    name: "CS301 - Data Structures",
-    students: "28 students",
-    quizzes: "15 quizzes",
-    avgScore: "Avg Score: 82%",
-    active: true,
-  },
-  {
-    name: "CS150 - Python Basics",
-    students: "19 students",
-    quizzes: "6 quizzes",
-    avgScore: "Avg Score: 88%",
-  },
-];
-
-export const teacherTopStudents: TeacherTopStudent[] = [
-  {
-    name: "Aruzhan K.",
-    className: "CS101 - Intro to Programming",
-    score: "98%",
-  },
-  {
-    name: "Timur S.",
-    className: "CS301 - Data Structures",
-    score: "96%",
-  },
-  {
-    name: "Malika R.",
-    className: "CS202 - Web Development",
-    score: "94%",
   },
 ];
 

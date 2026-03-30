@@ -11,7 +11,10 @@ export function BilgenlyLogo({
   showText = true,
 }: BilgenlyLogoProps) {
   return (
-    <Link to="/" style={{ display: "inline-flex", gap: 8, alignItems: "center" }}>
+    <Link
+      to="/"
+      className="group inline-flex items-center gap-2 transition-all duration-300 hover:[filter:drop-shadow(0_0_10px_rgba(33,145,246,0.35))]"
+    >
       <img
         src={logoPng}
         alt="Bilgenly Logo"

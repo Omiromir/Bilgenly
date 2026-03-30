@@ -7,6 +7,13 @@ import {
   useState,
 } from "react";
 import type { UserRole } from "../../lib/auth";
+import {
+  defaultMockStudentId,
+  getMockStudentById,
+  mockStudentUsers,
+  mockTeacherUser,
+  type MockDashboardUser,
+} from "../../features/dashboard/mock/mockUsers";
 
 interface AuthContextValue {
   role: UserRole | null;
@@ -16,6 +23,7 @@ interface AuthContextValue {
   setRole: (role: UserRole | null) => void;
   signInAsRole: (role: UserRole, token: string) => void;
   signOut: () => void;
+  setCurrentStudentId: (studentId: string) => void;
 }
 
 const AUTH_ROLE_KEY = "bilgenly_role";
@@ -73,15 +81,36 @@ export function AuthProvider({ children }: AuthProviderProps) {
         localStorage.removeItem(AUTH_TOKEN_KEY);
     };
 
+  const setCurrentStudentId = (studentId: string) => {
+    if (!getMockStudentById(studentId)) {
+      return;
+    }
+
+    setCurrentStudentIdState(studentId);
+    localStorage.setItem(AUTH_STUDENT_KEY, studentId);
+  };
+
+  const currentStudent = getMockStudentById(currentStudentId);
+  const currentUser =
+    role === "teacher"
+      ? mockTeacherUser
+      : role === "student"
+        ? currentStudent
+        : null;
+
   const value = useMemo(
     () => ({
       role,
         token,
         isAuthenticated: role !== null && token !== null,
       isLoading,
+      currentUser,
+      currentStudent,
+      availableStudents: mockStudentUsers,
       setRole,
       signInAsRole,
       signOut,
+      setCurrentStudentId,
     }),
       [role, token, isLoading]
   );

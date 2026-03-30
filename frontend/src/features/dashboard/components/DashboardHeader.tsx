@@ -10,9 +10,10 @@ import {
     User,
     X,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 import { useAuth } from "../../../app/providers/AuthProvider";
+import { useNotifications } from "../../../app/providers/NotificationsProvider";
 import { cn } from "../../../components/ui/utils";
 import { notificationItems } from "../mock/sharedUi";
 import { useCurrentUser } from "../hooks/useCurrentUser";
@@ -23,6 +24,11 @@ import {
     dashboardIconChipVariants,
     dashboardSectionDividerClassName,
 } from "./DashboardPrimitives";
+import {
+  formatDashboardNotificationDateTime,
+  getNotificationStatusLabel,
+  getNotificationStatusTone,
+} from "./notifications/notificationUtils";
 
 interface DashboardHeaderProps {
     onOpenSidebar: () => void;

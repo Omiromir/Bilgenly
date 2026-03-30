@@ -1,4 +1,4 @@
-import { Flame, Medal, Target, Trophy, Zap } from "lucide-react";
+import { Medal, Trophy } from "lucide-react";
 import { CtaPanel } from "../../../features/dashboard/components/CtaPanel";
 import { DashboardPageHeader } from "../../../features/dashboard/components/DashboardPageHeader";
 import {
@@ -10,29 +10,28 @@ import { SectionCard } from "../../../features/dashboard/components/SectionCard"
 import { useDashboardPageMeta } from "../../../features/dashboard/hooks/useDashboardPageMeta";
 import {
   studentBadgeSummary,
-  studentBadges,
   studentLeaderboard,
 } from "../../../features/dashboard/mock/studentWorkspace";
 
-const badgeIcons = [Zap, Target, Flame, Trophy, Zap, Medal] as const;
-
 export function StudentBadgesPage() {
   const meta = useDashboardPageMeta();
-  const earnedBadges = studentBadges.filter((badge) => badge.earnedAt);
-  const progressBadges = studentBadges.filter((badge) => badge.progress);
 
   return (
     <div className={dashboardPageClassName}>
       <DashboardPageHeader
-        title={meta?.title ?? "Badges & Leaderboard"}
-        subtitle="Track your achievements and compete with peers"
+        title={meta?.title ?? "Achievements"}
+        subtitle={meta?.subtitle ?? "Track your achievements and progress in class"}
       />
 
       <CtaPanel
         title="Your Rank: #3"
         description="You're in the top 15% of all students. Keep up the great work."
         variant="gradient"
-        aside={<Trophy className="hidden h-20 w-20 text-white/85 lg:block" />}
+        aside={
+          <div className="hidden h-40 w-40 items-center justify-center rounded-[28px] bg-white/12 lg:flex">
+            <Trophy className="h-20 w-20 text-white/85" />
+          </div>
+        }
         actions={
           <div className="grid gap-10 text-white sm:grid-cols-3">
             {studentBadgeSummary.map((item) => (
@@ -47,81 +46,21 @@ export function StudentBadgesPage() {
 
       <SectionCard title="Your Badges">
         <div className="flex justify-end pb-5 text-sm text-slate-500">
-          12 of 50 earned
+          0 of 50 earned
         </div>
 
-        <div className="grid gap-4 md:grid-cols-3">
-          {earnedBadges.map((badge, index) => {
-            const Icon = badgeIcons[index];
-
-            return (
-              <DashboardSurface
-                asChild
-                key={badge.name}
-                variant="muted"
-                radius="md"
-                padding="sm"
-                className="border-[var(--dashboard-warning)]/20"
-              >
-                <article>
-                <div className="flex items-start justify-between gap-3">
-                  <Icon
-                    className="h-9 w-9"
-                    style={{ color: badge.accent ?? "#F59E0B" }}
-                  />
-                  <Medal className="h-4 w-4 text-[var(--dashboard-warning)]" />
-                </div>
-                <h3 className="mt-5 text-[1.1rem] font-semibold text-[var(--dashboard-text-strong)]">
-                  {badge.name}
-                </h3>
-                <p className="mt-2 text-sm text-slate-500">{badge.detail}</p>
-                <p className="mt-4 text-xs font-medium text-[var(--dashboard-success)]">
-                  {badge.earnedAt}
-                </p>
-                </article>
-              </DashboardSurface>
-            );
-          })}
-
-          {progressBadges.map((badge, index) => {
-            const Icon = badgeIcons[index + earnedBadges.length];
-
-            return (
-              <DashboardSurface
-                asChild
-                key={badge.name}
-                radius="md"
-                padding="sm"
-              >
-                <article>
-                <Icon
-                  className="h-9 w-9"
-                  style={{ color: badge.accent ?? "#F59E0B" }}
-                />
-                <h3 className="mt-5 text-[1.1rem] font-semibold text-[var(--dashboard-text-strong)]">
-                  {badge.name}
-                </h3>
-                <p className="mt-2 text-sm text-slate-500">{badge.detail}</p>
-                <div className="mt-5">
-                  <div className="flex items-center justify-between text-xs text-slate-500">
-                    <span>Progress</span>
-                    <span>{badge.progress}</span>
-                  </div>
-                  <div className="mt-2 h-2 rounded-full bg-slate-200">
-                    <div
-                      className="h-full rounded-full"
-                      style={{
-                        width: badge.progress === "24/50" ? "48%" : "85%",
-                        backgroundColor: badge.accent ?? "#F59E0B",
-                      }}
-                    />
-                  </div>
-                </div>
-                </article>
-              </DashboardSurface>
-            );
-          })}
-        </div>
+        <DashboardSurface
+          variant="muted"
+          radius="md"
+          padding="sm"
+          className="border-dashed border-[var(--dashboard-border-soft)]"
+        >
+          <div className="py-8 text-center">
+            <p className="text-[1.05rem] font-semibold text-[var(--dashboard-text-strong)]">
+              No badges yet
+            </p>
+          </div>
+        </DashboardSurface>
       </SectionCard>
 
       <SectionCard
