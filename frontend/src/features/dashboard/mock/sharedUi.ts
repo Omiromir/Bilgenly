@@ -1,13 +1,3 @@
-export type NotificationIconKey = "info" | "check" | "alert" | "badge";
-
-export interface NotificationItem {
-  title: string;
-  message: string;
-  time: string;
-  icon: NotificationIconKey;
-  unread?: boolean;
-}
-
 export interface ProfileField {
   label: string;
   value: string;
@@ -93,35 +83,6 @@ export interface SettingsScreenData {
     privacy: SettingsToggleItem[];
   };
 }
-
-export const notificationItems: NotificationItem[] = [
-  {
-    title: "New quiz assigned",
-    message: "JavaScript Fundamentals quiz is now available",
-    time: "5 min ago",
-    icon: "info",
-    unread: true,
-  },
-  {
-    title: "Quiz completed",
-    message: "You scored 92% on Python Data Structures",
-    time: "1 hour ago",
-    icon: "check",
-    unread: true,
-  },
-  {
-    title: "Deadline approaching",
-    message: "React Hooks quiz due in 2 days",
-    time: "3 hours ago",
-    icon: "alert",
-  },
-  {
-    title: "Badge earned",
-    message: 'You earned the "Quick Learner" badge!',
-    time: "6 hours ago",
-    icon: "badge",
-  },
-];
 
 export const teacherProfileSummary: ProfileSummary = {
   name: "Professor Doe",

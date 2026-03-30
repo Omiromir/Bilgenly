@@ -12,6 +12,24 @@ export type QuizLibraryStatus =
 export type QuizLibraryVisibility = "private" | "public";
 export type QuizDifficulty = "Beginner" | "Intermediate" | "Advanced";
 export type QuizPracticeState = "ready" | "in-progress" | "completed";
+export type QuizLibrarySource =
+  | "assigned"
+  | "discover"
+  | "generated"
+  | "saved"
+  | "history";
+
+export interface QuizAssignmentContext {
+  assignmentId: string;
+  classId: string;
+  className: string;
+  classSubject: string;
+  assignedAt: string;
+  assignedBy: string;
+  assignedByName: string;
+  visibility: "class-members";
+  status: "assigned";
+}
 
 export interface QuizQuestionRecord {
   id: string;
@@ -64,6 +82,8 @@ export interface QuizLibraryItem {
   tags: string[];
   sourceLabel: string;
   note?: string;
+  sourceType?: QuizLibrarySource;
+  assignmentContext?: QuizAssignmentContext;
   isOwner?: boolean;
   isSaved?: boolean;
   isRecommended?: boolean;

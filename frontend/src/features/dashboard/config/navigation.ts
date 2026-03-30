@@ -1,6 +1,7 @@
 import type { LucideIcon } from "lucide-react";
 import {
   BarChart3,
+  Bell,
   BookOpen,
   FilePlus2,
   Home,
@@ -10,7 +11,6 @@ import {
   User,
   Settings,
   ShieldCheck,
-  Sparkles,
   Users,
 } from "lucide-react";
 import type { UserRole } from "../../../lib/auth";
@@ -121,6 +121,16 @@ const dashboardRoutes: DashboardRouteMeta[] = [
     icon: LogIn,
     navVisible: true,
     badge: "Quick entry",
+  },
+  {
+    path: "/dashboard/student/notifications",
+    role: "student",
+    label: "Notifications",
+    title: "Notifications",
+    subtitle: "See persistent class invitations and other important updates tied to your student account.",
+    icon: Bell,
+    navVisible: false,
+    badge: "Inbox",
   },
   {
     path: "/dashboard/student/quiz-library",

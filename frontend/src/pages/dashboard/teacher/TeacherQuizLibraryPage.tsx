@@ -14,11 +14,21 @@ import {
 } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "../../../components/ui/dialog";
+import { useTeacherClasses } from "../../../app/providers/TeacherClassesProvider";
+import {
   getQuizLibraryItemsForRole,
   useQuizLibrary,
 } from "../../../app/providers/QuizLibraryProvider";
 import { DashboardPageHeader } from "../../../features/dashboard/components/DashboardPageHeader";
 import {
+  DashboardBadge,
   DashboardButton,
   dashboardPageClassName,
 } from "../../../features/dashboard/components/DashboardPrimitives";
@@ -52,6 +62,7 @@ export function TeacherQuizLibraryPage() {
   const meta = useDashboardPageMeta();
   const location = useLocation();
   const navigate = useNavigate();
+  const { classes, assignQuizToClasses } = useTeacherClasses();
   const { quizzes, deleteQuiz, duplicateQuizToLibrary, publishQuiz, toggleSavedQuiz } =
     useQuizLibrary();
   const teacherQuizLibraryItems = getQuizLibraryItemsForRole(quizzes, "teacher");
@@ -64,6 +75,11 @@ export function TeacherQuizLibraryPage() {
   );
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("all");
+  const [quizPendingAssignment, setQuizPendingAssignment] =
+    useState<QuizLibraryItem | null>(null);
+  const [selectedClassIds, setSelectedClassIds] = useState<string[]>([]);
+  const [assignmentError, setAssignmentError] = useState("");
+  const [assignmentFeedback, setAssignmentFeedback] = useState<string | null>(null);
   const deferredSearch = useDeferredValue(search);
   const shouldShowStatusFilter = activeTab === "my-quizzes";
 
@@ -173,6 +189,57 @@ export function TeacherQuizLibraryPage() {
       setStatus("all");
     }
   }, [shouldShowStatusFilter, status]);
+
+  useEffect(() => {
+    if (!quizPendingAssignment) {
+      setSelectedClassIds([]);
+      setAssignmentError("");
+      return;
+    }
+
+    setSelectedClassIds([]);
+    setAssignmentError("");
+  }, [quizPendingAssignment]);
+
+  const getAssignedClassIdsForQuiz = (quizId: string) =>
+    classes
+      .filter((teacherClass) =>
+        teacherClass.assignedQuizzes.some((assignedQuiz) => assignedQuiz.quizId === quizId),
+      )
+      .map((teacherClass) => teacherClass.id);
+
+  const handleAssignQuizToClasses = () => {
+    if (!quizPendingAssignment) {
+      return;
+    }
+
+    if (!selectedClassIds.length) {
+      setAssignmentError("Select at least one active class to continue.");
+      return;
+    }
+
+    const assignedClassIds = assignQuizToClasses(
+      {
+        quizId: quizPendingAssignment.id,
+        title: quizPendingAssignment.title,
+        topic: quizPendingAssignment.topic,
+        questionCount: quizPendingAssignment.questionCount,
+      },
+      selectedClassIds,
+    );
+
+    if (!assignedClassIds.length) {
+      setAssignmentError("That quiz is already assigned to the selected classes.");
+      return;
+    }
+
+    setAssignmentFeedback(
+      `"${quizPendingAssignment.title}" assigned to ${assignedClassIds.length} ${
+        assignedClassIds.length === 1 ? "class" : "classes"
+      }.`,
+    );
+    setQuizPendingAssignment(null);
+  };
 
   const getTeacherMetadata = (item: QuizLibraryItem): QuizCardMetadataItem[] => [
     {
@@ -297,6 +364,7 @@ export function TeacherQuizLibraryPage() {
       {
         label: "Assign Quiz",
         icon: Rocket,
+        onClick: () => setQuizPendingAssignment(item),
       },
       {
         label: "Edit",
@@ -350,6 +418,14 @@ export function TeacherQuizLibraryPage() {
       />
 
       <section className="space-y-5">
+        {assignmentFeedback ? (
+          <div className="rounded-[22px] border border-[var(--dashboard-success-soft)] bg-[var(--dashboard-success-soft)]/50 px-5 py-4">
+            <p className="text-sm leading-6 text-[var(--dashboard-success)]">
+              {assignmentFeedback}
+            </p>
+          </div>
+        ) : null}
+
         <LibrarySectionHeader
           title={activeTabConfig.label}
           description={activeTabConfig.description}
@@ -376,6 +452,137 @@ export function TeacherQuizLibraryPage() {
           />
         )}
       </section>
+
+      <Dialog
+        open={Boolean(quizPendingAssignment)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setQuizPendingAssignment(null);
+          }
+        }}
+      >
+        <DialogContent className="max-w-2xl rounded-[28px] border-[var(--dashboard-border-soft)] p-0">
+          <div className="border-b border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-muted)] px-6 py-5">
+            <DialogHeader className="gap-3 text-left">
+              <DialogTitle className="text-[1.55rem] font-semibold tracking-[-0.03em] text-[var(--dashboard-text-strong)]">
+                Assign quiz to classes
+              </DialogTitle>
+              <DialogDescription className="text-sm leading-6 text-[var(--dashboard-text-soft)]">
+                {quizPendingAssignment
+                  ? `Choose which classes should receive "${quizPendingAssignment.title}".`
+                  : "Choose classes for this quiz."}
+              </DialogDescription>
+            </DialogHeader>
+          </div>
+
+          <div className="space-y-5 px-6 py-6">
+            {quizPendingAssignment ? (
+              <div className="rounded-[18px] border border-[var(--dashboard-border-soft)] bg-white px-4 py-3">
+                <p className="font-semibold text-[var(--dashboard-text-strong)]">
+                  {quizPendingAssignment.title}
+                </p>
+                <p className="mt-1 text-sm text-[var(--dashboard-text-soft)]">
+                  {quizPendingAssignment.topic} · {quizPendingAssignment.questionCount}{" "}
+                  {quizPendingAssignment.questionCount === 1 ? "question" : "questions"}
+                </p>
+              </div>
+            ) : null}
+
+            <div className="space-y-3">
+              {classes.length ? (
+                classes.map((teacherClass) => {
+                  const alreadyAssigned = quizPendingAssignment
+                    ? getAssignedClassIdsForQuiz(quizPendingAssignment.id).includes(
+                        teacherClass.id,
+                      )
+                    : false;
+                  const isArchived = teacherClass.status === "archived";
+                  const isDisabled = alreadyAssigned || isArchived;
+
+                  return (
+                    <label
+                      key={teacherClass.id}
+                      className="flex items-center justify-between gap-4 rounded-[18px] border border-[var(--dashboard-border-soft)] bg-white px-4 py-3"
+                    >
+                      <div className="flex items-start gap-3">
+                        <input
+                          type="checkbox"
+                          checked={selectedClassIds.includes(teacherClass.id)}
+                          disabled={isDisabled}
+                          onChange={(event) => {
+                            const { checked } = event.target;
+
+                            setSelectedClassIds((current) =>
+                              checked
+                                ? [...current, teacherClass.id]
+                                : current.filter((item) => item !== teacherClass.id),
+                            );
+                            if (assignmentError) {
+                              setAssignmentError("");
+                            }
+                          }}
+                          className="mt-1 h-4 w-4 rounded border-[var(--dashboard-border-soft)] text-[var(--dashboard-brand)]"
+                        />
+                        <div>
+                          <p className="font-semibold text-[var(--dashboard-text-strong)]">
+                            {teacherClass.name}
+                          </p>
+                          <p className="mt-1 text-sm text-[var(--dashboard-text-soft)]">
+                            {teacherClass.studentCount}{" "}
+                            {teacherClass.studentCount === 1 ? "student" : "students"} ·{" "}
+                            {teacherClass.quizCount}{" "}
+                            {teacherClass.quizCount === 1 ? "quiz" : "quizzes"}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap gap-2">
+                        {alreadyAssigned ? (
+                          <DashboardBadge tone="info">Already assigned</DashboardBadge>
+                        ) : null}
+                        {isArchived ? (
+                          <DashboardBadge tone="neutral">Archived</DashboardBadge>
+                        ) : null}
+                      </div>
+                    </label>
+                  );
+                })
+              ) : (
+                <div className="rounded-[18px] border border-dashed border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-muted)] px-4 py-4">
+                  <p className="font-semibold text-[var(--dashboard-text-strong)]">
+                    No classes available yet
+                  </p>
+                  <p className="mt-1 text-sm leading-6 text-[var(--dashboard-text-soft)]">
+                    Create a class first, then come back here to assign quizzes to it.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {assignmentError ? (
+              <div className="rounded-[18px] border border-[var(--dashboard-danger-soft)] bg-[var(--dashboard-danger-soft)]/40 px-4 py-3">
+                <p className="text-sm leading-6 text-[var(--dashboard-danger)]">
+                  {assignmentError}
+                </p>
+              </div>
+            ) : null}
+          </div>
+
+          <DialogFooter className="border-t border-[var(--dashboard-border-soft)] px-6 py-5 sm:justify-end">
+            <DashboardButton
+              type="button"
+              size="lg"
+              variant="ghost"
+              onClick={() => setQuizPendingAssignment(null)}
+            >
+              Cancel
+            </DashboardButton>
+            <DashboardButton type="button" size="lg" onClick={handleAssignQuizToClasses}>
+              Assign to classes
+            </DashboardButton>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

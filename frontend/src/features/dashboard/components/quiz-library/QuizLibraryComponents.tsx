@@ -1,11 +1,13 @@
 import type { ReactNode } from "react";
 import {
-  BadgeCheck,
+  BookOpen,
+  CalendarDays,
   Eye,
   Globe2,
   Lock,
   RotateCcw,
   SearchX,
+  UserRound,
 } from "lucide-react";
 import { cn } from "../../../../components/ui/utils";
 import {
@@ -29,16 +31,19 @@ import {
   dashboardTabVariants,
 } from "../DashboardPrimitives";
 import type {
+  QuizAssignmentContext,
   QuizCardAction,
   QuizCardMetadataItem,
   QuizLibraryFilterDefinition,
   QuizLibraryItem,
   QuizLibraryTab,
 } from "./quizLibraryTypes";
+import type { StudentAssignedQuizLibraryItem } from "./studentQuizLibrarySources";
 import {
   getStatusLabel,
   getVisibilityLabel,
 } from "./quizLibraryUtils";
+import { formatTeacherClassDate } from "../classes/teacherClassesUtils";
 
 const statusToneMap = {
   draft: "warning",
@@ -225,6 +230,47 @@ export function VisibilityBadge({ visibility }: VisibilityBadgeProps) {
   );
 }
 
+interface QuizSourceBadgeProps {
+  label: string;
+}
+
+export function QuizSourceBadge({ label }: QuizSourceBadgeProps) {
+  return <DashboardBadge tone="brand">{label}</DashboardBadge>;
+}
+
+interface ClassAssignmentMetaProps {
+  assignmentContext: QuizAssignmentContext;
+}
+
+export function ClassAssignmentMeta({
+  assignmentContext,
+}: ClassAssignmentMetaProps) {
+  const assignedDate = formatTeacherClassDate(assignmentContext.assignedAt);
+
+  return (
+    <div className="rounded-[20px] bg-[var(--dashboard-surface-muted)] px-4 py-4">
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className={dashboardIconTextRowClassName}>
+          <BookOpen className="h-4 w-4" />
+          <span>{assignmentContext.className}</span>
+        </div>
+        <div className={dashboardIconTextRowClassName}>
+          <UserRound className="h-4 w-4" />
+          <span>{assignmentContext.assignedByName}</span>
+        </div>
+        <div className={dashboardIconTextRowClassName}>
+          <CalendarDays className="h-4 w-4" />
+          <span>Assigned {assignedDate}</span>
+        </div>
+        <div className={dashboardIconTextRowClassName}>
+          <Eye className="h-4 w-4" />
+          <span>Visible through class membership</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 interface QuizMetadataRowProps {
   item: QuizCardMetadataItem;
 }
@@ -245,7 +291,6 @@ interface QuizCardProps {
   metadata: QuizCardMetadataItem[];
   actions: QuizCardAction[];
   badgeLabel?: string;
-  footerNote?: string;
 }
 
 export function QuizCard({
@@ -253,7 +298,6 @@ export function QuizCard({
   metadata,
   actions,
   badgeLabel,
-  footerNote,
 }: QuizCardProps) {
   return (
     <DashboardSurface asChild radius="xl" padding="md" className="h-full">
@@ -299,20 +343,105 @@ export function QuizCard({
           ))}
         </div>
 
-        <div className="mt-5 rounded-[18px] bg-[var(--dashboard-surface-muted)] px-4 py-3">
-          <div className="flex items-start gap-3">
-            <div className={dashboardIconChipVariants({ tone: "accent", size: "sm" })}>
-              <BadgeCheck className="h-4 w-4" />
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-[var(--dashboard-text-strong)]">
-                {item.sourceLabel}
-              </p>
-              <p className="mt-1 text-sm leading-6 text-[var(--dashboard-text-soft)]">
-                {footerNote ?? item.note ?? `Updated ${item.updatedAt}`}
-              </p>
-            </div>
+        <div className="mt-5 flex flex-wrap gap-2.5 border-t border-[var(--dashboard-border-soft)] pt-5">
+          {actions.map((action, index) => {
+            const Icon = action.icon;
+
+            return (
+              <DashboardButton
+                key={`${item.id}-${action.label}`}
+                type="button"
+                size="lg"
+                variant={action.variant ?? (index === 0 ? "primary" : "secondary")}
+                className={cn(index === 0 && actions.length < 3 && "flex-1")}
+                onClick={action.onClick}
+              >
+                <Icon className="h-4 w-4" />
+                {action.label}
+              </DashboardButton>
+            );
+          })}
+        </div>
+      </article>
+    </DashboardSurface>
+  );
+}
+
+interface AssignedQuizCardProps {
+  item: StudentAssignedQuizLibraryItem;
+  actions: QuizCardAction[];
+  badgeLabel?: string;
+}
+
+export function AssignedQuizCard({
+  item,
+  actions,
+  badgeLabel,
+}: AssignedQuizCardProps) {
+  const assignedDate = formatTeacherClassDate(item.assignmentContext.assignedAt);
+
+  return (
+    <DashboardSurface asChild radius="xl" padding="md" className="h-full">
+      <article className="flex h-full flex-col">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="flex flex-wrap gap-2">
+            <QuizSourceBadge label="Assigned" />
+            <VisibilityBadge visibility={item.visibility} />
+            {badgeLabel ? (
+              <DashboardBadge tone="info">
+                {badgeLabel}
+              </DashboardBadge>
+            ) : null}
           </div>
+        </div>
+
+        <div className="mt-5">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--dashboard-text-faint)]">
+            {item.topic} / {item.difficulty}
+          </p>
+          <h3 className="mt-3 text-[1.2rem] font-semibold text-[var(--dashboard-text-strong)]">
+            {item.title}
+          </h3>
+          <p className="mt-3 text-sm leading-6 text-[var(--dashboard-text-soft)]">
+            {item.description}
+          </p>
+        </div>
+
+        <div className="mt-5 grid gap-2.5 sm:grid-cols-2">
+          <QuizMetadataRow
+            item={{ icon: BookOpen, label: `${item.questionCount} questions` }}
+          />
+          <QuizMetadataRow
+            item={{ icon: CalendarDays, label: `Assigned ${assignedDate}` }}
+          />
+          <QuizMetadataRow item={{ icon: UserRound, label: item.assignmentContext.assignedByName }} />
+          <QuizMetadataRow
+            item={{
+              icon: RotateCcw,
+              label:
+                item.practiceProgressLabel ??
+                (item.practiceState === "in-progress"
+                  ? "In progress"
+                  : item.practiceState === "completed"
+                    ? "Completed"
+                    : "Ready to start"),
+            }}
+          />
+        </div>
+
+        <div className="mt-5">
+          <ClassAssignmentMeta assignmentContext={item.assignmentContext} />
+        </div>
+
+        <div className="mt-5 flex flex-wrap gap-2">
+          {item.tags.map((tag) => (
+            <span
+              key={`${item.assignmentContext.assignmentId}-${tag}`}
+              className="rounded-full bg-[var(--dashboard-surface-muted)] px-3 py-1 text-xs font-medium text-[var(--dashboard-text-soft)]"
+            >
+              {tag}
+            </span>
+          ))}
         </div>
 
         <div className="mt-5 flex flex-wrap gap-2.5 border-t border-[var(--dashboard-border-soft)] pt-5">
@@ -321,7 +450,7 @@ export function QuizCard({
 
             return (
               <DashboardButton
-                key={`${item.id}-${action.label}`}
+                key={`${item.assignmentContext.assignmentId}-${action.label}`}
                 type="button"
                 size="lg"
                 variant={action.variant ?? (index === 0 ? "primary" : "secondary")}
@@ -366,6 +495,28 @@ export function SearchEmptyState({
       title={title}
       description={description}
       icon={SearchX}
+      className="border-dashed"
+    />
+  );
+}
+
+interface EmptyAssignedQuizzesStateProps {
+  title: string;
+  description: string;
+  action?: ReactNode;
+}
+
+export function EmptyAssignedQuizzesState({
+  title,
+  description,
+  action,
+}: EmptyAssignedQuizzesStateProps) {
+  return (
+    <EmptyStateBlock
+      title={title}
+      description={description}
+      icon={BookOpen}
+      action={action}
       className="border-dashed"
     />
   );

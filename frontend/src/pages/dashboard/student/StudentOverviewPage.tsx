@@ -1,5 +1,8 @@
 import { BookOpen, Medal, Timer } from "lucide-react";
 import { Link } from "react-router";
+import { useAuth } from "../../../app/providers/AuthProvider";
+import { useTeacherClasses } from "../../../app/providers/TeacherClassesProvider";
+import { useQuizLibrary } from "../../../app/providers/QuizLibraryProvider";
 import logoPng from "../../../assets/logo.png";
 import { cn } from "../../../components/ui/utils";
 import { CtaPanel } from "../../../features/dashboard/components/CtaPanel";
@@ -14,10 +17,11 @@ import {
   dashboardStatsGridClassName,
   dashboardTextToneClassName,
 } from "../../../features/dashboard/components/DashboardPrimitives";
+import { EmptyAssignedQuizzesState } from "../../../features/dashboard/components/quiz-library/QuizLibraryComponents";
+import { buildStudentQuizLibrarySources } from "../../../features/dashboard/components/quiz-library/studentQuizLibrarySources";
 import { SectionCard } from "../../../features/dashboard/components/SectionCard";
 import { StatCard } from "../../../features/dashboard/components/StatCard";
 import {
-  studentAssignments,
   studentOverviewStats,
   studentResults,
 } from "../../../features/dashboard/mock/studentOverview";
@@ -28,6 +32,43 @@ const scoreToneClassName = {
 } as const;
 
 export function StudentOverviewPage() {
+  const { currentStudent } = useAuth();
+  const { classes } = useTeacherClasses();
+  const { quizzes } = useQuizLibrary();
+  const studentSources = buildStudentQuizLibrarySources(
+    classes,
+    quizzes,
+    currentStudent?.id,
+  );
+  const assignedPreview = studentSources.assigned.slice(0, 3);
+
+  const getAssignedEmptyState = () => {
+    if (studentSources.pendingMemberships.length) {
+      return {
+        title: "Accept your class invitation",
+        description:
+          "A pending class invite is waiting in Notifications. Accept it to unlock quizzes assigned to that class.",
+      };
+    }
+
+    if (!studentSources.activeMemberships.length) {
+      return {
+        title: "No class memberships yet",
+        description:
+          "Assigned quizzes will appear here after you join a class through the invitation flow.",
+      };
+    }
+
+    return {
+      title: "No assigned quizzes yet",
+      description:
+        "You are already part of a class, but no quiz assignments have been sent to it yet.",
+    };
+  };
+
+  const assignedEmptyState = getAssignedEmptyState();
+  const assignedCount = studentSources.assigned.length;
+
   return (
     <div className={dashboardPageClassName}>
       <DashboardPageHeader
@@ -37,7 +78,11 @@ export function StudentOverviewPage() {
 
       <CtaPanel
         title="Continue Your Learning"
-        description="You have 3 quizzes assigned. Jump back in and keep your streak going."
+        description={
+          assignedCount
+            ? `You have ${assignedCount} class-assigned ${assignedCount === 1 ? "quiz" : "quizzes"} ready. Jump back in and keep your streak going.`
+            : "Jump into your quiz library, discover new practice sets, and stay ready for your next class assignment."
+        }
         variant="gradient"
         actions={
           <>
@@ -73,41 +118,58 @@ export function StudentOverviewPage() {
       <div className={dashboardSplitGridClassName}>
         <SectionCard title="Assigned Quizzes">
           <div className={dashboardSectionStackClassName}>
-            {studentAssignments.map((assignment) => (
-              <DashboardSurface
-                asChild
-                key={assignment.title}
-                radius="md"
-                padding="sm"
-              >
-                <article>
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <h3 className="text-[1.15rem] font-semibold text-[var(--dashboard-text-strong)]">
-                      {assignment.title}
-                    </h3>
-                    <div className="mt-3 flex flex-wrap gap-5 text-sm text-[var(--dashboard-text-soft)]">
-                      <span className={dashboardIconTextRowClassName}>
-                        <BookOpen className="h-4 w-4" />
-                        {assignment.questionCount}
-                      </span>
-                      <span className={dashboardIconTextRowClassName}>
-                        <Timer className="h-4 w-4" />
-                        {assignment.duration}
+            {assignedPreview.length ? (
+              assignedPreview.map((assignment) => (
+                <DashboardSurface
+                  asChild
+                  key={assignment.assignmentContext.assignmentId}
+                  radius="md"
+                  padding="sm"
+                >
+                  <article>
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <h3 className="text-[1.15rem] font-semibold text-[var(--dashboard-text-strong)]">
+                          {assignment.title}
+                        </h3>
+                        <p className="mt-1 text-sm text-[var(--dashboard-text-soft)]">
+                          {assignment.assignmentContext.className}
+                        </p>
+                        <div className="mt-3 flex flex-wrap gap-5 text-sm text-[var(--dashboard-text-soft)]">
+                          <span className={dashboardIconTextRowClassName}>
+                            <BookOpen className="h-4 w-4" />
+                            {assignment.questionCount}{" "}
+                            {assignment.questionCount === 1 ? "question" : "questions"}
+                          </span>
+                          <span className={dashboardIconTextRowClassName}>
+                            <Timer className="h-4 w-4" />
+                            {assignment.durationMinutes} min
+                          </span>
+                        </div>
+                      </div>
+                      <span className="text-sm font-medium text-[var(--dashboard-warning)]">
+                        Assigned
                       </span>
                     </div>
-                  </div>
-                  <span className="text-sm font-medium text-[var(--dashboard-warning)]">
-                    {assignment.dueDate}
-                  </span>
-                </div>
 
-                  <DashboardButton type="button" size="lg" className="mt-5 w-full">
-                    Start Quiz
-                  </DashboardButton>
-                </article>
-              </DashboardSurface>
-            ))}
+                    <DashboardButton asChild type="button" size="lg" className="mt-5 w-full">
+                      <Link to="/dashboard/student/quiz-library" state={{ libraryTab: "assigned" }}>
+                        {assignment.practiceState === "in-progress"
+                          ? "Continue Quiz"
+                          : assignment.practiceState === "completed"
+                            ? "View Quiz"
+                            : "Start Quiz"}
+                      </Link>
+                    </DashboardButton>
+                  </article>
+                </DashboardSurface>
+              ))
+            ) : (
+              <EmptyAssignedQuizzesState
+                title={assignedEmptyState.title}
+                description={assignedEmptyState.description}
+              />
+            )}
           </div>
         </SectionCard>
 
@@ -137,7 +199,7 @@ export function StudentOverviewPage() {
                 <span
                   className={cn(
                     "text-[1.8rem] font-semibold tracking-[-0.03em]",
-                    scoreToneClassName[result.scoreTone]
+                    scoreToneClassName[result.scoreTone],
                   )}
                 >
                   {result.score}

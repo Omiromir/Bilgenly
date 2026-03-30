@@ -7,17 +7,29 @@ import {
   useState,
 } from "react";
 import type { UserRole } from "../../lib/auth";
+import {
+  defaultMockStudentId,
+  getMockStudentById,
+  mockStudentUsers,
+  mockTeacherUser,
+  type MockDashboardUser,
+} from "../../features/dashboard/mock/mockUsers";
 
 interface AuthContextValue {
   role: UserRole | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  currentUser: MockDashboardUser | null;
+  currentStudent: MockDashboardUser | null;
+  availableStudents: MockDashboardUser[];
   setRole: (role: UserRole | null) => void;
   signInAsRole: (role: UserRole) => void;
   signOut: () => void;
+  setCurrentStudentId: (studentId: string) => void;
 }
 
 const AUTH_ROLE_KEY = "bilgenly_role";
+const AUTH_STUDENT_KEY = "bilgenly_student_id";
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
@@ -27,10 +39,13 @@ interface AuthProviderProps {
 
 export function AuthProvider({ children }: AuthProviderProps) {
   const [role, setRoleState] = useState<UserRole | null>(null);
+  const [currentStudentId, setCurrentStudentIdState] =
+    useState<string>(defaultMockStudentId);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const savedRole = localStorage.getItem(AUTH_ROLE_KEY) as UserRole | null;
+    const savedStudentId = localStorage.getItem(AUTH_STUDENT_KEY);
 
     if (
       savedRole === "teacher" ||
@@ -38,6 +53,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
       savedRole === "moderator"
     ) {
       setRoleState(savedRole);
+    }
+
+    if (getMockStudentById(savedStudentId)) {
+      setCurrentStudentIdState(savedStudentId!);
     }
 
     setIsLoading(false);
@@ -54,6 +73,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
   };
 
   const signInAsRole = (nextRole: UserRole) => {
+    if (nextRole === "student" && !getMockStudentById(currentStudentId)) {
+      setCurrentStudentIdState(defaultMockStudentId);
+      localStorage.setItem(AUTH_STUDENT_KEY, defaultMockStudentId);
+    }
+
     setRole(nextRole);
   };
 
@@ -61,16 +85,37 @@ export function AuthProvider({ children }: AuthProviderProps) {
     setRole(null);
   };
 
+  const setCurrentStudentId = (studentId: string) => {
+    if (!getMockStudentById(studentId)) {
+      return;
+    }
+
+    setCurrentStudentIdState(studentId);
+    localStorage.setItem(AUTH_STUDENT_KEY, studentId);
+  };
+
+  const currentStudent = getMockStudentById(currentStudentId);
+  const currentUser =
+    role === "teacher"
+      ? mockTeacherUser
+      : role === "student"
+        ? currentStudent
+        : null;
+
   const value = useMemo(
     () => ({
       role,
       isAuthenticated: role !== null,
       isLoading,
+      currentUser,
+      currentStudent,
+      availableStudents: mockStudentUsers,
       setRole,
       signInAsRole,
       signOut,
+      setCurrentStudentId,
     }),
-    [role, isLoading]
+    [role, isLoading, currentUser, currentStudent]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
