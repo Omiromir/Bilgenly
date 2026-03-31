@@ -1,0 +1,13 @@
+C:\Users\Sonya\RiderProjects\Bilgenly\Bilgenly.Domain\bin\Debug\net8.0\Bilgenly.Domain.deps.json
+C:\Users\Sonya\RiderProjects\Bilgenly\Bilgenly.Domain\bin\Debug\net8.0\Bilgenly.Domain.dll
+C:\Users\Sonya\RiderProjects\Bilgenly\Bilgenly.Domain\bin\Debug\net8.0\Bilgenly.Domain.pdb
+C:\Users\Sonya\RiderProjects\Bilgenly\Bilgenly.Domain\obj\Debug\net8.0\Bilgenly.Domain.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\Sonya\RiderProjects\Bilgenly\Bilgenly.Domain\obj\Debug\net8.0\Bilgenly.Domain.AssemblyInfoInputs.cache
+C:\Users\Sonya\RiderProjects\Bilgenly\Bilgenly.Domain\obj\Debug\net8.0\Bilgenly.Domain.AssemblyInfo.cs
+C:\Users\Sonya\RiderProjects\Bilgenly\Bilgenly.Domain\obj\Debug\net8.0\Bilgenly.Domain.csproj.CoreCompileInputs.cache
+C:\Users\Sonya\RiderProjects\Bilgenly\Bilgenly.Domain\obj\Debug\net8.0\Bilgenly.Domain.dll
+C:\Users\Sonya\RiderProjects\Bilgenly\Bilgenly.Domain\obj\Debug\net8.0\refint\Bilgenly.Domain.dll
+C:\Users\Sonya\RiderProjects\Bilgenly\Bilgenly.Domain\obj\Debug\net8.0\Bilgenly.Domain.pdb
+C:\Users\Sonya\RiderProjects\Bilgenly\Bilgenly.Domain\obj\Debug\net8.0\ref\Bilgenly.Domain.dll
+C:\Users\Sonya\RiderProjects\Bilgenly\Bilgenly.Domain\obj\Debug\net8.0\Bilgenly.Domain.csproj.AssemblyReference.cache
+C:\Users\Sonya\RiderProjects\Bilgenly\Bilgenly.Domain\obj\Debug\net8.0\Bilgenly.Domain.sourcelink.json

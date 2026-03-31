@@ -1,0 +1,11 @@
+{
+  "Version": 1,
+  "Hash": "i2yHsl3YhbNK1kJ3HBsd7Dzlu87+X/kOhxRgvYN4NFw=",
+  "Source": "Bilgenly.API",
+  "BasePath": "_content/Bilgenly.API",
+  "Mode": "Default",
+  "ManifestType": "Build",
+  "ReferencedProjectsConfiguration": [],
+  "DiscoveryPatterns": [],
+  "Assets": []
+}

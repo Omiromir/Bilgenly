@@ -1,0 +1,16 @@
+C:\Users\Sonya\RiderProjects\Bilgenly\Bilgenly.Application\bin\Debug\net8.0\Bilgenly.Application.deps.json
+C:\Users\Sonya\RiderProjects\Bilgenly\Bilgenly.Application\bin\Debug\net8.0\Bilgenly.Application.dll
+C:\Users\Sonya\RiderProjects\Bilgenly\Bilgenly.Application\bin\Debug\net8.0\Bilgenly.Application.pdb
+C:\Users\Sonya\RiderProjects\Bilgenly\Bilgenly.Application\bin\Debug\net8.0\Bilgenly.Domain.dll
+C:\Users\Sonya\RiderProjects\Bilgenly\Bilgenly.Application\bin\Debug\net8.0\Bilgenly.Domain.pdb
+C:\Users\Sonya\RiderProjects\Bilgenly\Bilgenly.Application\obj\Debug\net8.0\Bilgenly.Application.csproj.AssemblyReference.cache
+C:\Users\Sonya\RiderProjects\Bilgenly\Bilgenly.Application\obj\Debug\net8.0\Bilgenly.Application.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\Sonya\RiderProjects\Bilgenly\Bilgenly.Application\obj\Debug\net8.0\Bilgenly.Application.AssemblyInfoInputs.cache
+C:\Users\Sonya\RiderProjects\Bilgenly\Bilgenly.Application\obj\Debug\net8.0\Bilgenly.Application.AssemblyInfo.cs
+C:\Users\Sonya\RiderProjects\Bilgenly\Bilgenly.Application\obj\Debug\net8.0\Bilgenly.Application.csproj.CoreCompileInputs.cache
+C:\Users\Sonya\RiderProjects\Bilgenly\Bilgenly.Application\obj\Debug\net8.0\Bilgenly.709613CB.Up2Date
+C:\Users\Sonya\RiderProjects\Bilgenly\Bilgenly.Application\obj\Debug\net8.0\Bilgenly.Application.dll
+C:\Users\Sonya\RiderProjects\Bilgenly\Bilgenly.Application\obj\Debug\net8.0\refint\Bilgenly.Application.dll
+C:\Users\Sonya\RiderProjects\Bilgenly\Bilgenly.Application\obj\Debug\net8.0\Bilgenly.Application.pdb
+C:\Users\Sonya\RiderProjects\Bilgenly\Bilgenly.Application\obj\Debug\net8.0\ref\Bilgenly.Application.dll
+C:\Users\Sonya\RiderProjects\Bilgenly\Bilgenly.Application\obj\Debug\net8.0\Bilgenly.Application.sourcelink.json
