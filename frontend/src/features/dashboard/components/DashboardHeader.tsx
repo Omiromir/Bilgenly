@@ -4,31 +4,41 @@ import {
   CircleCheckBig,
   Info,
   LogOut,
-  Medal,
   Menu,
   Settings,
   User,
-  X,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router";
 import { useAuth } from "../../../app/providers/AuthProvider";
+import { useNotifications } from "../../../app/providers/NotificationsProvider";
 import { cn } from "../../../components/ui/utils";
-import { notificationItems } from "../mock/sharedUi";
 import {
+  DashboardBadge,
   DashboardButton,
   DashboardSearchField,
   DashboardSurface,
   dashboardIconChipVariants,
   dashboardSectionDividerClassName,
 } from "./DashboardPrimitives";
+import {
+  formatDashboardNotificationDateTime,
+  getNotificationStatusLabel,
+  getNotificationStatusTone,
+} from "./notifications/notificationUtils";
 
 interface DashboardHeaderProps {
   onOpenSidebar: () => void;
 }
 
 export function DashboardHeader({ onOpenSidebar }: DashboardHeaderProps) {
-  const { role, signOut } = useAuth();
+  const { currentUser, role, signOut } = useAuth();
+  const {
+    getNotificationsForRecipient,
+    getUnreadCountForRecipient,
+    markAllNotificationsRead,
+    markNotificationRead,
+  } = useNotifications();
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const headerRef = useRef<HTMLDivElement | null>(null);
@@ -45,40 +55,60 @@ export function DashboardHeader({ onOpenSidebar }: DashboardHeaderProps) {
     return () => document.removeEventListener("mousedown", handlePointerDown);
   }, []);
 
+  const recipientUserId = currentUser?.id ?? "";
+  const notifications = useMemo(
+    () =>
+      recipientUserId
+        ? getNotificationsForRecipient(recipientUserId).slice(0, 5)
+        : [],
+    [getNotificationsForRecipient, recipientUserId],
+  );
+  const unreadCount = recipientUserId
+    ? getUnreadCountForRecipient(recipientUserId)
+    : 0;
+
   const userMeta = useMemo(() => {
+    const name = currentUser?.fullName ?? "Bilgenly User";
+    const email = currentUser?.email ?? "user@bilgenly.com";
+
     switch (role) {
       case "teacher":
         return {
-          name: "Professor Doe",
-          email: "professor@bilgenly.com",
+          name,
+          email,
           profilePath: "/dashboard/teacher/profile",
           settingsPath: "/dashboard/teacher/settings",
         };
       case "student":
         return {
-          name: "John Doe",
-          email: "john.doe@bilgenly.com",
+          name,
+          email,
           profilePath: "/dashboard/student/profile",
           settingsPath: "/dashboard/student/settings",
         };
       case "moderator":
         return {
-          name: "Moderator User",
-          email: "moderator@bilgenly.com",
+          name,
+          email,
           profilePath: "/dashboard/moderator",
           settingsPath: "/dashboard/moderator",
         };
       default:
         return {
-          name: "Bilgenly User",
-          email: "user@bilgenly.com",
+          name,
+          email,
           profilePath: "/signin",
           settingsPath: "/signin",
         };
     }
-  }, [role]);
+  }, [currentUser, role]);
 
-  const unreadCount = notificationItems.filter((item) => item.unread).length;
+  const initials = userMeta.name
+    .split(" ")
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
   const dropdownBaseClassName =
     "absolute right-0 top-0 z-30 overflow-hidden transition";
 
@@ -119,7 +149,9 @@ export function DashboardHeader({ onOpenSidebar }: DashboardHeaderProps) {
                 aria-label="Notifications"
               >
                 <Bell className="h-5 w-5" />
-                <span className="absolute right-3 top-3 h-2.5 w-2.5 rounded-full bg-[var(--dashboard-brand)]" />
+                {unreadCount ? (
+                  <span className="absolute right-3 top-3 h-2.5 w-2.5 rounded-full bg-[var(--dashboard-brand)]" />
+                ) : null}
               </DashboardButton>
 
               <DashboardButton
@@ -134,7 +166,7 @@ export function DashboardHeader({ onOpenSidebar }: DashboardHeaderProps) {
                 aria-label="Profile"
               >
                 <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-950 text-sm font-semibold text-white">
-                  {userMeta.name.charAt(0)}
+                  {initials}
                 </div>
               </DashboardButton>
             </div>
@@ -161,73 +193,107 @@ export function DashboardHeader({ onOpenSidebar }: DashboardHeaderProps) {
                   <h3 className="text-[1.35rem] font-semibold text-[var(--dashboard-text-strong)] sm:text-[1.6rem]">
                     Notifications
                   </h3>
-                  <p className="text-sm text-[var(--dashboard-text-soft)]">{unreadCount} unread</p>
+                  <p className="text-sm text-[var(--dashboard-text-soft)]">
+                    {unreadCount} unread
+                  </p>
                 </div>
                 <button
                   type="button"
-                  className="pt-1 text-sm font-medium text-[var(--dashboard-brand)] transition hover:text-[var(--dashboard-brand-strong)]"
+                  onClick={() => {
+                    if (recipientUserId) {
+                      markAllNotificationsRead(recipientUserId);
+                    }
+                  }}
+                  className="pt-1 text-sm font-medium text-[var(--dashboard-brand)] transition hover:text-[var(--dashboard-brand-strong)] disabled:cursor-not-allowed disabled:opacity-50"
+                  disabled={!recipientUserId || unreadCount === 0}
                 >
                   Mark all as read
                 </button>
               </div>
 
               <div className="max-h-[min(65vh,356px)] overflow-y-auto">
-                {notificationItems.map((item) => (
-                  <article
-                    key={`${item.title}-${item.time}`}
-                    className={cn(
-                      "border-b px-4 py-4 last:border-b-0 sm:px-5",
-                      dashboardSectionDividerClassName,
-                      item.unread ? "bg-[var(--dashboard-brand-soft-alt)]/60" : "bg-white",
-                    )}
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className={dashboardIconChipVariants({ tone: "brand", size: "md" })}>
-                        <NotificationIcon icon={item.icon} />
-                      </div>
+                {notifications.length ? (
+                  notifications.map((notification) => (
+                    <article
+                      key={notification.id}
+                      className={cn(
+                        "border-b px-4 py-4 last:border-b-0 sm:px-5",
+                        dashboardSectionDividerClassName,
+                        notification.read
+                          ? "bg-white"
+                          : "bg-[var(--dashboard-brand-soft-alt)]/60",
+                      )}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div
+                          className={dashboardIconChipVariants({
+                            tone: getNotificationStatusTone(notification.status),
+                            size: "md",
+                          })}
+                        >
+                          <NotificationIcon status={notification.status} />
+                        </div>
 
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <p className="text-[15px] font-semibold text-[var(--dashboard-text-strong)]">
-                                {item.title}
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <p className="text-[15px] font-semibold text-[var(--dashboard-text-strong)]">
+                                  {notification.title}
+                                </p>
+                                {!notification.read ? (
+                                  <span className="h-2 w-2 rounded-full bg-[var(--dashboard-brand)]" />
+                                ) : null}
+                                <DashboardBadge
+                                  tone={getNotificationStatusTone(
+                                    notification.status,
+                                  )}
+                                >
+                                  {getNotificationStatusLabel(notification.status)}
+                                </DashboardBadge>
+                              </div>
+                              <p className="mt-1 text-[15px] leading-6 text-[var(--dashboard-text-soft)]">
+                                {notification.message}
                               </p>
-                              {item.unread ? (
-                                <span className="h-2 w-2 rounded-full bg-[var(--dashboard-brand)]" />
-                              ) : null}
+                              <p className="mt-2 text-sm text-[var(--dashboard-text-faint)]">
+                                {formatDashboardNotificationDateTime(
+                                  notification.createdAt,
+                                )}
+                              </p>
                             </div>
-                            <p className="mt-1 text-[15px] leading-6 text-[var(--dashboard-text-soft)]">
-                              {item.message}
-                            </p>
-                            <p className="mt-2 text-sm text-[var(--dashboard-text-faint)]">
-                              {item.time}
-                            </p>
-                          </div>
 
-                          <button
-                            type="button"
-                            className="text-[var(--dashboard-text-faint)] transition hover:text-[var(--dashboard-text-soft)]"
-                            aria-label={`Dismiss ${item.title}`}
-                          >
-                            <X className="h-4 w-4" />
-                          </button>
+                            {!notification.read ? (
+                              <button
+                                type="button"
+                                onClick={() => markNotificationRead(notification.id)}
+                                className="text-[var(--dashboard-text-faint)] transition hover:text-[var(--dashboard-text-soft)]"
+                                aria-label={`Mark ${notification.title} as read`}
+                              >
+                                <CircleCheckBig className="h-4 w-4" />
+                              </button>
+                            ) : null}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </article>
-                ))}
+                    </article>
+                  ))
+                ) : (
+                  <div className="px-5 py-8 text-center text-sm text-[var(--dashboard-text-soft)]">
+                    No notifications yet.
+                  </div>
+                )}
               </div>
 
-              <button
-                type="button"
+              <Link
+                to="/dashboard/student/notifications"
                 className={cn(
-                  "w-full border-t px-5 py-4 text-center text-[15px] font-semibold text-[var(--dashboard-brand)] transition hover:bg-[var(--dashboard-surface-muted)]",
+                  "block w-full border-t px-5 py-4 text-center text-[15px] font-semibold text-[var(--dashboard-brand)] transition hover:bg-[var(--dashboard-surface-muted)]",
                   dashboardSectionDividerClassName,
                 )}
+                onClick={() => setIsNotificationsOpen(false)}
               >
                 View all notifications
-              </button>
+              </Link>
             </DashboardSurface>
 
             <DashboardSurface
@@ -243,13 +309,7 @@ export function DashboardHeader({ onOpenSidebar }: DashboardHeaderProps) {
             >
               <div className="flex items-center gap-3 px-4 py-4">
                 <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--dashboard-brand)] text-lg font-semibold text-white">
-                  {role === "teacher"
-                    ? "PD"
-                    : userMeta.name
-                        .split(" ")
-                        .map((part) => part[0])
-                        .join("")
-                        .slice(0, 2)}
+                  {initials}
                 </div>
                 <div className="min-w-0">
                   <p className="truncate text-[1.05rem] font-semibold text-[var(--dashboard-text-strong)]">
@@ -280,6 +340,7 @@ export function DashboardHeader({ onOpenSidebar }: DashboardHeaderProps) {
                   Settings
                 </Link>
               </div>
+
               <div className={cn("border-t py-2", dashboardSectionDividerClassName)}>
                 <button
                   type="button"
@@ -299,18 +360,16 @@ export function DashboardHeader({ onOpenSidebar }: DashboardHeaderProps) {
 }
 
 function NotificationIcon({
-  icon,
+  status,
 }: {
-  icon: "info" | "check" | "alert" | "badge";
+  status: "pending" | "accepted" | "declined";
 }) {
-  switch (icon) {
-    case "check":
+  switch (status) {
+    case "accepted":
       return <CircleCheckBig className="h-4 w-4" />;
-    case "alert":
-      return <CircleAlert className="h-4 w-4 text-violet-500" />;
-    case "badge":
-      return <Medal className="h-4 w-4" />;
-    case "info":
+    case "declined":
+      return <CircleAlert className="h-4 w-4" />;
+    case "pending":
     default:
       return <Info className="h-4 w-4" />;
   }

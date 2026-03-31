@@ -1,4 +1,7 @@
 import { BookOpen, Hash, Timer } from "lucide-react";
+import { useAuth } from "../../../app/providers/AuthProvider";
+import { useTeacherClasses } from "../../../app/providers/TeacherClassesProvider";
+import { useQuizLibrary } from "../../../app/providers/QuizLibraryProvider";
 import { cn } from "../../../components/ui/utils";
 import { DashboardPageHeader } from "../../../features/dashboard/components/DashboardPageHeader";
 import {
@@ -10,17 +13,63 @@ import {
   dashboardInputVariants,
   dashboardPageNarrowClassName,
 } from "../../../features/dashboard/components/DashboardPrimitives";
+import { EmptyAssignedQuizzesState } from "../../../features/dashboard/components/quiz-library/QuizLibraryComponents";
+import { buildStudentQuizLibrarySources } from "../../../features/dashboard/components/quiz-library/studentQuizLibrarySources";
 import { useDashboardPageMeta } from "../../../features/dashboard/hooks/useDashboardPageMeta";
-import { studentJoinAssignments } from "../../../features/dashboard/mock/studentWorkspace";
+
+function getAssignedActionLabel(practiceState?: string) {
+  if (practiceState === "completed") {
+    return "View Quiz";
+  }
+
+  if (practiceState === "in-progress") {
+    return "Continue Quiz";
+  }
+
+  return "Start Quiz";
+}
 
 export function StudentJoinQuizPage() {
   const meta = useDashboardPageMeta();
+  const { currentStudent } = useAuth();
+  const { classes } = useTeacherClasses();
+  const { quizzes } = useQuizLibrary();
+  const studentSources = buildStudentQuizLibrarySources(
+    classes,
+    quizzes,
+    currentStudent?.id,
+  );
+
+  const getAssignedEmptyState = () => {
+    if (studentSources.pendingMemberships.length) {
+      return {
+        title: "Accept your invitation to unlock quizzes",
+        description:
+          "You have a pending class invitation. Accept it in Notifications and the assigned quizzes for that class will appear here.",
+      };
+    }
+
+    if (!studentSources.activeMemberships.length) {
+      return {
+        title: "No joined classes yet",
+        description:
+          "Assigned quizzes only appear after you join a class through the invitation flow.",
+      };
+    }
+
+    return {
+      title: "No class quizzes assigned yet",
+      description:
+        "Your joined classes are connected, but no teacher has assigned a quiz to them yet.",
+    };
+  };
+  const assignedEmptyState = getAssignedEmptyState();
 
   return (
     <div className={dashboardPageNarrowClassName}>
       <DashboardPageHeader
         title={meta?.title ?? "Join a Quiz"}
-        subtitle="Enter the quiz code provided by your teacher or select from assigned quizzes"
+        subtitle="Enter the quiz code provided by your teacher or launch a quiz assigned through a class you have joined."
         align="center"
       />
 
@@ -62,46 +111,60 @@ export function StudentJoinQuizPage() {
 
       <div className="flex items-center gap-4 py-2 text-sm text-[var(--dashboard-text-soft)]">
         <div className="h-px flex-1 bg-[var(--dashboard-border-soft)]" />
-        or select from assigned quizzes
+        or select from your class assignments
         <div className="h-px flex-1 bg-[var(--dashboard-border-soft)]" />
       </div>
 
       <div className="space-y-4">
-        {studentJoinAssignments.map((assignment) => (
-          <DashboardSurface asChild key={assignment.title} radius="lg" padding="md">
-            <article>
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <h3 className="text-[1.25rem] font-semibold text-[var(--dashboard-text-strong)]">
-                    {assignment.title}
-                  </h3>
-                  <p className="mt-2 text-[1rem] text-[var(--dashboard-text-soft)]">
-                    {assignment.teacher}
-                  </p>
+        {studentSources.assigned.length ? (
+          studentSources.assigned.map((assignment) => (
+            <DashboardSurface
+              asChild
+              key={assignment.assignmentContext.assignmentId}
+              radius="lg"
+              padding="md"
+            >
+              <article>
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <h3 className="text-[1.25rem] font-semibold text-[var(--dashboard-text-strong)]">
+                      {assignment.title}
+                    </h3>
+                    <p className="mt-2 text-[1rem] text-[var(--dashboard-text-soft)]">
+                      {assignment.assignmentContext.assignedByName} ·{" "}
+                      {assignment.assignmentContext.className}
+                    </p>
+                  </div>
+                  <DashboardBadge tone="warning" size="md">
+                    Assigned
+                  </DashboardBadge>
                 </div>
-                <DashboardBadge tone="warning" size="md">
-                  {assignment.dueDate}
-                </DashboardBadge>
-              </div>
 
-              <div className="mt-5 flex flex-wrap gap-6 text-sm text-[var(--dashboard-text-soft)]">
-                <span className={dashboardIconTextRowClassName}>
-                  <BookOpen className="h-4 w-4" />
-                  {assignment.questions}
-                </span>
-                <span className={dashboardIconTextRowClassName}>
-                  <Timer className="h-4 w-4" />
-                  {assignment.duration}
-                </span>
-              </div>
+                <div className="mt-5 flex flex-wrap gap-6 text-sm text-[var(--dashboard-text-soft)]">
+                  <span className={dashboardIconTextRowClassName}>
+                    <BookOpen className="h-4 w-4" />
+                    {assignment.questionCount}{" "}
+                    {assignment.questionCount === 1 ? "question" : "questions"}
+                  </span>
+                  <span className={dashboardIconTextRowClassName}>
+                    <Timer className="h-4 w-4" />
+                    {assignment.durationMinutes} min
+                  </span>
+                </div>
 
-              <DashboardButton type="button" size="lg" className="mt-5 w-full">
-                Start Quiz
-                <span className="text-base">{">"}</span>
-              </DashboardButton>
-            </article>
-          </DashboardSurface>
-        ))}
+                <DashboardButton type="button" size="lg" className="mt-5 w-full">
+                  {getAssignedActionLabel(assignment.practiceState)}
+                  <span className="text-base">{">"}</span>
+                </DashboardButton>
+              </article>
+            </DashboardSurface>
+          ))
+        ) : (
+          <EmptyAssignedQuizzesState
+            title={assignedEmptyState.title}
+            description={assignedEmptyState.description}
+          />
+        )}
       </div>
     </div>
   );

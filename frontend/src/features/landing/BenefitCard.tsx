@@ -15,10 +15,10 @@ export function BenefitCard({ icon, title, description }: BenefitCardProps) {
     >
       <div className="shrink-0">{icon}</div>
       <div>
-        <h3 className="font-['Montserrat',sans-serif] text-[14px] font-bold leading-[2.5] tracking-[0.7px] text-[#2563EB]">
+        <h3 className="font-['Montserrat',sans-serif] text-[17px] font-bold leading-[1.6] tracking-[0.4px] text-[#2563EB] sm:text-[18px]">
           {title}
         </h3>
-        <p className="font-['Montserrat',sans-serif] text-[10px] leading-[1.54] tracking-[0.5px] text-[#2563EB]">
+        <p className="font-['Montserrat',sans-serif] text-[13px] leading-[1.7] tracking-[0.2px] text-[#2563EB] sm:text-[14px]">
           {description}
         </p>
       </div>

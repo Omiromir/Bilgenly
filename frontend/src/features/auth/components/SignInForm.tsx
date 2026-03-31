@@ -3,32 +3,38 @@ import { Link, useNavigate } from "react-router";
 import { signIn } from "../api";
 import { usePasswordVisibility } from "../hooks";
 import type { SignInFormErrors, SignInFormValues } from "../types";
+import type { UserRole } from "../../../lib/auth";
 import {
   normalizeEmail,
   validateEmail,
   validatePassword,
   validateSignInForm,
 } from "../validation";
+import { getDashboardPathByRole } from "../../../lib/auth";
+import {useAuth} from "../../../app/providers/AuthProvider";
 
 export function SignInForm() {
   const navigate = useNavigate();
+  const { signInAsRole } = useAuth();
   const { inputType, isVisible, toggleVisibility } = usePasswordVisibility();
   const [values, setValues] = useState<SignInFormValues>({
     email: "",
     password: "",
   });
   const [errors, setErrors] = useState<SignInFormErrors>({});
-  const [touched, setTouched] = useState<Record<keyof SignInFormValues, boolean>>(
-    {
-      email: false,
-      password: false,
-    }
-  );
+  const [touched, setTouched] = useState<
+    Record<keyof SignInFormValues, boolean>
+  >({
+    email: false,
+    password: false,
+  });
   const [rememberMe, setRememberMe] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [serverError, setServerError] = useState<string | null>(null);
 
   const handleChange =
-    (field: keyof SignInFormValues) => (event: ChangeEvent<HTMLInputElement>) => {
+    (field: keyof SignInFormValues) =>
+    (event: ChangeEvent<HTMLInputElement>) => {
       const nextValue = event.target.value;
 
       setValues((current) => ({
@@ -62,6 +68,7 @@ export function SignInForm() {
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    setServerError(null);
 
     const normalizedValues: SignInFormValues = {
       email: normalizeEmail(values.email),
@@ -80,13 +87,17 @@ export function SignInForm() {
       return;
     }
 
-    try {
-      setIsSubmitting(true);
-      await signIn({ ...normalizedValues, rememberMe });
-      navigate("/onboarding");
-    } finally {
-      setIsSubmitting(false);
-    }
+      try {
+          setIsSubmitting(true);
+          const result = await signIn({ ...normalizedValues, rememberMe });
+          signInAsRole(result.role.toLowerCase() as UserRole, result.token);
+          const dashboardPath = getDashboardPathByRole(result.role.toLowerCase());
+          navigate(dashboardPath);
+      } catch (error) {
+          setServerError(error instanceof Error ? error.message : "Login failed");
+      } finally {
+          setIsSubmitting(false);
+      }
   };
 
   const canSubmit =
@@ -183,22 +194,13 @@ export function SignInForm() {
 
       <div className="auth-divider">Or</div>
 
-      <div className="auth-stack">
-        <button
-          className="auth-secondary"
-          type="button"
-          onClick={() => navigate("/onboarding")}
-        >
-          Sign In With Google
-        </button>
-        <button
-          className="auth-secondary"
-          type="button"
-          onClick={() => navigate("/onboarding")}
-        >
-          Sign In With Apple
-        </button>
-      </div>
+      <button
+        className="auth-secondary"
+        type="button"
+        onClick={() => navigate("/onboarding")}
+      >
+        Sign In With Google
+      </button>
     </form>
   );
 }
