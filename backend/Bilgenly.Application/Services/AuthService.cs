@@ -43,6 +43,7 @@ public class AuthService
 
         return (new AuthResponseDto
         {
+            UserId = user.Id.ToString(),
             Token = GenerateToken(user),
             Username = user.Username,
             Email = user.Email,
@@ -60,6 +61,7 @@ public class AuthService
 
         return (new AuthResponseDto
         {
+            UserId = user.Id.ToString(),
             Token = GenerateToken(user),
             Username = user.Username,
             Email = user.Email,

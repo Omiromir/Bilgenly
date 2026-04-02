@@ -7,6 +7,7 @@ import {
   useState,
 } from "react";
 import type { UserRole } from "../../lib/auth";
+import { getMe } from "../../features/auth/api";
 import {
   defaultMockStudentId,
   getMockStudentById,
@@ -24,7 +25,11 @@ interface AuthContextValue {
   currentStudent: MockDashboardUser | null;
   availableStudents: MockDashboardUser[];
   setRole: (role: UserRole | null) => void;
-  signInAsRole: (role: UserRole, token: string) => void;
+  signInAsRole: (
+    role: UserRole,
+    token: string,
+    user?: AuthUserProfile,
+  ) => void;
   signOut: () => void;
   setCurrentStudentId: (studentId: string) => void;
 }
@@ -32,6 +37,49 @@ interface AuthContextValue {
 const AUTH_ROLE_KEY = "bilgenly_role";
 const AUTH_TOKEN_KEY = "bilgenly_token";
 const AUTH_STUDENT_KEY = "bilgenly_current_student_id";
+const AUTH_USER_KEY = "bilgenly_current_user";
+
+interface AuthUserProfile {
+  userId: string;
+  username: string;
+  email: string;
+  role: string;
+}
+
+function getInitials(name: string) {
+  return name
+    .split(" ")
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
+}
+
+function mapAuthUserToDashboardUser(
+  authUser: AuthUserProfile,
+  fallbackRole: UserRole | null,
+): MockDashboardUser | null {
+  const normalizedRole = authUser.role.toLowerCase() as UserRole;
+  const role = fallbackRole ?? normalizedRole;
+
+  if (role !== "teacher" && role !== "student") {
+    return null;
+  }
+
+  const fallbackUser =
+    role === "teacher" ? mockTeacherUser : getMockStudentById(defaultMockStudentId);
+
+  return {
+    id: authUser.userId || `email:${authUser.email.trim().toLowerCase()}`,
+    role,
+    fullName: authUser.username,
+    email: authUser.email,
+    initials: getInitials(authUser.username),
+    joinedLabel: fallbackUser?.joinedLabel ?? "Joined recently",
+    location: fallbackUser?.location ?? "Location not set",
+    bio: fallbackUser?.bio ?? "Bilgenly user",
+  };
+}
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
@@ -42,6 +90,7 @@ interface AuthProviderProps {
 export function AuthProvider({ children }: AuthProviderProps) {
   const [role, setRoleState] = useState<UserRole | null>(null);
   const [token, setTokenState] = useState<string | null>(null);
+  const [authUser, setAuthUser] = useState<AuthUserProfile | null>(null);
   const [currentStudentId, setCurrentStudentIdState] =
     useState(defaultMockStudentId);
   const [isLoading, setIsLoading] = useState(true);
@@ -50,6 +99,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     const savedRole = localStorage.getItem(AUTH_ROLE_KEY) as UserRole | null;
     const savedToken = localStorage.getItem(AUTH_TOKEN_KEY);
     const savedStudentId = localStorage.getItem(AUTH_STUDENT_KEY);
+    const savedUser = localStorage.getItem(AUTH_USER_KEY);
 
     if (
       savedRole === "teacher" ||
@@ -64,8 +114,47 @@ export function AuthProvider({ children }: AuthProviderProps) {
     if (savedStudentId && getMockStudentById(savedStudentId)) {
       setCurrentStudentIdState(savedStudentId);
     }
+    if (savedUser) {
+      try {
+        setAuthUser(JSON.parse(savedUser) as AuthUserProfile);
+      } catch {
+        localStorage.removeItem(AUTH_USER_KEY);
+      }
+    }
     setIsLoading(false);
   }, []);
+
+  useEffect(() => {
+    if (!token) {
+      setAuthUser(null);
+      localStorage.removeItem(AUTH_USER_KEY);
+      return;
+    }
+
+    let isMounted = true;
+
+    getMe()
+      .then((user) => {
+        if (!isMounted) {
+          return;
+        }
+
+        setAuthUser(user);
+        localStorage.setItem(AUTH_USER_KEY, JSON.stringify(user));
+      })
+      .catch(() => {
+        if (!isMounted) {
+          return;
+        }
+
+        setAuthUser(null);
+        localStorage.removeItem(AUTH_USER_KEY);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [token]);
 
   const setRole = (nextRole: UserRole | null) => {
     setRoleState(nextRole);
@@ -77,9 +166,17 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   };
 
-  const signInAsRole = (nextRole: UserRole, nextToken: string) => {
+  const signInAsRole = (
+    nextRole: UserRole,
+    nextToken: string,
+    nextUser?: AuthUserProfile,
+  ) => {
     setRoleState(nextRole);
     setTokenState(nextToken);
+    if (nextUser) {
+      setAuthUser(nextUser);
+      localStorage.setItem(AUTH_USER_KEY, JSON.stringify(nextUser));
+    }
     localStorage.setItem(AUTH_ROLE_KEY, nextRole);
     localStorage.setItem(AUTH_TOKEN_KEY, nextToken);
   };
@@ -87,8 +184,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const signOut = () => {
     setRoleState(null);
     setTokenState(null);
+    setAuthUser(null);
     localStorage.removeItem(AUTH_ROLE_KEY);
     localStorage.removeItem(AUTH_TOKEN_KEY);
+    localStorage.removeItem(AUTH_USER_KEY);
   };
 
   const setCurrentStudentId = (studentId: string) => {
@@ -101,8 +200,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
   };
 
   const currentStudent = getMockStudentById(currentStudentId);
-  const currentUser =
-    role === "teacher"
+  const currentUser = authUser
+    ? mapAuthUserToDashboardUser(authUser, role)
+    : role === "teacher"
       ? mockTeacherUser
       : role === "student"
         ? currentStudent

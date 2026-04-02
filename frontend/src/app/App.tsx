@@ -10,8 +10,14 @@ export default function App() {
   return (
     <QueryProvider>
       <AuthProvider>
-        <AppRoutes />
-        <Toaster closeButton position="top-right" richColors />
+        <NotificationsProvider>
+          <TeacherClassesProvider>
+            <QuizLibraryProvider>
+              <AppRoutes />
+              <Toaster closeButton position="top-right" richColors />
+            </QuizLibraryProvider>
+          </TeacherClassesProvider>
+        </NotificationsProvider>
       </AuthProvider>
     </QueryProvider>
   );

@@ -1,38 +1,31 @@
-import { useEffect, useState } from "react";
-import { getMe } from "../../auth/api";
+import { useMemo } from "react";
+import { useAuth } from "../../../app/providers/AuthProvider";
 import type { ProfileSummary } from "../mock/sharedUi";
 
 export function useProfile(fallback: ProfileSummary) {
-    const [profile, setProfile] = useState<ProfileSummary>(fallback);
+    const { currentUser, role } = useAuth();
 
-    useEffect(() => {
-        getMe()
-            .then((data) => {
-                const initials = data.username
-                    .split(" ")
-                    .map((n: string) => n[0])
-                    .join("")
-                    .toUpperCase()
-                    .slice(0, 2);
+    return useMemo(() => {
+        if (!currentUser) {
+            return fallback;
+        }
 
-                setProfile((current) => ({
-                    ...current,
-                    name: data.username,
-                    email: data.email,
-                    roleLabel: data.role,
-                    initials,
-                    personalInfo: [
-                        { label: "Full Name", value: data.username },
-                        { label: "Email", value: data.email },
-                        ...current.personalInfo.filter(
-                            (f) => f.label !== "Full Name" && f.label !== "Email"
-                        ),
-                    ],
-                }));
-            })
-            .catch(() => {
-            });
-    }, []);
-
-    return profile;
+        return {
+            ...fallback,
+            name: currentUser.fullName,
+            email: currentUser.email,
+            roleLabel: role ? role.charAt(0).toUpperCase() + role.slice(1) : fallback.roleLabel,
+            initials: currentUser.initials,
+            joinedLabel: currentUser.joinedLabel,
+            location: currentUser.location,
+            bio: currentUser.bio,
+            personalInfo: [
+                { label: "Full Name", value: currentUser.fullName },
+                { label: "Email", value: currentUser.email },
+                ...fallback.personalInfo.filter(
+                    (field) => field.label !== "Full Name" && field.label !== "Email",
+                ),
+            ],
+        };
+    }, [currentUser, fallback, role]);
 }

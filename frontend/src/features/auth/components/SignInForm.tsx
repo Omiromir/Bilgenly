@@ -91,7 +91,12 @@ export function SignInForm() {
       try {
           setIsSubmitting(true);
           const result = await signIn({ ...normalizedValues, rememberMe });
-          signInAsRole(result.role.toLowerCase() as UserRole, result.token);
+          signInAsRole(result.role.toLowerCase() as UserRole, result.token, {
+            userId: result.userId ?? "",
+            username: result.username,
+            email: result.email,
+            role: result.role,
+          });
           const dashboardPath = getDashboardPathByRole(result.role.toLowerCase());
           navigate(dashboardPath);
       } catch (error) {
