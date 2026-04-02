@@ -54,9 +54,9 @@ public class AuthService
     {
         var user = await _userRepository.GetByEmailAsync(dto.Email);
         if (user is null)
-            return (null, "Email or password is incorrect");
+            return (null, "No account found with this email");
         if (!BCrypt.Net.BCrypt.Verify(dto.Password, user.PasswordHash))
-            return (null, "Email or password is incorrect");
+            return (null, "Incorrect password");
 
         return (new AuthResponseDto
         {

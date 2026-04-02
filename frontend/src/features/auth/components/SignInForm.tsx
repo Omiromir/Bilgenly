@@ -1,5 +1,6 @@
 import { type ChangeEvent, type FormEvent, useState } from "react";
 import { Link, useNavigate } from "react-router";
+import { toast } from "sonner";
 import { signIn } from "../api";
 import { usePasswordVisibility } from "../hooks";
 import type { SignInFormErrors, SignInFormValues } from "../types";
@@ -93,7 +94,9 @@ export function SignInForm() {
           const dashboardPath = getDashboardPathByRole(result.role.toLowerCase());
           navigate(dashboardPath);
       } catch (error) {
-          setServerError(error instanceof Error ? error.message : "Login failed");
+          const message = error instanceof Error ? error.message : "Login failed";
+          setServerError(message);
+          toast.error(message);
       } finally {
           setIsSubmitting(false);
       }
@@ -183,6 +186,12 @@ export function SignInForm() {
       <button className="auth-primary" type="submit" disabled={!canSubmit}>
         {isSubmitting ? "Signing in..." : "Sign In"}
       </button>
+
+      {serverError && (
+        <p className="auth-error" role="alert">
+          {serverError}
+        </p>
+      )}
 
       <div className="auth-center-row">
         Don&apos;t have an account?{" "}

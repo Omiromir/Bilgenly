@@ -1,5 +1,6 @@
 import { type ChangeEvent, type FormEvent, useState } from "react";
 import { Link, useNavigate } from "react-router";
+import { toast } from "sonner";
 import { signUp } from "../api";
 import { usePasswordVisibility } from "../hooks";
 import type { UserRole } from "../../../lib/auth";
@@ -95,7 +96,9 @@ export function SignUpForm() {
             const dashboardPath = getDashboardPathByRole(result.role.toLowerCase());
             navigate(dashboardPath);
         } catch (error) {
-            setServerError(error instanceof Error ? error.message : "Registration failed");
+            const message = error instanceof Error ? error.message : "Registration failed";
+            setServerError(message);
+            toast.error(message);
         } finally {
             setIsSubmitting(false);
         }
