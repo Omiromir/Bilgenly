@@ -9,9 +9,6 @@ import {
 import type { UserRole } from "../../lib/auth";
 import { getMe } from "../../features/auth/api";
 import {
-  defaultMockStudentId,
-  getMockStudentById,
-  mockStudentUsers,
   mockTeacherUser,
   type MockDashboardUser,
 } from "../../features/dashboard/mock/mockUsers";
@@ -22,8 +19,6 @@ interface AuthContextValue {
   isLoading: boolean;
   token: string | null;
   currentUser: MockDashboardUser | null;
-  currentStudent: MockDashboardUser | null;
-  availableStudents: MockDashboardUser[];
   setRole: (role: UserRole | null) => void;
   signInAsRole: (
     role: UserRole,
@@ -31,12 +26,10 @@ interface AuthContextValue {
     user?: AuthUserProfile,
   ) => void;
   signOut: () => void;
-  setCurrentStudentId: (studentId: string) => void;
 }
 
 const AUTH_ROLE_KEY = "bilgenly_role";
 const AUTH_TOKEN_KEY = "bilgenly_token";
-const AUTH_STUDENT_KEY = "bilgenly_current_student_id";
 const AUTH_USER_KEY = "bilgenly_current_user";
 
 interface AuthUserProfile {
@@ -66,8 +59,7 @@ function mapAuthUserToDashboardUser(
     return null;
   }
 
-  const fallbackUser =
-    role === "teacher" ? mockTeacherUser : getMockStudentById(defaultMockStudentId);
+  const fallbackUser = role === "teacher" ? mockTeacherUser : null;
 
   return {
     id: authUser.userId || `email:${authUser.email.trim().toLowerCase()}`,
@@ -91,14 +83,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [role, setRoleState] = useState<UserRole | null>(null);
   const [token, setTokenState] = useState<string | null>(null);
   const [authUser, setAuthUser] = useState<AuthUserProfile | null>(null);
-  const [currentStudentId, setCurrentStudentIdState] =
-    useState(defaultMockStudentId);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const savedRole = localStorage.getItem(AUTH_ROLE_KEY) as UserRole | null;
     const savedToken = localStorage.getItem(AUTH_TOKEN_KEY);
-    const savedStudentId = localStorage.getItem(AUTH_STUDENT_KEY);
     const savedUser = localStorage.getItem(AUTH_USER_KEY);
 
     if (
@@ -110,9 +99,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
     if (savedToken) {
       setTokenState(savedToken);
-    }
-    if (savedStudentId && getMockStudentById(savedStudentId)) {
-      setCurrentStudentIdState(savedStudentId);
     }
     if (savedUser) {
       try {
@@ -189,24 +175,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
     localStorage.removeItem(AUTH_TOKEN_KEY);
     localStorage.removeItem(AUTH_USER_KEY);
   };
-
-  const setCurrentStudentId = (studentId: string) => {
-    if (!getMockStudentById(studentId)) {
-      return;
-    }
-
-    setCurrentStudentIdState(studentId);
-    localStorage.setItem(AUTH_STUDENT_KEY, studentId);
-  };
-
-  const currentStudent = getMockStudentById(currentStudentId);
   const currentUser = authUser
     ? mapAuthUserToDashboardUser(authUser, role)
     : role === "teacher"
       ? mockTeacherUser
-      : role === "student"
-        ? currentStudent
-        : null;
+      : null;
 
   const value = useMemo(
     () => ({
@@ -215,14 +188,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
       isAuthenticated: role !== null && token !== null,
       isLoading,
       currentUser,
-      currentStudent,
-      availableStudents: mockStudentUsers,
       setRole,
       signInAsRole,
       signOut,
-      setCurrentStudentId,
     }),
-    [currentStudent, currentUser, isLoading, role, token],
+    [currentUser, isLoading, role, token],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

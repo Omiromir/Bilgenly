@@ -1,14 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { Bell, Inbox, Users } from "../../../components/icons/AppIcons";
+import { Bell, Inbox } from "../../../components/icons/AppIcons";
 import { useAuth } from "../../../app/providers/AuthProvider";
 import { useNotifications } from "../../../app/providers/NotificationsProvider";
 import { useTeacherClasses } from "../../../app/providers/TeacherClassesProvider";
 import { DashboardPageHeader } from "../../../features/dashboard/components/DashboardPageHeader";
 import {
-  DashboardBadge,
   DashboardButton,
   dashboardPageClassName,
-  dashboardSelectVariants,
 } from "../../../features/dashboard/components/DashboardPrimitives";
 import { SectionCard } from "../../../features/dashboard/components/SectionCard";
 import { StatCard } from "../../../features/dashboard/components/StatCard";
@@ -18,27 +16,45 @@ import { useDashboardPageMeta } from "../../../features/dashboard/hooks/useDashb
 
 export function StudentNotificationsPage() {
   const meta = useDashboardPageMeta();
+  const { currentUser } = useAuth();
   const {
-    availableStudents,
-    currentStudent,
-    setCurrentStudentId,
-  } = useAuth();
-  const {
-    getNotificationsForRecipient,
-    getUnreadCountForRecipient,
-    markAllNotificationsRead,
+    getNotificationsForRecipientIdentity,
+    getUnreadCountForRecipientIdentity,
     markNotificationRead,
   } = useNotifications();
-  const { updateStudentStatus } = useTeacherClasses();
+  const { respondToClassInvitation } = useTeacherClasses();
   const [feedback, setFeedback] = useState<string | null>(null);
+  const studentViewer = currentUser?.role === "student" ? currentUser : null;
+  const studentIdentity = {
+    userId: studentViewer?.id,
+    email: studentViewer?.email,
+  };
+  const notificationRecipientId = studentViewer?.id ?? null;
+  const notificationRecipientEmail = studentViewer?.email ?? null;
 
   const notifications = useMemo(
-    () =>
-      currentStudent ? getNotificationsForRecipient(currentStudent.id) : [],
-    [currentStudent, getNotificationsForRecipient],
+    () => {
+      if (studentViewer) {
+        return getNotificationsForRecipientIdentity(
+          notificationRecipientId,
+          notificationRecipientEmail,
+        );
+      }
+
+      return [];
+    },
+    [
+      getNotificationsForRecipientIdentity,
+      notificationRecipientEmail,
+      notificationRecipientId,
+      studentViewer,
+    ],
   );
-  const unreadCount = currentStudent
-    ? getUnreadCountForRecipient(currentStudent.id)
+  const unreadCount = notificationRecipientId || notificationRecipientEmail
+    ? getUnreadCountForRecipientIdentity(
+        notificationRecipientId,
+        notificationRecipientEmail,
+      )
     : 0;
   const pendingCount = notifications.filter(
     (notification) => notification.status === "pending",
@@ -46,24 +62,26 @@ export function StudentNotificationsPage() {
 
   useEffect(() => {
     setFeedback(null);
-  }, [currentStudent?.id]);
+  }, [studentViewer?.id]);
 
   const handleAcceptInvitation = (notification: DashboardNotification) => {
-    updateStudentStatus(
+    respondToClassInvitation(
       notification.relatedClassId,
       notification.studentId,
-      "active",
+      "accepted",
+      studentIdentity,
     );
     setFeedback(
-      `You joined ${notification.relatedClassName}. Any quizzes assigned to that class are now available in your Quiz Library.`,
+      `You joined ${notification.relatedClassName}. It now appears in My Classes, and any assigned quizzes are unlocked there and in the Assigned tab of your Quiz Library.`,
     );
   };
 
   const handleDeclineInvitation = (notification: DashboardNotification) => {
-    updateStudentStatus(
+    respondToClassInvitation(
       notification.relatedClassId,
       notification.studentId,
       "declined",
+      studentIdentity,
     );
     setFeedback(`You declined the invitation to ${notification.relatedClassName}.`);
   };
@@ -77,12 +95,16 @@ export function StudentNotificationsPage() {
           "Review class invitations and the important updates that belong to your student workspace."
         }
         actions={
-          currentStudent ? (
+          studentViewer ? (
             <DashboardButton
               type="button"
               variant="secondary"
               size="lg"
-              onClick={() => markAllNotificationsRead(currentStudent.id)}
+              onClick={() => {
+                notifications.forEach((notification) =>
+                  markNotificationRead(notification.id),
+                );
+              }}
               disabled={!unreadCount}
             >
               Mark all as read
@@ -106,13 +128,6 @@ export function StudentNotificationsPage() {
           icon={Inbox}
           iconClassName="bg-[var(--dashboard-warning-soft)] text-[var(--dashboard-warning)]"
         />
-        <StatCard
-          title="Mock Students"
-          value={String(availableStudents.length)}
-          change="Switch student identity to test targeted notifications"
-          icon={Users}
-          iconClassName="bg-[var(--dashboard-brand-soft)] text-[var(--dashboard-brand-strong)]"
-        />
       </div>
 
       <SectionCard
@@ -120,44 +135,6 @@ export function StudentNotificationsPage() {
         description="Notifications are stored in shared frontend state, so invitations stay available as you move through the dashboard."
         contentClassName="space-y-5"
       >
-        <div className="flex flex-col gap-4 rounded-[22px] border border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-muted)] px-5 py-5 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <p className="text-sm font-semibold text-[var(--dashboard-text-strong)]">
-              Current mock student
-            </p>
-            <p className="mt-1 text-sm leading-6 text-[var(--dashboard-text-soft)]">
-              Use the selector to verify that invitations land in the right student inbox
-              before real auth and backend data are wired in.
-            </p>
-          </div>
-
-          <label className="w-full max-w-[320px]">
-            <span className="sr-only">Select current mock student</span>
-            <select
-              value={currentStudent?.id ?? ""}
-              onChange={(event) => setCurrentStudentId(event.target.value)}
-              className={dashboardSelectVariants({ size: "md" })}
-            >
-              {availableStudents.map((student) => (
-                <option key={student.id} value={student.id}>
-                  {student.fullName} ({student.email})
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-
-        {currentStudent ? (
-          <div className="flex flex-wrap items-center gap-2">
-            <DashboardBadge tone="info" size="md">
-              Viewing as {currentStudent.fullName}
-            </DashboardBadge>
-            <DashboardBadge tone="neutral" size="md">
-              {currentStudent.email}
-            </DashboardBadge>
-          </div>
-        ) : null}
-
         {feedback ? (
           <div className="rounded-[18px] border border-[var(--dashboard-success-soft)] bg-[var(--dashboard-success-soft)]/50 px-4 py-3">
             <p className="text-sm leading-6 text-[var(--dashboard-success)]">

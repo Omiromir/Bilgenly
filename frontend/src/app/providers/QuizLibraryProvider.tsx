@@ -13,6 +13,12 @@ import type {
   QuizQuestionRecord,
   QuizRecord,
 } from "../../features/dashboard/components/quiz-library/quizLibraryTypes";
+import { useAuth } from "./AuthProvider";
+import {
+  getScopedStorageValue,
+  getUserStorageScope,
+  getUserScopedStorageKey,
+} from "./userScopedStorage";
 
 const QUIZ_LIBRARY_STORAGE_KEY = "bilgenly_quiz_library";
 
@@ -68,7 +74,14 @@ function formatQuizDate(date: Date) {
   }).format(date);
 }
 
-function getOwnerName(role: "teacher" | "student") {
+function getOwnerName(
+  role: "teacher" | "student",
+  currentUserName?: string | null,
+) {
+  if (currentUserName?.trim()) {
+    return currentUserName.trim();
+  }
+
   return role === "teacher" ? "Professor Doe" : "You";
 }
 
@@ -140,11 +153,31 @@ export function getQuizLibraryItemsForRole(
 }
 
 export function QuizLibraryProvider({ children }: QuizLibraryProviderProps) {
+  const { currentUser, role, token } = useAuth();
   const [quizzes, setQuizzes] = useState<QuizRecord[]>([]);
   const [isHydrated, setIsHydrated] = useState(false);
+  const [hydratedStorageKey, setHydratedStorageKey] = useState<string | null>(null);
+  const storageScope = useMemo(
+    () =>
+      getUserStorageScope({
+        userId: currentUser?.id,
+        email: currentUser?.email,
+        role,
+        token,
+      }),
+    [currentUser?.email, currentUser?.id, role, token],
+  );
+  const storageKey = useMemo(
+    () => getUserScopedStorageKey(QUIZ_LIBRARY_STORAGE_KEY, storageScope),
+    [storageScope],
+  );
 
   useEffect(() => {
-    const savedValue = localStorage.getItem(QUIZ_LIBRARY_STORAGE_KEY);
+    setQuizzes([]);
+    setIsHydrated(false);
+    setHydratedStorageKey(null);
+
+    const savedValue = getScopedStorageValue(QUIZ_LIBRARY_STORAGE_KEY, storageScope);
 
     if (!savedValue) {
       setIsHydrated(true);
@@ -164,17 +197,18 @@ export function QuizLibraryProvider({ children }: QuizLibraryProviderProps) {
     } catch {
       setQuizzes([]);
     } finally {
+      setHydratedStorageKey(storageKey);
       setIsHydrated(true);
     }
-  }, []);
+  }, [storageKey, storageScope]);
 
   useEffect(() => {
-    if (!isHydrated) {
+    if (!isHydrated || hydratedStorageKey !== storageKey) {
       return;
     }
 
-    localStorage.setItem(QUIZ_LIBRARY_STORAGE_KEY, JSON.stringify(quizzes));
-  }, [isHydrated, quizzes]);
+    localStorage.setItem(storageKey, JSON.stringify(quizzes));
+  }, [hydratedStorageKey, isHydrated, quizzes, storageKey]);
 
   const value = useMemo<QuizLibraryContextValue>(
     () => ({
@@ -186,7 +220,7 @@ export function QuizLibraryProvider({ children }: QuizLibraryProviderProps) {
             input.existingQuizId ??
             `quiz-${now.getTime()}-${Math.random().toString(36).slice(2, 8)}`,
           ownerRole: input.ownerRole,
-          ownerName: getOwnerName(input.ownerRole),
+          ownerName: getOwnerName(input.ownerRole, currentUser?.fullName),
           title: input.title.trim(),
           description: input.description.trim(),
           topic: input.topic.trim(),
@@ -292,7 +326,7 @@ export function QuizLibraryProvider({ children }: QuizLibraryProviderProps) {
           ...source,
           id: `quiz-${now.getTime()}-${Math.random().toString(36).slice(2, 8)}`,
           ownerRole: viewerRole,
-          ownerName: getOwnerName(viewerRole),
+          ownerName: getOwnerName(viewerRole, currentUser?.fullName),
           sourceQuizId: source.id,
           savedByRoles: [],
           title: `${source.title} Copy`,
@@ -312,7 +346,7 @@ export function QuizLibraryProvider({ children }: QuizLibraryProviderProps) {
         return duplicate;
       },
     }),
-    [quizzes],
+    [currentUser?.fullName, quizzes],
   );
 
   return (

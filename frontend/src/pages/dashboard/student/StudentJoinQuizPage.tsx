@@ -31,13 +31,18 @@ function getAssignedActionLabel(practiceState?: string) {
 
 export function StudentJoinQuizPage() {
   const meta = useDashboardPageMeta();
-  const { currentStudent } = useAuth();
+  const { currentUser } = useAuth();
   const { classes } = useTeacherClasses();
   const { quizzes } = useQuizLibrary();
+  const studentViewer = currentUser?.role === "student" ? currentUser : null;
+  const studentIdentity = {
+    userId: studentViewer?.id,
+    email: studentViewer?.email,
+  };
   const studentSources = buildStudentQuizLibrarySources(
     classes,
     quizzes,
-    currentStudent?.id,
+    studentIdentity,
   );
 
   const getAssignedEmptyState = () => {

@@ -21,7 +21,15 @@ const NOTIFICATIONS_STORAGE_KEY = "bilgenly_notifications";
 interface NotificationsContextValue {
   notifications: DashboardNotification[];
   getNotificationsForRecipient: (recipientUserId: string) => DashboardNotification[];
+  getNotificationsForRecipientIdentity: (
+    recipientUserId: string | null | undefined,
+    recipientEmail?: string | null,
+  ) => DashboardNotification[];
   getUnreadCountForRecipient: (recipientUserId: string) => number;
+  getUnreadCountForRecipientIdentity: (
+    recipientUserId: string | null | undefined,
+    recipientEmail?: string | null,
+  ) => number;
   upsertClassInvitationNotification: (
     input: ClassInvitationNotificationInput,
   ) => DashboardNotification;
@@ -82,7 +90,9 @@ function sanitizeNotificationRecord(
       ? notification.updatedAt
       : timestamp;
   const status =
-    notification.status === "accepted" || notification.status === "declined"
+    notification.status === "accepted" ||
+    notification.status === "declined" ||
+    notification.status === "removed"
       ? notification.status
       : "pending";
 
@@ -161,6 +171,27 @@ export function NotificationsProvider({
     );
   }, [isHydrated, notifications]);
 
+  const matchesRecipientIdentity = (
+    notification: DashboardNotification,
+    recipientUserId: string | null | undefined,
+    recipientEmail?: string | null,
+  ) => {
+    const normalizedRecipientEmail = recipientEmail?.trim().toLowerCase();
+
+    if (recipientUserId && notification.recipientUserId === recipientUserId) {
+      return true;
+    }
+
+    if (
+      normalizedRecipientEmail &&
+      notification.recipientEmail.trim().toLowerCase() === normalizedRecipientEmail
+    ) {
+      return true;
+    }
+
+    return false;
+  };
+
   const value = useMemo<NotificationsContextValue>(
     () => ({
       notifications,
@@ -168,10 +199,20 @@ export function NotificationsProvider({
         notifications.filter(
           (notification) => notification.recipientUserId === recipientUserId,
         ),
+      getNotificationsForRecipientIdentity: (recipientUserId, recipientEmail) =>
+        notifications.filter((notification) =>
+          matchesRecipientIdentity(notification, recipientUserId, recipientEmail),
+        ),
       getUnreadCountForRecipient: (recipientUserId) =>
         notifications.filter(
           (notification) =>
             notification.recipientUserId === recipientUserId && !notification.read,
+        ).length,
+      getUnreadCountForRecipientIdentity: (recipientUserId, recipientEmail) =>
+        notifications.filter(
+          (notification) =>
+            matchesRecipientIdentity(notification, recipientUserId, recipientEmail) &&
+            !notification.read,
         ).length,
       upsertClassInvitationNotification: (input) => {
         const existingNotification = notifications.find(

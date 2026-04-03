@@ -7,12 +7,12 @@ import {
   useState,
 } from "react";
 import type {
+  ClassInvitationStatus,
   TeacherClassAssignedQuiz,
   TeacherClassFormValues,
   TeacherClassRecord,
-  TeacherClassStudent,
-  TeacherClassStudentStatus,
   TeacherClassStatus,
+  TeacherClassStudent,
 } from "../../features/dashboard/components/classes/teacherClassesTypes";
 import {
   buildTeacherStudentNameFromEmail,
@@ -20,7 +20,9 @@ import {
   createTeacherClassId,
   createTeacherInviteCode,
   createTeacherStudentId,
+  matchesTeacherClassStudentIdentity,
   normalizeTeacherClassFormValues,
+  type StudentIdentity,
   sortTeacherClasses,
   sortTeacherClassStudents,
 } from "../../features/dashboard/components/classes/teacherClassesUtils";
@@ -30,8 +32,19 @@ import {
   getNotificationRecipientUserIdByEmail,
   mockTeacherUser,
 } from "../../features/dashboard/mock/mockUsers";
+import { useAuth } from "./AuthProvider";
+import {
+  getScopedStorageValue,
+  getUserStorageScope,
+  getUserScopedStorageKey,
+} from "./userScopedStorage";
 
 const TEACHER_CLASSES_STORAGE_KEY = "bilgenly_teacher_classes";
+
+export interface StudentClassMembershipRecord {
+  teacherClass: TeacherClassRecord;
+  membership: TeacherClassStudent;
+}
 
 interface TeacherClassesContextValue {
   classes: TeacherClassRecord[];
@@ -47,10 +60,11 @@ interface TeacherClassesContextValue {
   ) => TeacherClassStudent[];
   removeStudentFromClass: (classId: string, studentId: string) => void;
   resendStudentInvite: (classId: string, studentId: string) => void;
-  updateStudentStatus: (
+  respondToClassInvitation: (
     classId: string,
     studentId: string,
-    status: TeacherClassStudentStatus,
+    response: Extract<ClassInvitationStatus, "accepted" | "declined">,
+    studentIdentity?: StudentIdentity,
   ) => void;
   assignQuizToClasses: (
     quiz: Pick<TeacherClassAssignedQuiz, "quizId" | "title" | "topic" | "questionCount">,
@@ -59,6 +73,7 @@ interface TeacherClassesContextValue {
   removeQuizFromClass: (classId: string, quizId: string) => void;
   deleteClass: (classId: string) => void;
   getClassById: (classId: string) => TeacherClassRecord | undefined;
+  getStudentMemberships: (studentIdentity: StudentIdentity) => StudentClassMembershipRecord[];
 }
 
 const TeacherClassesContext = createContext<
@@ -67,6 +82,112 @@ const TeacherClassesContext = createContext<
 
 interface TeacherClassesProviderProps {
   children: ReactNode;
+}
+
+function isActiveTeacherClass(
+  teacherClass: TeacherClassRecord | undefined | null,
+): teacherClass is TeacherClassRecord {
+  return Boolean(teacherClass && teacherClass.status === "active");
+}
+
+function getInvitationStatusFromLegacyStatus(
+  status: string | undefined,
+): ClassInvitationStatus {
+  switch (status) {
+    case "accepted":
+      return "accepted";
+    case "declined":
+      return "declined";
+    case "removed":
+      return "removed";
+    default:
+      return "pending";
+  }
+}
+
+function sanitizeTeacherClassStudent(
+  student: Partial<TeacherClassStudent>,
+): TeacherClassStudent | null {
+  if (typeof student?.id !== "string") {
+    return null;
+  }
+
+  const email =
+    typeof student.email === "string" ? normalizeEmail(student.email) : "";
+
+  if (!email) {
+    return null;
+  }
+
+  const fallbackTimestamp =
+    typeof student.joinedAt === "string"
+      ? student.joinedAt
+      : typeof student.invitedAt === "string"
+        ? student.invitedAt
+        : new Date().toISOString();
+  const nextStatus =
+    student.status === "joined" || student.status === "active"
+      ? "joined"
+      : student.status === "declined"
+        ? "declined"
+        : student.status === "removed"
+          ? "removed"
+          : "invited";
+  const invitationStatus =
+    student.invitationStatus ??
+    (nextStatus === "joined"
+      ? "accepted"
+      : nextStatus === "declined"
+        ? "declined"
+        : nextStatus === "removed"
+          ? "removed"
+          : getInvitationStatusFromLegacyStatus(
+              (student as { invitationState?: string }).invitationState,
+            ));
+
+  return {
+    id: student.id,
+    fullName:
+      typeof student.fullName === "string" && student.fullName.trim()
+        ? student.fullName.trim()
+        : typeof (student as { name?: string })?.name === "string" &&
+            (student as { name?: string }).name?.trim()
+          ? (student as { name?: string }).name!.trim()
+          : buildTeacherStudentNameFromEmail(email),
+    email,
+    status: nextStatus,
+    invitationStatus,
+    invitedAt:
+      typeof student.invitedAt === "string" ? student.invitedAt : fallbackTimestamp,
+    joinedAt:
+      typeof student.joinedAt === "string" && student.joinedAt
+        ? student.joinedAt
+        : nextStatus === "joined"
+          ? fallbackTimestamp
+          : undefined,
+    respondedAt:
+      typeof student.respondedAt === "string"
+        ? student.respondedAt
+        : invitationStatus === "accepted" || invitationStatus === "declined"
+          ? fallbackTimestamp
+          : undefined,
+    removedAt:
+      typeof student.removedAt === "string"
+        ? student.removedAt
+        : nextStatus === "removed"
+          ? fallbackTimestamp
+          : undefined,
+    linkedUserId:
+      typeof student.linkedUserId === "string"
+        ? student.linkedUserId
+        : getNotificationRecipientUserIdByEmail(email),
+    avatar: typeof student.avatar === "string" ? student.avatar : undefined,
+    role: typeof student.role === "string" ? student.role : undefined,
+  };
+}
+
+function getCurrentStudentCount(students: TeacherClassStudent[]) {
+  return students.filter((student) => student.status !== "removed").length;
 }
 
 function sanitizeTeacherClassRecord(
@@ -79,41 +200,8 @@ function sanitizeTeacherClassRecord(
   const students = Array.isArray(teacherClass.students)
     ? sortTeacherClassStudents(
         teacherClass.students
-          .filter((student) => typeof student?.id === "string")
-          .map((student) => {
-            const email =
-              typeof student?.email === "string" ? normalizeEmail(student.email) : "";
-
-            return {
-              id: student.id,
-              fullName:
-                typeof student?.fullName === "string" && student.fullName.trim()
-                  ? student.fullName.trim()
-                  : typeof (student as { name?: string })?.name === "string" &&
-                      (student as { name?: string }).name?.trim()
-                    ? (student as { name?: string }).name!.trim()
-                    : buildTeacherStudentNameFromEmail(email),
-              email,
-              status:
-                student?.status === "active"
-                  ? "active"
-                  : student?.status === "declined"
-                    ? "declined"
-                    : "invited",
-              joinedAt:
-                typeof student?.joinedAt === "string"
-                  ? student.joinedAt
-                  : new Date().toISOString(),
-              linkedUserId:
-                typeof student?.linkedUserId === "string"
-                  ? student.linkedUserId
-                  : getNotificationRecipientUserIdByEmail(email),
-              avatar:
-                typeof student?.avatar === "string" ? student.avatar : undefined,
-              role: typeof student?.role === "string" ? student.role : undefined,
-            } satisfies TeacherClassStudent;
-          })
-          .filter((student) => student.email),
+          .map((student) => sanitizeTeacherClassStudent(student))
+          .filter((student): student is TeacherClassStudent => student !== null),
       )
     : [];
   const assignedQuizzes = Array.isArray(teacherClass.assignedQuizzes)
@@ -162,8 +250,7 @@ function sanitizeTeacherClassRecord(
     typeof teacherClass.updatedAt === "string" ? teacherClass.updatedAt : createdAt;
 
   return {
-    id:
-      resolvedClassId,
+    id: resolvedClassId,
     name:
       typeof teacherClass.name === "string" && teacherClass.name.trim()
         ? teacherClass.name.trim()
@@ -180,7 +267,7 @@ function sanitizeTeacherClassRecord(
         : createTeacherInviteCode(),
     createdAt,
     updatedAt,
-    studentCount: students.length || Math.max(teacherClass.studentCount ?? 0, 0),
+    studentCount: getCurrentStudentCount(students),
     quizCount: assignedQuizzes.length || Math.max(teacherClass.quizCount ?? 0, 0),
     status: teacherClass.status === "archived" ? "archived" : "active",
     students,
@@ -188,11 +275,27 @@ function sanitizeTeacherClassRecord(
   };
 }
 
+function updateTeacherClassStudents(
+  teacherClass: TeacherClassRecord,
+  updater: (students: TeacherClassStudent[]) => TeacherClassStudent[],
+): TeacherClassRecord {
+  const students = sortTeacherClassStudents(updater(teacherClass.students));
+
+  return {
+    ...teacherClass,
+    students,
+    studentCount: getCurrentStudentCount(students),
+    updatedAt: new Date().toISOString(),
+  };
+}
+
 export function TeacherClassesProvider({
   children,
 }: TeacherClassesProviderProps) {
+  const { currentUser, role, token } = useAuth();
   const [classes, setClasses] = useState<TeacherClassRecord[]>([]);
   const [isHydrated, setIsHydrated] = useState(false);
+  const [hydratedStorageKey, setHydratedStorageKey] = useState<string | null>(null);
   const {
     removeClassInvitationNotification,
     removeNotificationsForClass,
@@ -200,9 +303,31 @@ export function TeacherClassesProvider({
     updateClassInvitationStatusByStudent,
     upsertClassInvitationNotification,
   } = useNotifications();
+  const storageScope = useMemo(
+    () =>
+      getUserStorageScope({
+        userId: currentUser?.id,
+        email: currentUser?.email,
+        role,
+        token,
+      }),
+    [currentUser?.email, currentUser?.id, role, token],
+  );
+  const storageKey = useMemo(
+    () => getUserScopedStorageKey(TEACHER_CLASSES_STORAGE_KEY, storageScope),
+    [storageScope],
+  );
+  const teacherActor = role === "teacher" && currentUser ? currentUser : mockTeacherUser;
 
   useEffect(() => {
-    const savedValue = localStorage.getItem(TEACHER_CLASSES_STORAGE_KEY);
+    setClasses([]);
+    setIsHydrated(false);
+    setHydratedStorageKey(null);
+
+    const savedValue = getScopedStorageValue(
+      TEACHER_CLASSES_STORAGE_KEY,
+      storageScope,
+    );
 
     if (!savedValue) {
       setIsHydrated(true);
@@ -219,17 +344,18 @@ export function TeacherClassesProvider({
     } catch {
       setClasses([]);
     } finally {
+      setHydratedStorageKey(storageKey);
       setIsHydrated(true);
     }
-  }, []);
+  }, [storageKey, storageScope]);
 
   useEffect(() => {
-    if (!isHydrated) {
+    if (!isHydrated || hydratedStorageKey !== storageKey) {
       return;
     }
 
-    localStorage.setItem(TEACHER_CLASSES_STORAGE_KEY, JSON.stringify(classes));
-  }, [classes, isHydrated]);
+    localStorage.setItem(storageKey, JSON.stringify(classes));
+  }, [classes, hydratedStorageKey, isHydrated, storageKey]);
 
   const value = useMemo<TeacherClassesContextValue>(
     () => ({
@@ -258,7 +384,7 @@ export function TeacherClassesProvider({
       updateClass: (classId, values) => {
         const existingClass = classes.find((item) => item.id === classId);
 
-        if (!existingClass) {
+        if (!isActiveTeacherClass(existingClass)) {
           return null;
         }
 
@@ -279,8 +405,8 @@ export function TeacherClassesProvider({
 
         syncClassInvitationMetadata(classId, {
           relatedClassName: updatedClass.name,
-          senderName: mockTeacherUser.fullName,
-          senderEmail: mockTeacherUser.email,
+          senderName: teacherActor.fullName,
+          senderEmail: teacherActor.email,
         });
 
         return updatedClass;
@@ -303,27 +429,28 @@ export function TeacherClassesProvider({
       addStudentsToClass: (classId, emails) => {
         const targetClass = classes.find((item) => item.id === classId);
 
-        if (!targetClass) {
+        if (!isActiveTeacherClass(targetClass)) {
           return [];
         }
 
+        const createdAt = new Date().toISOString();
+        const normalizedEmails = Array.from(
+          new Set(emails.map((email) => normalizeEmail(email)).filter(Boolean)),
+        );
         const existingEmails = new Set(
           targetClass.students.map((student) => normalizeEmail(student.email)),
         );
-        const createdAt = new Date().toISOString();
-        const newStudents = sortTeacherClassStudents(
-          emails
-            .map((email) => normalizeEmail(email))
-            .filter((email) => email && !existingEmails.has(email))
-            .map((email) => ({
-              id: createTeacherStudentId(),
-              fullName: buildTeacherStudentNameFromEmail(email),
-              email,
-              status: "invited" as const,
-              joinedAt: createdAt,
-              linkedUserId: getNotificationRecipientUserIdByEmail(email),
-            })),
-        );
+        const newStudents = normalizedEmails
+          .filter((email) => !existingEmails.has(email))
+          .map((email) => ({
+            id: createTeacherStudentId(),
+            fullName: buildTeacherStudentNameFromEmail(email),
+            email,
+            status: "invited" as const,
+            invitationStatus: "pending" as const,
+            invitedAt: createdAt,
+            linkedUserId: getNotificationRecipientUserIdByEmail(email),
+          }));
 
         if (!newStudents.length) {
           return [];
@@ -336,17 +463,18 @@ export function TeacherClassesProvider({
                 return item;
               }
 
-              const students = sortTeacherClassStudents([
-                ...item.students,
-                ...newStudents,
-              ]);
+              const existingByEmail = new Map(
+                item.students.map((student) => [normalizeEmail(student.email), student]),
+              );
 
-              return {
-                ...item,
-                students,
-                studentCount: students.length,
-                updatedAt: createdAt,
-              };
+              newStudents.forEach((student) => {
+                existingByEmail.set(normalizeEmail(student.email), student);
+              });
+
+              return updateTeacherClassStudents(
+                item,
+                () => Array.from(existingByEmail.values()),
+              );
             }),
           ),
         );
@@ -358,8 +486,8 @@ export function TeacherClassesProvider({
             recipientEmail: student.email,
             relatedClassId: targetClass.id,
             relatedClassName: targetClass.name,
-            senderName: mockTeacherUser.fullName,
-            senderEmail: mockTeacherUser.email,
+            senderName: teacherActor.fullName,
+            senderEmail: teacherActor.email,
             studentId: student.id,
             studentName: student.fullName,
             studentEmail: student.email,
@@ -369,6 +497,19 @@ export function TeacherClassesProvider({
         return newStudents;
       },
       removeStudentFromClass: (classId, studentId) => {
+        const targetClass = classes.find((item) => item.id === classId);
+
+        if (!isActiveTeacherClass(targetClass)) {
+          return;
+        }
+
+        const targetStudent =
+          targetClass.students.find((student) => student.id === studentId) ?? null;
+
+        if (!targetStudent) {
+          return;
+        }
+
         removeClassInvitationNotification(classId, studentId);
 
         setClasses((current) =>
@@ -378,16 +519,9 @@ export function TeacherClassesProvider({
                 return item;
               }
 
-              const students = item.students.filter(
-                (student) => student.id !== studentId,
+              return updateTeacherClassStudents(item, (students) =>
+                students.filter((student) => student.id !== studentId),
               );
-
-              return {
-                ...item,
-                students,
-                studentCount: students.length,
-                updatedAt: new Date().toISOString(),
-              };
             }),
           ),
         );
@@ -397,56 +531,15 @@ export function TeacherClassesProvider({
         const targetStudent =
           targetClass?.students.find((student) => student.id === studentId) ?? null;
 
-        setClasses((current) =>
-          sortTeacherClasses(
-            current.map((item) => {
-              if (item.id !== classId) {
-                return item;
-              }
-
-              const students = item.students.map((student) =>
-                student.id === studentId && student.status !== "active"
-                  ? {
-                      ...student,
-                      status: "invited" as const,
-                      joinedAt: new Date().toISOString(),
-                    }
-                  : student,
-              );
-
-              return {
-                ...item,
-                students,
-                updatedAt: new Date().toISOString(),
-              };
-            }),
-          ),
-        );
-
-        if (targetClass && targetStudent) {
-          upsertClassInvitationNotification({
-            recipientUserId:
-              targetStudent.linkedUserId ??
-              getNotificationRecipientUserIdByEmail(targetStudent.email),
-            recipientEmail: targetStudent.email,
-            relatedClassId: targetClass.id,
-            relatedClassName: targetClass.name,
-            senderName: mockTeacherUser.fullName,
-            senderEmail: mockTeacherUser.email,
-            studentId: targetStudent.id,
-            studentName: targetStudent.fullName,
-            studentEmail: targetStudent.email,
-          });
-        }
-      },
-      updateStudentStatus: (classId, studentId, status) => {
-        if (status === "active") {
-          updateClassInvitationStatusByStudent(classId, studentId, "accepted");
+        if (
+          !isActiveTeacherClass(targetClass) ||
+          !targetStudent ||
+          targetStudent.status === "joined"
+        ) {
+          return;
         }
 
-        if (status === "declined") {
-          updateClassInvitationStatusByStudent(classId, studentId, "declined");
-        }
+        const invitedAt = new Date().toISOString();
 
         setClasses((current) =>
           sortTeacherClasses(
@@ -455,33 +548,90 @@ export function TeacherClassesProvider({
                 return item;
               }
 
-              const students = sortTeacherClassStudents(
-                item.students.map((student) =>
-                  student.id === studentId
+              return updateTeacherClassStudents(item, (students) =>
+                students.map((student) =>
+                  student.id === studentId && student.status !== "joined"
                     ? {
                         ...student,
-                        status,
-                        joinedAt:
-                          status === "active"
-                            ? new Date().toISOString()
-                            : student.joinedAt,
+                        status: "invited",
+                        invitationStatus: "pending",
+                        invitedAt,
+                        joinedAt: undefined,
+                        respondedAt: undefined,
+                        removedAt: undefined,
                       }
                     : student,
                 ),
               );
+            }),
+          ),
+        );
 
-              return {
-                ...item,
-                students,
-                studentCount: students.length,
-                updatedAt: new Date().toISOString(),
-              };
+        upsertClassInvitationNotification({
+          recipientUserId:
+            targetStudent.linkedUserId ??
+            getNotificationRecipientUserIdByEmail(targetStudent.email),
+          recipientEmail: targetStudent.email,
+          relatedClassId: targetClass.id,
+          relatedClassName: targetClass.name,
+          senderName: teacherActor.fullName,
+          senderEmail: teacherActor.email,
+          studentId: targetStudent.id,
+          studentName: targetStudent.fullName,
+          studentEmail: targetStudent.email,
+        });
+      },
+      respondToClassInvitation: (classId, studentId, response, studentIdentity) => {
+        const targetClass = classes.find((item) => item.id === classId);
+
+        if (!isActiveTeacherClass(targetClass)) {
+          return;
+        }
+
+        const responseTimestamp = new Date().toISOString();
+
+        updateClassInvitationStatusByStudent(classId, studentId, response);
+        setClasses((current) =>
+          sortTeacherClasses(
+            current.map((item) => {
+              if (item.id !== classId) {
+                return item;
+              }
+
+              return updateTeacherClassStudents(item, (students) =>
+                students.map((student) =>
+                  student.id === studentId
+                    ? {
+                        ...student,
+                        status: response === "accepted" ? "joined" : "declined",
+                        invitationStatus: response,
+                        linkedUserId:
+                          response === "accepted"
+                            ? studentIdentity?.userId ?? student.linkedUserId
+                            : student.linkedUserId,
+                        joinedAt:
+                          response === "accepted"
+                            ? student.joinedAt ?? responseTimestamp
+                            : undefined,
+                        respondedAt: responseTimestamp,
+                        removedAt: undefined,
+                      }
+                    : student,
+                ),
+              );
             }),
           ),
         );
       },
       assignQuizToClasses: (quiz, classIds) => {
-        const uniqueClassIds = Array.from(new Set(classIds));
+        const activeClassIds = new Set(
+          classes
+            .filter((teacherClass) => teacherClass.status === "active")
+            .map((teacherClass) => teacherClass.id),
+        );
+        const uniqueClassIds = Array.from(
+          new Set(classIds.filter((classId) => activeClassIds.has(classId))),
+        );
 
         if (!uniqueClassIds.length) {
           return [];
@@ -509,8 +659,8 @@ export function TeacherClassesProvider({
                   classId: item.id,
                   ...quiz,
                   assignedAt,
-                  assignedBy: mockTeacherUser.id,
-                  assignedByName: mockTeacherUser.fullName,
+                  assignedBy: teacherActor.id,
+                  assignedByName: teacherActor.fullName,
                   visibility: "class-members" as const,
                   status: "assigned" as const,
                 },
@@ -530,6 +680,12 @@ export function TeacherClassesProvider({
         return assignedClassIds;
       },
       removeQuizFromClass: (classId, quizId) => {
+        const targetClass = classes.find((item) => item.id === classId);
+
+        if (!isActiveTeacherClass(targetClass)) {
+          return;
+        }
+
         setClasses((current) =>
           sortTeacherClasses(
             current.map((item) => {
@@ -556,8 +712,51 @@ export function TeacherClassesProvider({
         setClasses((current) => current.filter((item) => item.id !== classId));
       },
       getClassById: (classId) => classes.find((item) => item.id === classId),
+      getStudentMemberships: (studentIdentity) =>
+        classes
+          .flatMap((teacherClass) => {
+            const membership = teacherClass.students.find(
+              (student) => matchesTeacherClassStudentIdentity(student, studentIdentity),
+            );
+
+            if (!membership) {
+              return [];
+            }
+
+            return [{ teacherClass, membership }];
+          })
+          .sort((left, right) => {
+            if (
+              left.membership.status === "joined" &&
+              right.membership.status !== "joined"
+            ) {
+              return -1;
+            }
+
+            if (
+              left.membership.status !== "joined" &&
+              right.membership.status === "joined"
+            ) {
+              return 1;
+            }
+
+            return (
+              new Date(right.teacherClass.updatedAt).getTime() -
+              new Date(left.teacherClass.updatedAt).getTime()
+            );
+          }),
     }),
-    [classes],
+    [
+      classes,
+      removeClassInvitationNotification,
+      removeNotificationsForClass,
+      syncClassInvitationMetadata,
+      teacherActor.email,
+      teacherActor.fullName,
+      teacherActor.id,
+      updateClassInvitationStatusByStudent,
+      upsertClassInvitationNotification,
+    ],
   );
 
   return (

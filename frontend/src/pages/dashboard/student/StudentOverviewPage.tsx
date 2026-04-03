@@ -32,13 +32,18 @@ const scoreToneClassName = {
 } as const;
 
 export function StudentOverviewPage() {
-  const { currentStudent } = useAuth();
+  const { currentUser } = useAuth();
   const { classes } = useTeacherClasses();
   const { quizzes } = useQuizLibrary();
+  const studentViewer = currentUser?.role === "student" ? currentUser : null;
+  const studentIdentity = {
+    userId: studentViewer?.id,
+    email: studentViewer?.email,
+  };
   const studentSources = buildStudentQuizLibrarySources(
     classes,
     quizzes,
-    currentStudent?.id,
+    studentIdentity,
   );
   const assignedPreview = studentSources.assigned.slice(0, 3);
 
@@ -87,8 +92,8 @@ export function StudentOverviewPage() {
         actions={
           <>
             <DashboardButton asChild variant="inverse" size="xl">
-              <Link to="/dashboard/student/join-quiz">
-                Join Quiz by Code
+              <Link to="/dashboard/student/classes">
+                Open My Classes
               </Link>
             </DashboardButton>
             <DashboardButton asChild variant="hero" size="xl">
@@ -153,7 +158,10 @@ export function StudentOverviewPage() {
                     </div>
 
                     <DashboardButton asChild type="button" size="lg" className="mt-5 w-full">
-                      <Link to="/dashboard/student/quiz-library" state={{ libraryTab: "assigned" }}>
+                      <Link
+                        to="/dashboard/student/classes"
+                        state={{ selectedClassId: assignment.assignmentContext.classId }}
+                      >
                         {assignment.practiceState === "in-progress"
                           ? "Continue Quiz"
                           : assignment.practiceState === "completed"

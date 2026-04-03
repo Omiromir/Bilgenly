@@ -5,6 +5,7 @@ import {
   MailCheck,
   MailOpen,
   MailX,
+  XCircle,
   UserPlus,
 } from "../../../../components/icons/AppIcons";
 import { cn } from "../../../../components/ui/utils";
@@ -121,6 +122,10 @@ export function ClassInvitationNotificationCard({
             ) : notification.status === "declined" ? (
               <div className={dashboardIconChipVariants({ tone: "danger", size: "md" })}>
                 <MailX className="h-4 w-4" />
+              </div>
+            ) : notification.status === "removed" ? (
+              <div className={dashboardIconChipVariants({ tone: "neutral", size: "md" })}>
+                <XCircle className="h-4 w-4" />
               </div>
             ) : (
               <div className={dashboardIconChipVariants({ tone: "warning", size: "md" })}>

@@ -77,16 +77,86 @@ export function parseTeacherStudentEmails(value: string) {
     .filter(Boolean);
 }
 
+export interface StudentIdentity {
+  userId?: string | null;
+  email?: string | null;
+}
+
+function getEmailIdentityKey(email: string) {
+  return `email:${normalizeEmail(email)}`;
+}
+
+export function matchesTeacherClassStudentIdentity(
+  student: TeacherClassStudent,
+  identity: StudentIdentity,
+) {
+  const normalizedIdentityEmail = identity.email
+    ? normalizeEmail(identity.email)
+    : "";
+  const normalizedStudentEmail = normalizeEmail(student.email);
+
+  if (identity.userId && student.linkedUserId === identity.userId) {
+    return true;
+  }
+
+  if (!normalizedIdentityEmail) {
+    return false;
+  }
+
+  if (normalizedStudentEmail === normalizedIdentityEmail) {
+    return true;
+  }
+
+  return student.linkedUserId === getEmailIdentityKey(normalizedIdentityEmail);
+}
+
+export function getTeacherClassStudentActivityDate(student: TeacherClassStudent) {
+  return (
+    student.removedAt ??
+    student.joinedAt ??
+    student.respondedAt ??
+    student.invitedAt
+  );
+}
+
+export function getTeacherClassStudentStateLabel(student: TeacherClassStudent) {
+  if (student.status === "joined") {
+    return "Joined";
+  }
+
+  if (student.status === "declined") {
+    return "Declined";
+  }
+
+  if (student.status === "removed") {
+    return "Removed";
+  }
+
+  return student.invitationStatus === "pending" ? "Invited" : "Invited";
+}
+
 export function sortTeacherClassStudents(students: TeacherClassStudent[]) {
   const statusRank = {
-    active: 0,
+    joined: 0,
     invited: 1,
     declined: 2,
+    removed: 3,
   } satisfies Record<TeacherClassStudent["status"], number>;
 
   return [...students].sort((left, right) => {
     if (left.status !== right.status) {
       return statusRank[left.status] - statusRank[right.status];
+    }
+
+    const rightActivity = new Date(
+      getTeacherClassStudentActivityDate(right),
+    ).getTime();
+    const leftActivity = new Date(
+      getTeacherClassStudentActivityDate(left),
+    ).getTime();
+
+    if (rightActivity !== leftActivity) {
+      return rightActivity - leftActivity;
     }
 
     return left.fullName.localeCompare(right.fullName);

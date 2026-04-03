@@ -26,6 +26,15 @@ export function buildClassInvitationNotification(
   },
 ): DashboardNotification {
   const timestamp = options?.updatedAt ?? new Date().toISOString();
+  const status = options?.status ?? "pending";
+  const message =
+    status === "accepted"
+      ? `You accepted ${input.senderName}'s invitation to join ${input.relatedClassName}.`
+      : status === "declined"
+        ? `You declined ${input.senderName}'s invitation to join ${input.relatedClassName}.`
+        : status === "removed"
+          ? `${input.senderName}'s invitation to join ${input.relatedClassName} is no longer active.`
+          : `${input.senderName} invited you to join ${input.relatedClassName}.`;
 
   return {
     id: options?.existingId ?? createDashboardNotificationId(),
@@ -33,7 +42,7 @@ export function buildClassInvitationNotification(
     recipientUserId: input.recipientUserId,
     recipientEmail: input.recipientEmail,
     title: `Class invitation: ${input.relatedClassName}`,
-    message: `${input.senderName} invited you to join ${input.relatedClassName}.`,
+    message,
     createdAt: options?.createdAt ?? timestamp,
     updatedAt: timestamp,
     read: options?.read ?? false,
@@ -45,7 +54,7 @@ export function buildClassInvitationNotification(
     studentId: input.studentId,
     studentName: input.studentName,
     studentEmail: input.studentEmail,
-    status: options?.status ?? "pending",
+    status,
   };
 }
 
@@ -77,6 +86,8 @@ export function getNotificationStatusLabel(
       return "Accepted";
     case "declined":
       return "Declined";
+    case "removed":
+      return "Removed";
     case "pending":
     default:
       return "Pending";
@@ -91,6 +102,8 @@ export function getNotificationStatusTone(
       return "success" as const;
     case "declined":
       return "danger" as const;
+    case "removed":
+      return "neutral" as const;
     case "pending":
     default:
       return "warning" as const;

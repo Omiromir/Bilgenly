@@ -11,6 +11,10 @@ import {
   AlertDialogTitle,
 } from "../../../components/ui/alert-dialog";
 import { useTeacherClasses } from "../../../app/providers/TeacherClassesProvider";
+import {
+  getQuizLibraryItemsForRole,
+  useQuizLibrary,
+} from "../../../app/providers/QuizLibraryProvider";
 import { DashboardPageHeader } from "../../../features/dashboard/components/DashboardPageHeader";
 import {
   DashboardButton,
@@ -21,6 +25,7 @@ import {
 import { SectionCard } from "../../../features/dashboard/components/SectionCard";
 import {
   AddStudentsDialog,
+  AssignQuizDialog,
   TeacherClassCard,
   TeacherClassDetailsPanel,
   TeacherClassFilterBar,
@@ -33,6 +38,7 @@ import type {
   TeacherClassRecord,
   TeacherClassStatus,
 } from "../../../features/dashboard/components/classes/teacherClassesTypes";
+import { isDraftQuiz } from "../../../features/dashboard/components/quiz-library/quizLibraryUtils";
 import { matchesTeacherClassSearch } from "../../../features/dashboard/components/classes/teacherClassesUtils";
 import { useDashboardPageMeta } from "../../../features/dashboard/hooks/useDashboardPageMeta";
 
@@ -44,11 +50,14 @@ export function TeacherClassesPage() {
     updateClass,
     setClassStatus,
     addStudentsToClass,
+    assignQuizToClasses,
     removeQuizFromClass,
     deleteClass,
   } = useTeacherClasses();
+  const { quizzes } = useQuizLibrary();
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isAddStudentsDialogOpen, setIsAddStudentsDialogOpen] = useState(false);
+  const [isAssignQuizDialogOpen, setIsAssignQuizDialogOpen] = useState(false);
   const [editingClass, setEditingClass] = useState<TeacherClassRecord | null>(null);
   const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -112,7 +121,7 @@ export function TeacherClassesPage() {
   };
 
   const handleAddStudents = (emails: string[]) => {
-    if (!selectedClass) {
+    if (!selectedClass || selectedClass.status !== "active") {
       return;
     }
 
@@ -125,12 +134,12 @@ export function TeacherClassesPage() {
     setMembershipFeedback(
       `${addedStudents.length} ${
         addedStudents.length === 1 ? "student was" : "students were"
-      } invited to ${selectedClass.name}. Matching mock students can now see the invitation in Notifications.`,
+      } invited to ${selectedClass.name}.`,
     );
   };
 
   const handleRemoveAssignedQuiz = (quiz: { quizId: string; title: string }) => {
-    if (!selectedClass) {
+    if (!selectedClass || selectedClass.status !== "active") {
       return;
     }
 
@@ -140,6 +149,10 @@ export function TeacherClassesPage() {
 
   const selectedClass =
     classes.find((item) => item.id === selectedClassId) ?? null;
+  const isSelectedClassActive = selectedClass?.status === "active";
+  const assignableQuizzes = getQuizLibraryItemsForRole(quizzes, "teacher").filter(
+    (quiz) => quiz.isOwner && !isDraftQuiz(quiz.status) && quiz.status !== "archived",
+  );
   const filteredClasses = classes.filter((teacherClass) => {
     const matchesStatus =
       statusFilter === "all" ? true : teacherClass.status === statusFilter;
@@ -171,6 +184,30 @@ export function TeacherClassesPage() {
         : "",
     },
   ];
+
+  const handleAssignQuiz = (quiz: (typeof assignableQuizzes)[number]) => {
+    if (!selectedClass || selectedClass.status !== "active") {
+      return;
+    }
+
+    const assignedClassIds = assignQuizToClasses(
+      {
+        quizId: quiz.id,
+        title: quiz.title,
+        topic: quiz.topic,
+        questionCount: quiz.questionCount,
+      },
+      [selectedClass.id],
+    );
+
+    if (!assignedClassIds.length) {
+      setMembershipFeedback(`${quiz.title} is already assigned to ${selectedClass.name}.`);
+      return;
+    }
+
+    setMembershipFeedback(`${quiz.title} was assigned to ${selectedClass.name}.`);
+    setIsAssignQuizDialogOpen(false);
+  };
 
   return (
     <div className={dashboardPageClassName}>
@@ -257,8 +294,13 @@ export function TeacherClassesPage() {
           teacherClass={selectedClass}
           hasClasses={classes.length > 0}
           membershipFeedback={membershipFeedback}
-          onOpenAddStudents={() => setIsAddStudentsDialogOpen(true)}
-          onRemoveAssignedQuiz={handleRemoveAssignedQuiz}
+          onOpenAddStudents={
+            isSelectedClassActive ? () => setIsAddStudentsDialogOpen(true) : undefined
+          }
+          onOpenAssignQuiz={
+            isSelectedClassActive ? () => setIsAssignQuizDialogOpen(true) : undefined
+          }
+          onRemoveAssignedQuiz={isSelectedClassActive ? handleRemoveAssignedQuiz : undefined}
         />
       </div>
 
@@ -291,9 +333,17 @@ export function TeacherClassesPage() {
 
       <AddStudentsDialog
         open={isAddStudentsDialogOpen}
-        teacherClass={selectedClass}
+        teacherClass={isSelectedClassActive ? selectedClass : null}
         onOpenChange={setIsAddStudentsDialogOpen}
         onSubmit={handleAddStudents}
+      />
+
+      <AssignQuizDialog
+        open={isAssignQuizDialogOpen}
+        teacherClass={isSelectedClassActive ? selectedClass : null}
+        quizzes={assignableQuizzes}
+        onOpenChange={setIsAssignQuizDialogOpen}
+        onAssignQuiz={handleAssignQuiz}
       />
 
       <AlertDialog

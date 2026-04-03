@@ -1,4 +1,4 @@
-import { useDeferredValue, useEffect, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import {
   BookOpen,
   Clock3,
@@ -15,11 +15,6 @@ import {
 import { Link, useLocation, useNavigate } from "react-router";
 import {
   Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
 } from "../../../components/ui/dialog";
 import { useTeacherClasses } from "../../../app/providers/TeacherClassesProvider";
 import {
@@ -27,6 +22,12 @@ import {
   useQuizLibrary,
 } from "../../../app/providers/QuizLibraryProvider";
 import { DashboardPageHeader } from "../../../features/dashboard/components/DashboardPageHeader";
+import {
+  DashboardModalBody,
+  DashboardModalContent,
+  DashboardModalFooter,
+  DashboardModalHeader,
+} from "../../../features/dashboard/components/DashboardModal";
 import {
   DashboardBadge,
   DashboardButton,
@@ -82,6 +83,10 @@ export function TeacherQuizLibraryPage() {
   const [assignmentFeedback, setAssignmentFeedback] = useState<string | null>(null);
   const deferredSearch = useDeferredValue(search);
   const shouldShowStatusFilter = activeTab === "my-quizzes";
+  const activeClasses = useMemo(
+    () => classes.filter((teacherClass) => teacherClass.status === "active"),
+    [classes],
+  );
 
   const getTeacherItemsForTab = (tab: TeacherLibraryTab) => {
     switch (tab) {
@@ -456,27 +461,23 @@ export function TeacherQuizLibraryPage() {
           }
         }}
       >
-        <DialogContent className="max-w-2xl rounded-[28px] border-[var(--dashboard-border-soft)] p-0">
-          <div className="border-b border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-muted)] px-6 py-5">
-            <DialogHeader className="gap-3 text-left">
-              <DialogTitle className="text-[1.55rem] font-semibold tracking-[-0.03em] text-[var(--dashboard-text-strong)]">
-                Assign quiz to classes
-              </DialogTitle>
-              <DialogDescription className="text-sm leading-6 text-[var(--dashboard-text-soft)]">
-                {quizPendingAssignment
-                  ? `Choose which classes should receive "${quizPendingAssignment.title}".`
-                  : "Choose classes for this quiz."}
-              </DialogDescription>
-            </DialogHeader>
-          </div>
+        <DashboardModalContent className="max-w-[720px]">
+          <DashboardModalHeader
+            title="Assign quiz to classes"
+            description={
+              quizPendingAssignment
+                ? `Choose which classes should receive "${quizPendingAssignment.title}".`
+                : "Choose classes for this quiz."
+            }
+          />
 
-          <div className="space-y-5 px-6 py-6">
+          <DashboardModalBody className="space-y-5">
             {quizPendingAssignment ? (
-              <div className="rounded-[18px] border border-[var(--dashboard-border-soft)] bg-white px-4 py-3">
-                <p className="font-semibold text-[var(--dashboard-text-strong)]">
+              <div className="rounded-[22px] border border-[var(--dashboard-border-soft)] bg-white px-5 py-4 shadow-[0_10px_30px_rgba(18,32,58,0.04)]">
+                <p className="text-[1.125rem] font-semibold tracking-[-0.02em] text-[var(--dashboard-text-strong)]">
                   {quizPendingAssignment.title}
                 </p>
-                <p className="mt-1 text-sm text-[var(--dashboard-text-soft)]">
+                <p className="mt-1 text-sm leading-6 text-[var(--dashboard-text-soft)]">
                   {quizPendingAssignment.topic} · {quizPendingAssignment.questionCount}{" "}
                   {quizPendingAssignment.questionCount === 1 ? "question" : "questions"}
                 </p>
@@ -484,22 +485,21 @@ export function TeacherQuizLibraryPage() {
             ) : null}
 
             <div className="space-y-3">
-              {classes.length ? (
-                classes.map((teacherClass) => {
+              {activeClasses.length ? (
+                activeClasses.map((teacherClass) => {
                   const alreadyAssigned = quizPendingAssignment
                     ? getAssignedClassIdsForQuiz(quizPendingAssignment.id).includes(
                         teacherClass.id,
                       )
                     : false;
-                  const isArchived = teacherClass.status === "archived";
-                  const isDisabled = alreadyAssigned || isArchived;
+                  const isDisabled = alreadyAssigned;
 
                   return (
                     <label
                       key={teacherClass.id}
-                      className="flex items-center justify-between gap-4 rounded-[18px] border border-[var(--dashboard-border-soft)] bg-white px-4 py-3"
+                      className="flex items-start justify-between gap-4 rounded-[22px] border border-[var(--dashboard-border-soft)] bg-white px-5 py-4 shadow-[0_10px_30px_rgba(18,32,58,0.04)] transition-colors hover:border-[var(--dashboard-brand-soft)]"
                     >
-                      <div className="flex items-start gap-3">
+                      <div className="flex items-start gap-4">
                         <input
                           type="checkbox"
                           checked={selectedClassIds.includes(teacherClass.id)}
@@ -516,13 +516,13 @@ export function TeacherQuizLibraryPage() {
                               setAssignmentError("");
                             }
                           }}
-                          className="mt-1 h-4 w-4 rounded border-[var(--dashboard-border-soft)] text-[var(--dashboard-brand)]"
+                          className="mt-1 h-5 w-5 rounded border-[var(--dashboard-border-soft)] text-[var(--dashboard-brand)]"
                         />
                         <div>
-                          <p className="font-semibold text-[var(--dashboard-text-strong)]">
+                          <p className="text-[1.125rem] font-semibold tracking-[-0.02em] text-[var(--dashboard-text-strong)]">
                             {teacherClass.name}
                           </p>
-                          <p className="mt-1 text-sm text-[var(--dashboard-text-soft)]">
+                          <p className="mt-1 text-sm leading-6 text-[var(--dashboard-text-soft)]">
                             {teacherClass.studentCount}{" "}
                             {teacherClass.studentCount === 1 ? "student" : "students"} ·{" "}
                             {teacherClass.quizCount}{" "}
@@ -531,24 +531,21 @@ export function TeacherQuizLibraryPage() {
                         </div>
                       </div>
 
-                      <div className="flex flex-wrap gap-2">
+                      <div className="flex flex-wrap justify-end gap-2 pt-0.5">
                         {alreadyAssigned ? (
                           <DashboardBadge tone="info">Already assigned</DashboardBadge>
-                        ) : null}
-                        {isArchived ? (
-                          <DashboardBadge tone="neutral">Archived</DashboardBadge>
                         ) : null}
                       </div>
                     </label>
                   );
                 })
               ) : (
-                <div className="rounded-[18px] border border-dashed border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-muted)] px-4 py-4">
+                <div className="rounded-[22px] border border-dashed border-[var(--dashboard-border-soft)] bg-white px-5 py-5">
                   <p className="font-semibold text-[var(--dashboard-text-strong)]">
-                    No classes available yet
+                    No active classes available
                   </p>
                   <p className="mt-1 text-sm leading-6 text-[var(--dashboard-text-soft)]">
-                    Create a class first, then come back here to assign quizzes to it.
+                    Create a class or restore an archived one, then come back here to assign quizzes to it.
                   </p>
                 </div>
               )}
@@ -561,9 +558,9 @@ export function TeacherQuizLibraryPage() {
                 </p>
               </div>
             ) : null}
-          </div>
+          </DashboardModalBody>
 
-          <DialogFooter className="border-t border-[var(--dashboard-border-soft)] px-6 py-5 sm:justify-end">
+          <DashboardModalFooter>
             <DashboardButton
               type="button"
               size="lg"
@@ -575,8 +572,8 @@ export function TeacherQuizLibraryPage() {
             <DashboardButton type="button" size="lg" onClick={handleAssignQuizToClasses}>
               Assign to classes
             </DashboardButton>
-          </DialogFooter>
-        </DialogContent>
+          </DashboardModalFooter>
+        </DashboardModalContent>
       </Dialog>
     </div>
   );

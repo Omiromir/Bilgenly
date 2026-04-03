@@ -1,5 +1,14 @@
 export type TeacherClassStatus = "active" | "archived";
-export type TeacherClassStudentStatus = "active" | "invited" | "declined";
+export type ClassInvitationStatus =
+  | "pending"
+  | "accepted"
+  | "declined"
+  | "removed";
+export type TeacherClassStudentStatus =
+  | "invited"
+  | "joined"
+  | "declined"
+  | "removed";
 export type TeacherClassAssignmentVisibility = "class-members";
 export type TeacherClassAssignedQuizStatus = "assigned";
 
@@ -8,7 +17,11 @@ export interface TeacherClassStudent {
   fullName: string;
   email: string;
   status: TeacherClassStudentStatus;
-  joinedAt: string;
+  invitationStatus: ClassInvitationStatus;
+  invitedAt: string;
+  joinedAt?: string;
+  respondedAt?: string;
+  removedAt?: string;
   linkedUserId?: string;
   avatar?: string;
   role?: string;

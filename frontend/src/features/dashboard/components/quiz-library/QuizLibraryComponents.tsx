@@ -164,7 +164,9 @@ export function QuizFilterBar({
           </div>
         </div>
 
-       
+        {helperText ? (
+          <p className={dashboardPageSubtitleClassName}>{helperText}</p>
+        ) : null}
       </section>
     </DashboardSurface>
   );
@@ -467,11 +469,12 @@ export function AssignedQuizCard({
 interface QuizGridProps {
   items: QuizLibraryItem[];
   renderCard: (item: QuizLibraryItem) => ReactNode;
+  className?: string;
 }
 
-export function QuizGrid({ items, renderCard }: QuizGridProps) {
+export function QuizGrid({ items, renderCard, className }: QuizGridProps) {
   return (
-    <div className="grid gap-5 md:grid-cols-2 2xl:grid-cols-3">
+    <div className={cn("grid gap-5 md:grid-cols-2 2xl:grid-cols-3", className)}>
       {items.map((item) => renderCard(item))}
     </div>
   );

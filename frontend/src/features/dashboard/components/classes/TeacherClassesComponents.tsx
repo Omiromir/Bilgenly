@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import {
   Archive,
@@ -8,6 +8,7 @@ import {
   Mail,
   MoreVertical,
   PencilLine,
+  Rocket,
   SearchX,
   Trash2,
   Users,
@@ -23,13 +24,14 @@ import {
 } from "../../../../components/ui/dropdown-menu";
 import {
   Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
 } from "../../../../components/ui/dialog";
 import { EmptyStateBlock } from "../EmptyStateBlock";
+import {
+  DashboardModalBody,
+  DashboardModalContent,
+  DashboardModalFooter,
+  DashboardModalHeader,
+} from "../DashboardModal";
 import {
   DashboardBadge,
   DashboardButton,
@@ -38,6 +40,7 @@ import {
   dashboardButtonVariants,
   dashboardInputVariants,
   dashboardInsetBlockClassName,
+  dashboardInvertedInsetBlockClassName,
   dashboardMetaTextClassName,
   dashboardSelectVariants,
   dashboardTextareaVariants,
@@ -53,10 +56,11 @@ import type {
 } from "./teacherClassesTypes";
 import {
   formatTeacherClassDate,
+  getTeacherClassStudentActivityDate,
   parseTeacherStudentEmails,
 } from "./teacherClassesUtils";
 import { normalizeEmail, validateEmail } from "../../../auth/validation";
-import { mockStudentUsers } from "../../mock/mockUsers";
+import type { QuizLibraryItem } from "../quiz-library/quizLibraryTypes";
 
 const teacherClassStatusToneMap = {
   active: "success",
@@ -128,7 +132,10 @@ export function TeacherClassActionsMenu({
         className="w-52"
         onClick={(event) => event.stopPropagation()}
       >
-        <DropdownMenuItem onClick={onEdit}>
+        <DropdownMenuItem
+          onClick={onEdit}
+          disabled={teacherClass.status === "archived"}
+        >
           <PencilLine className="h-4 w-4" />
           Edit class
         </DropdownMenuItem>
@@ -168,9 +175,19 @@ export function TeacherClassCard({
   onToggleArchive,
   onDelete,
 }: TeacherClassCardProps) {
+  const joinedCount = teacherClass.students.filter(
+    (student) => student.status === "joined",
+  ).length;
+  const pendingCount = teacherClass.students.filter(
+    (student) =>
+      student.status === "invited" && student.invitationStatus === "pending",
+  ).length;
   const summaryRows = [
-    `${teacherClass.studentCount} ${
-      teacherClass.studentCount === 1 ? "student" : "students"
+    `${joinedCount} ${
+      joinedCount === 1 ? "joined student" : "joined students"
+    }`,
+    `${pendingCount} ${
+      pendingCount === 1 ? "pending invite" : "pending invites"
     }`,
     `${teacherClass.quizCount} ${
       teacherClass.quizCount === 1 ? "quiz" : "quizzes"
@@ -285,22 +302,18 @@ export function TeacherClassFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl rounded-[28px] border-[var(--dashboard-border-soft)] p-0">
-        <form onSubmit={handleSubmit}>
-          <div className="border-b border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-muted)] px-6 py-5">
-            <DialogHeader className="gap-3 text-left">
-              <DialogTitle className="text-[1.55rem] font-semibold tracking-[-0.03em] text-[var(--dashboard-text-strong)]">
-                {mode === "create" ? "Create class" : "Edit class"}
-              </DialogTitle>
-              <DialogDescription className="text-sm leading-6 text-[var(--dashboard-text-soft)]">
-                {mode === "create"
-                  ? "Create a real class workspace for students, quizzes, and upcoming activity."
-                  : "Update the core class details teachers and students rely on."}
-              </DialogDescription>
-            </DialogHeader>
-          </div>
+      <DashboardModalContent className="max-w-[720px]">
+        <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+          <DashboardModalHeader
+            title={mode === "create" ? "Create class" : "Edit class"}
+            description={
+              mode === "create"
+                ? "Create a real class workspace for students, quizzes, and upcoming activity."
+                : "Update the core class details teachers and students rely on."
+            }
+          />
 
-          <div className="space-y-5 px-6 py-6">
+          <DashboardModalBody className="space-y-6">
             <label className="block space-y-2">
               <span className="text-sm font-medium text-[var(--dashboard-text-strong)]">
                 Class name
@@ -316,7 +329,10 @@ export function TeacherClassFormDialog({
                     setNameError("");
                   }
                 }}
-                className={dashboardInputVariants({ size: "md" })}
+                className={cn(
+                  dashboardInputVariants({ size: "md" }),
+                  "h-14 rounded-[18px] border-[var(--dashboard-border)] bg-white px-5 text-base",
+                )}
                 placeholder="Grade 10 Biology - Section A"
                 aria-invalid={Boolean(nameError)}
               />
@@ -337,7 +353,10 @@ export function TeacherClassFormDialog({
                     subject: event.target.value,
                   }))
                 }
-                className={dashboardInputVariants({ size: "md" })}
+                className={cn(
+                  dashboardInputVariants({ size: "md" }),
+                  "h-14 rounded-[18px] border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-muted)] px-5 text-base",
+                )}
                 placeholder="Biology"
               />
             </label>
@@ -354,13 +373,16 @@ export function TeacherClassFormDialog({
                     description: event.target.value,
                   }))
                 }
-                className={dashboardTextareaVariants({ size: "md" })}
+                className={cn(
+                  dashboardTextareaVariants({ size: "md" }),
+                  "min-h-[200px] rounded-[22px] border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-muted)] px-5 py-5 text-base leading-8",
+                )}
                 placeholder="Add context for students, learning goals, or how you plan to use this class."
               />
             </label>
-          </div>
+          </DashboardModalBody>
 
-          <DialogFooter className="border-t border-[var(--dashboard-border-soft)] px-6 py-5 sm:justify-end">
+          <DashboardModalFooter>
             <DashboardButton
               type="button"
               size="lg"
@@ -372,9 +394,9 @@ export function TeacherClassFormDialog({
             <DashboardButton type="submit" size="lg">
               {mode === "create" ? "Create class" : "Save changes"}
             </DashboardButton>
-          </DialogFooter>
+          </DashboardModalFooter>
         </form>
-      </DialogContent>
+      </DashboardModalContent>
     </Dialog>
   );
 }
@@ -426,21 +448,52 @@ export function TeacherStudentStatusBadge({
   status,
 }: TeacherStudentStatusBadgeProps) {
   const tone =
-    status === "active"
+    status === "joined"
       ? "success"
       : status === "declined"
         ? "danger"
+        : status === "removed"
+          ? "neutral"
         : "warning";
   const label =
-    status === "active"
-      ? "Active"
+    status === "joined"
+      ? "Joined"
       : status === "declined"
         ? "Declined"
-        : "Invited";
+        : status === "removed"
+          ? "Removed"
+          : "Invited";
 
   return (
     <DashboardBadge tone={tone}>{label}</DashboardBadge>
   );
+}
+
+interface InvitationStatusBadgeProps {
+  status: TeacherClassStudent["invitationStatus"];
+}
+
+export function InvitationStatusBadge({
+  status,
+}: InvitationStatusBadgeProps) {
+  const tone =
+    status === "accepted"
+      ? "success"
+      : status === "declined"
+        ? "danger"
+        : status === "removed"
+          ? "neutral"
+          : "warning";
+  const label =
+    status === "accepted"
+      ? "Accepted"
+      : status === "declined"
+        ? "Declined"
+        : status === "removed"
+          ? "Removed"
+          : "Pending";
+
+  return <DashboardBadge tone={tone}>{label}</DashboardBadge>;
 }
 
 interface TeacherClassStudentActionsMenuProps {
@@ -464,13 +517,13 @@ export function TeacherClassStudentActionsMenu({
       </DropdownMenuTrigger>
 
       <DropdownMenuContent align="end" className="w-52">
-        {student.status !== "active" ? (
+        {student.status !== "joined" ? (
           <DropdownMenuItem onClick={onResendInvite}>
             <Mail className="h-4 w-4" />
             Resend invite
           </DropdownMenuItem>
         ) : null}
-        {student.status !== "active" ? <DropdownMenuSeparator /> : null}
+        {student.status !== "joined" ? <DropdownMenuSeparator /> : null}
         <DropdownMenuItem onClick={onRemove} variant="destructive">
           <Trash2 className="h-4 w-4" />
           Remove student
@@ -516,7 +569,9 @@ export function AddStudentsDialog({
 
     const parsedEmails = parseTeacherStudentEmails(values.emails);
     const existingEmails = new Set(
-      (teacherClass?.students ?? []).map((student) => normalizeEmail(student.email)),
+      (teacherClass?.students ?? [])
+        .filter((student) => student.status !== "removed")
+        .map((student) => normalizeEmail(student.email)),
     );
     const seenEmails = new Set<string>();
     const invalidEmails: string[] = [];
@@ -577,21 +632,19 @@ export function AddStudentsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl rounded-[28px] border-[var(--dashboard-border-soft)] p-0">
-        <form onSubmit={handleSubmit}>
-          <div className="border-b border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-muted)] px-6 py-5">
-            <DialogHeader className="gap-3 text-left">
-              <DialogTitle className="text-[1.55rem] font-semibold tracking-[-0.03em] text-[var(--dashboard-text-strong)]">
-                Add students
-              </DialogTitle>
-              <DialogDescription className="text-sm leading-6 text-[var(--dashboard-text-soft)]">
+      <DashboardModalContent className="max-w-[720px]">
+        <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+          <DashboardModalHeader
+            title="Add students"
+            description={
+              <>
                 Invite one or more students to {teacherClass?.name ?? "this class"}.
-                Paste emails separated by commas, spaces, or new lines.
-              </DialogDescription>
-            </DialogHeader>
-          </div>
+                {" "}Paste emails separated by commas, spaces, or new lines.
+              </>
+            }
+          />
 
-          <div className="space-y-5 px-6 py-6">
+          <DashboardModalBody className="space-y-5">
             {availableClasses && availableClasses.length > 1 && onSelectedClassChange ? (
               <label className="block space-y-2">
                 <span className="text-sm font-medium text-[var(--dashboard-text-strong)]">
@@ -626,34 +679,23 @@ export function AddStudentsDialog({
                     setErrorMessages([]);
                   }
                 }}
-                className={dashboardTextareaVariants({ size: "md" })}
+                className={cn(
+                  dashboardTextareaVariants({ size: "md" }),
+                  "min-h-[198px] rounded-[22px] border-[var(--dashboard-border)] bg-white px-5 py-5 text-base leading-8",
+                )}
                 placeholder={"student.one@example.com\nstudent.two@example.com"}
               />
             </label>
 
             <div className="flex flex-wrap items-center gap-2">
-              <DashboardBadge tone="info" size="md">
+              <DashboardBadge
+                tone="info"
+                size="md"
+                className="rounded-full px-4 py-2 font-semibold"
+              >
                 {parsedCount} {parsedCount === 1 ? "email" : "emails"} detected
               </DashboardBadge>
             </div>
-
-            <div className="rounded-[18px] border border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-muted)] px-4 py-4">
-              <p className="text-sm font-semibold text-[var(--dashboard-text-strong)]">
-                Mock student emails for testing
-              </p>
-              <p className="mt-1 text-sm leading-6 text-[var(--dashboard-text-soft)]">
-                Invite one of these mock students to see the notification appear in the
-                student dashboard.
-              </p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {mockStudentUsers.map((student) => (
-                  <DashboardBadge key={student.id} tone="neutral" size="md">
-                    {student.email}
-                  </DashboardBadge>
-                ))}
-              </div>
-            </div>
-
             {errorMessages.length ? (
               <div className="rounded-[18px] border border-[var(--dashboard-danger-soft)] bg-[var(--dashboard-danger-soft)]/40 px-4 py-3">
                 {errorMessages.map((message) => (
@@ -666,9 +708,9 @@ export function AddStudentsDialog({
                 ))}
               </div>
             ) : null}
-          </div>
+          </DashboardModalBody>
 
-          <DialogFooter className="border-t border-[var(--dashboard-border-soft)] px-6 py-5 sm:justify-end">
+          <DashboardModalFooter>
             <DashboardButton
               type="button"
               size="lg"
@@ -680,9 +722,9 @@ export function AddStudentsDialog({
             <DashboardButton type="submit" size="lg">
               Add students
             </DashboardButton>
-          </DialogFooter>
+          </DashboardModalFooter>
         </form>
-      </DialogContent>
+      </DashboardModalContent>
     </Dialog>
   );
 }
@@ -743,7 +785,8 @@ interface TeacherClassDetailsPanelProps {
   hasClasses: boolean;
   membershipFeedback?: string | null;
   onOpenAddStudents?: () => void;
-  onRemoveAssignedQuiz: (quiz: TeacherClassAssignedQuiz) => void;
+  onOpenAssignQuiz?: () => void;
+  onRemoveAssignedQuiz?: (quiz: TeacherClassAssignedQuiz) => void;
 }
 
 export function TeacherClassDetailsPanel({
@@ -751,6 +794,7 @@ export function TeacherClassDetailsPanel({
   hasClasses,
   membershipFeedback,
   onOpenAddStudents,
+  onOpenAssignQuiz,
   onRemoveAssignedQuiz,
 }: TeacherClassDetailsPanelProps) {
   if (!teacherClass) {
@@ -776,12 +820,19 @@ export function TeacherClassDetailsPanel({
       emphasizeWideTracking: true,
     },
     {
-      label: "Students",
-      value: String(teacherClass.studentCount),
+      label: "Joined",
+      value: String(
+        teacherClass.students.filter((student) => student.status === "joined").length,
+      ),
     },
     {
-      label: "Assigned quizzes",
-      value: String(teacherClass.quizCount),
+      label: "Pending invites",
+      value: String(
+        teacherClass.students.filter(
+          (student) =>
+            student.status === "invited" && student.invitationStatus === "pending",
+        ).length,
+      ),
     },
     {
       label: "Last updated",
@@ -817,6 +868,14 @@ export function TeacherClassDetailsPanel({
           <div className="rounded-[18px] border border-[var(--dashboard-success-soft)] bg-[var(--dashboard-success-soft)]/50 px-4 py-3">
             <p className="text-sm leading-6 text-[var(--dashboard-success)]">
               {membershipFeedback}
+            </p>
+          </div>
+        ) : null}
+
+        {teacherClass.status === "archived" ? (
+          <div className="rounded-[18px] border border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-muted)] px-4 py-3">
+            <p className="text-sm leading-6 text-[var(--dashboard-text-soft)]">
+              This class is archived. Any actions are disabled until you restore it.
             </p>
           </div>
         ) : null}
@@ -885,8 +944,9 @@ export function TeacherClassDetailsPanel({
                 </div>
                 <div className="flex items-center gap-3">
                   <TeacherStudentStatusBadge status={student.status} />
+                  <InvitationStatusBadge status={student.invitationStatus} />
                   <p className="text-sm text-[var(--dashboard-text-soft)]">
-                    {formatTeacherClassDate(student.joinedAt)}
+                    {formatTeacherClassDate(getTeacherClassStudentActivityDate(student))}
                   </p>
                 </div>
               </div>
@@ -912,10 +972,23 @@ export function TeacherClassDetailsPanel({
       </div>
 
       <div className="space-y-4">
-        <div>
-          <h3 className="text-lg font-semibold text-[var(--dashboard-text-strong)]">
-            Assigned Quizzes
-          </h3>
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <h3 className="text-lg font-semibold text-[var(--dashboard-text-strong)]">
+              Assigned Quizzes
+            </h3>
+          </div>
+          {onOpenAssignQuiz ? (
+            <DashboardButton
+              type="button"
+              size="sm"
+              variant="secondary"
+              onClick={onOpenAssignQuiz}
+            >
+              <Rocket className="h-4 w-4" />
+              Assign Quiz
+            </DashboardButton>
+          ) : null}
         </div>
 
         {teacherClass.assignedQuizzes.length ? (
@@ -941,15 +1014,17 @@ export function TeacherClassDetailsPanel({
                   <p className="text-sm text-[var(--dashboard-text-soft)]">
                     Assigned {formatTeacherClassDate(quiz.assignedAt)}
                   </p>
-                  <DashboardButton
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => onRemoveAssignedQuiz(quiz)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                    Remove
-                  </DashboardButton>
+                  {onRemoveAssignedQuiz ? (
+                    <DashboardButton
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => onRemoveAssignedQuiz(quiz)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      Remove
+                    </DashboardButton>
+                  ) : null}
                 </div>
               </div>
             ))}
@@ -964,5 +1039,157 @@ export function TeacherClassDetailsPanel({
       </div>
 
     </DashboardSurface>
+  );
+}
+
+interface AssignQuizDialogProps {
+  open: boolean;
+  teacherClass: TeacherClassRecord | null;
+  quizzes: QuizLibraryItem[];
+  onOpenChange: (open: boolean) => void;
+  onAssignQuiz: (quiz: QuizLibraryItem) => void;
+}
+
+export function AssignQuizDialog({
+  open,
+  teacherClass,
+  quizzes,
+  onOpenChange,
+  onAssignQuiz,
+}: AssignQuizDialogProps) {
+  const [search, setSearch] = useState("");
+  const deferredSearch = useDeferredValue(search);
+
+  useEffect(() => {
+    if (!open) {
+      setSearch("");
+    }
+  }, [open]);
+
+  const assignedQuizIds = useMemo(
+    () => new Set((teacherClass?.assignedQuizzes ?? []).map((quiz) => quiz.quizId)),
+    [teacherClass],
+  );
+
+  const filteredQuizzes = useMemo(() => {
+    const query = deferredSearch.trim().toLowerCase();
+
+    return quizzes.filter((quiz) => {
+      if (!query) {
+        return true;
+      }
+
+      return [quiz.title, quiz.topic, quiz.description]
+        .join(" ")
+        .toLowerCase()
+        .includes(query);
+    });
+  }, [deferredSearch, quizzes]);
+  const isArchivedClass = teacherClass?.status === "archived";
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DashboardModalContent className="max-w-[720px]">
+        <div className="flex min-h-0 flex-1 flex-col">
+        <DashboardModalHeader
+          title="Assign quiz"
+          description={
+            teacherClass
+              ? `Choose a quiz for ${teacherClass.name}.`
+              : "Choose a quiz for this class."
+          }
+        />
+
+        <DashboardModalBody>
+          <DashboardSearchField
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search quizzes by title, topic, or description..."
+            inputClassName="h-12 rounded-[16px] border-[var(--dashboard-border)] bg-white"
+          />
+
+          {isArchivedClass ? (
+            <EmptyStateBlock
+              title="Archived classes are read-only"
+              description="Restore this class before assigning more quizzes."
+              icon={Layers3}
+              className="border-dashed"
+            />
+          ) : filteredQuizzes.length ? (
+            <div className="max-h-[420px] space-y-2 overflow-y-auto pr-1">
+              {filteredQuizzes.map((quiz) => {
+                const isAlreadyAssigned = assignedQuizIds.has(quiz.id);
+
+                return (
+                  <div
+                    key={quiz.id}
+                    className="flex items-center justify-between gap-4 rounded-[18px] border border-[var(--dashboard-border-soft)] bg-white px-5 py-4 transition hover:border-[var(--dashboard-border)] hover:shadow-[0_10px_30px_rgba(18,32,58,0.06)]"
+                  >
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap gap-2">
+                        <DashboardBadge
+                          tone="neutral"
+                          className="px-3 py-1 text-xs font-semibold capitalize"
+                        >
+                          {quiz.status.replace("-", " ")}
+                        </DashboardBadge>
+                        <DashboardBadge
+                          tone="info"
+                          className="max-w-[220px] truncate px-3 py-1 text-xs font-semibold"
+                        >
+                          {quiz.topic}
+                        </DashboardBadge>
+                      </div>
+                      <p className="mt-3 text-[1.1rem] font-semibold text-[var(--dashboard-text-strong)]">
+                        {quiz.title}
+                      </p>
+                      <p className="mt-1 text-sm text-[var(--dashboard-text-soft)]">
+                        {quiz.questionCount}{" "}
+                        {quiz.questionCount === 1 ? "question" : "questions"} ·{" "}
+                        {quiz.updatedAt}
+                      </p>
+                    </div>
+
+                    <DashboardButton
+                      type="button"
+                      size="sm"
+                      variant={isAlreadyAssigned ? "ghost" : "secondary"}
+                      className="min-w-[96px] rounded-[16px] px-5"
+                      disabled={isAlreadyAssigned}
+                      onClick={() => onAssignQuiz(quiz)}
+                    >
+                      {isAlreadyAssigned ? "Assigned" : "Assign"}
+                    </DashboardButton>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <EmptyStateBlock
+              title="No quizzes available"
+              description={
+                quizzes.length
+                  ? "No quizzes match the current search."
+                  : "Create or publish a quiz first, then assign it from here."
+              }
+              icon={BookOpen}
+              className="border-dashed"
+            />
+          )}
+        </DashboardModalBody>
+
+        <DashboardModalFooter>
+          <DashboardButton
+            type="button"
+            size="sm"
+            variant="ghost"
+            onClick={() => onOpenChange(false)}
+          >
+            Close
+          </DashboardButton>
+        </DashboardModalFooter>
+        </div>
+      </DashboardModalContent>
+    </Dialog>
   );
 }

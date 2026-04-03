@@ -34,6 +34,7 @@ import {
 import { EmptyStateBlock } from "../../../features/dashboard/components/EmptyStateBlock";
 import {
   AddStudentsDialog,
+  InvitationStatusBadge,
   TeacherStudentStatusBadge,
 } from "../../../features/dashboard/components/classes/TeacherClassesComponents";
 import type {
@@ -41,7 +42,10 @@ import type {
   TeacherClassStudent,
   TeacherClassStudentStatus,
 } from "../../../features/dashboard/components/classes/teacherClassesTypes";
-import { formatTeacherClassDate } from "../../../features/dashboard/components/classes/teacherClassesUtils";
+import {
+  formatTeacherClassDate,
+  getTeacherClassStudentActivityDate,
+} from "../../../features/dashboard/components/classes/teacherClassesUtils";
 
 interface TeacherStudentRosterRow {
   rowId: string;
@@ -106,6 +110,10 @@ export function TeacherStudentsPage() {
     removeStudentFromClass,
     resendStudentInvite,
   } = useTeacherClasses();
+  const activeClasses = useMemo(
+    () => classes.filter((teacherClass) => teacherClass.status === "active"),
+    [classes],
+  );
   const [classFilter, setClassFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] =
     useState<"all" | TeacherClassStudentStatus>("all");
@@ -173,7 +181,7 @@ export function TeacherStudentsPage() {
   ).size;
 
   const addTargetClass =
-    classes.find((teacherClass) => teacherClass.id === addTargetClassId) ?? null;
+    activeClasses.find((teacherClass) => teacherClass.id === addTargetClassId) ?? null;
 
   const allVisibleSelected =
     filteredRows.length > 0 &&
@@ -181,10 +189,10 @@ export function TeacherStudentsPage() {
 
   const openAddStudentsDialog = () => {
     const fallbackClassId =
-      classFilter !== "all"
+      classFilter !== "all" &&
+      activeClasses.some((teacherClass) => teacherClass.id === classFilter)
         ? classFilter
-        : classes.find((teacherClass) => teacherClass.status === "active")?.id ??
-          classes[0]?.id ??
+        : activeClasses[0]?.id ??
           "";
 
     if (!fallbackClassId) {
@@ -255,7 +263,9 @@ export function TeacherStudentsPage() {
           escapeCsvValue(row.averageGrade),
           escapeCsvValue(row.missingDays),
           escapeCsvValue(row.student.status),
-          escapeCsvValue(formatTeacherClassDate(row.student.joinedAt)),
+          escapeCsvValue(
+            formatTeacherClassDate(getTeacherClassStudentActivityDate(row.student)),
+          ),
         ].join(","),
       ),
     ].join("\n");
@@ -288,7 +298,12 @@ export function TeacherStudentsPage() {
       description="Your classes are ready, but nobody has been invited or joined yet."
       icon={UserPlus}
       action={
-        <DashboardButton type="button" size="lg" onClick={openAddStudentsDialog}>
+        <DashboardButton
+          type="button"
+          size="lg"
+          onClick={openAddStudentsDialog}
+          disabled={!activeClasses.length}
+        >
           <Mail className="h-4 w-4" />
           Add student
         </DashboardButton>
@@ -349,7 +364,7 @@ export function TeacherStudentsPage() {
                 type="button"
                 size="lg"
                 onClick={openAddStudentsDialog}
-                disabled={!classes.length}
+                disabled={!activeClasses.length}
                 className="h-11 rounded-[14px] px-4 text-sm"
               >
                 <UserPlus className="h-4 w-4" />
@@ -371,6 +386,7 @@ export function TeacherStudentsPage() {
                   {classes.map((teacherClass) => (
                     <option key={teacherClass.id} value={teacherClass.id}>
                       {teacherClass.name}
+                      {teacherClass.status === "archived" ? " (Archived)" : ""}
                     </option>
                   ))}
                 </select>
@@ -424,7 +440,7 @@ export function TeacherStudentsPage() {
                   aria-label="Filter students by status"
                 >
                   <option value="all">All filters</option>
-                  <option value="active">Active</option>
+                  <option value="joined">Joined</option>
                   <option value="invited">Invited</option>
                   <option value="declined">Declined</option>
                 </select>
@@ -485,7 +501,10 @@ export function TeacherStudentsPage() {
                       Missing days
                     </TableHead>
                     <TableHead className="h-12 px-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--dashboard-text-faint)]">
-                      Status
+                      Member
+                    </TableHead>
+                    <TableHead className="h-12 px-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--dashboard-text-faint)]">
+                      Invite
                     </TableHead>
                     <TableHead className="h-12 px-4 text-right text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--dashboard-text-faint)]">
                       Actions
@@ -496,6 +515,11 @@ export function TeacherStudentsPage() {
                 <TableBody>
                   {filteredRows.map((row, index) => {
                     const isSelected = selectedRowIds.includes(row.rowId);
+                    const isArchivedClass = classes.some(
+                      (teacherClass) =>
+                        teacherClass.id === row.classId &&
+                        teacherClass.status === "archived",
+                    );
 
                     return (
                       <TableRow
@@ -563,11 +587,16 @@ export function TeacherStudentsPage() {
                           <TeacherStudentStatusBadge status={row.student.status} />
                         </TableCell>
 
+                        <TableCell className="px-3 py-3">
+                          <InvitationStatusBadge status={row.student.invitationStatus} />
+                        </TableCell>
+
                         <TableCell className="px-4 py-3">
                           <div className="flex items-center justify-end gap-2">
                             <button
                               type="button"
                               onClick={() => handleResendInvite(row)}
+                              disabled={isArchivedClass || row.student.status === "joined"}
                               className="flex h-9 w-9 items-center justify-center rounded-full border border-[var(--dashboard-border-soft)] text-[var(--dashboard-text-soft)] transition hover:bg-[var(--dashboard-surface-muted)] hover:text-[var(--dashboard-text-strong)]"
                               aria-label={`Email ${row.student.fullName}`}
                             >
@@ -582,12 +611,19 @@ export function TeacherStudentsPage() {
                                 <MoreHorizontal className="h-4 w-4" />
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end" className="w-52">
-                                <DropdownMenuItem onClick={() => handleResendInvite(row)}>
+                                <DropdownMenuItem
+                                  onClick={() => handleResendInvite(row)}
+                                  disabled={isArchivedClass || row.student.status === "joined"}
+                                >
                                   <Mail className="h-4 w-4" />
                                   Resend invite
                                 </DropdownMenuItem>
                                 <DropdownMenuSeparator />
-                                <DropdownMenuItem onClick={() => handleRemoveStudent(row)} variant="destructive">
+                                <DropdownMenuItem
+                                  onClick={() => handleRemoveStudent(row)}
+                                  variant="destructive"
+                                  disabled={isArchivedClass}
+                                >
                                   <Users className="h-4 w-4" />
                                   Remove student
                                 </DropdownMenuItem>
@@ -619,7 +655,7 @@ export function TeacherStudentsPage() {
       <AddStudentsDialog
         open={isAddStudentsDialogOpen}
         teacherClass={addTargetClass}
-        availableClasses={classes}
+        availableClasses={activeClasses}
         onSelectedClassChange={setAddTargetClassId}
         onOpenChange={setIsAddStudentsDialogOpen}
         onSubmit={handleAddStudents}

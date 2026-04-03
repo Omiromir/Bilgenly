@@ -4,6 +4,7 @@ import { ModeratorDashboardPage } from "../../pages/dashboard/moderator/Moderato
 import { StudentBadgesPage } from "../../pages/dashboard/student/StudentBadgesPage";
 import { StudentGenerateQuizPage } from "../../pages/dashboard/student/StudentGenerateQuizPage";
 import { StudentJoinQuizPage } from "../../pages/dashboard/student/StudentJoinQuizPage";
+import { StudentClassesPage } from "../../pages/dashboard/student/StudentClassesPage";
 import { StudentNotificationsPage } from "../../pages/dashboard/student/StudentNotificationsPage";
 import { StudentOverviewPage } from "../../pages/dashboard/student/StudentOverviewPage";
 import { StudentProfilePage } from "../../pages/dashboard/student/StudentProfilePage";
@@ -62,6 +63,7 @@ export function AppRoutes() {
               <Route index element={<Navigate to="overview" replace />} />
               <Route path="overview" element={<StudentOverviewPage />} />
               <Route path="join-quiz" element={<StudentJoinQuizPage />} />
+              <Route path="classes" element={<StudentClassesPage />} />
               <Route
                 path="notifications"
                 element={<StudentNotificationsPage />}

@@ -82,11 +82,5 @@ export function getMockStudentByEmail(email: string) {
 }
 
 export function getNotificationRecipientUserIdByEmail(email: string) {
-  const matchedStudent = getMockStudentByEmail(email);
-
-  if (matchedStudent) {
-    return matchedStudent.id;
-  }
-
   return `email:${email.trim().toLowerCase()}`;
 }

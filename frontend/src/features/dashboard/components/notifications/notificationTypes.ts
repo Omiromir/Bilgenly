@@ -1,5 +1,9 @@
 export type DashboardNotificationType = "class_invitation";
-export type DashboardNotificationStatus = "pending" | "accepted" | "declined";
+export type DashboardNotificationStatus =
+  | "pending"
+  | "accepted"
+  | "declined"
+  | "removed";
 
 export interface DashboardNotification {
   id: string;
