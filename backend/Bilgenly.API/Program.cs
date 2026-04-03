@@ -64,11 +64,14 @@ builder.Services.AddScoped<IAttemptRepository, AttemptRepository>();
 builder.Services.AddScoped<AttemptService>();
 builder.Services.AddScoped<AnalyticsService>();
 builder.Services.AddControllers();
+var allowedCorsOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
+    ?? ["http://localhost:5173", "https://bilgenly-git-frontend-features-omirs-projects.vercel.app"];
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
     {
-        policy.WithOrigins("http://localhost:5173")
+        policy.WithOrigins(allowedCorsOrigins)
             .AllowAnyHeader()
             .AllowAnyMethod();
     });
@@ -89,4 +92,3 @@ app.MapControllers();
 
 
 app.Run();
-

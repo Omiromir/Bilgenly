@@ -4,7 +4,10 @@ import type {
     SignUpFormValues,
 } from "./types";
 
-const API_URL = "http://localhost:5241";
+const API_URL = (
+    import.meta.env.VITE_API_URL?.trim() ||
+    (window.location.hostname === "localhost" ? "http://localhost:5241" : "https://bilgenly-1.onrender.com")
+).replace(/\/+$/, "");
 const AUTH_TOKEN_KEY = "bilgenly_token";
 const AUTH_ROLE_KEY = "bilgenly_role";
 
