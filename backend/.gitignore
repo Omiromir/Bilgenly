@@ -25,4 +25,4 @@ Thumbs.db
 secrets.json
 **/appsettings.Development.json
 **/appsettings.Local.json
-_temp_api_build
+_temp_api_build*

@@ -104,6 +104,12 @@ function getMoodleCorrectIndexes(question: QuizQuestionRecord) {
     : [question.correctIndex];
 }
 
+function getQuizRecordCorrectIndexes(question: QuizQuestionRecord) {
+  return question.selectionMode === "multiple" && question.correctIndexes?.length
+    ? [...question.correctIndexes].sort((left, right) => left - right)
+    : [question.correctIndex];
+}
+
 function buildMoodleAnswerXml(
   answerText: string,
   fraction: number,
@@ -226,6 +232,7 @@ function mapGeneratedResultToQuestions(
 
       return {
         id: question.id,
+        optionIds: question.answers.map((answer) => answer.id),
         questionType,
         selectionMode,
         text: question.text,
@@ -243,6 +250,31 @@ function mapGeneratedResultToQuestions(
         status: index < 2 ? "unreviewed" : "needs attention",
       } satisfies GeneratedQuestion;
     });
+}
+
+function mapGeneratedQuestionToQuizQuestionRecord(
+  question: GeneratedQuestion,
+): QuizQuestionRecord {
+  return {
+    id: question.id,
+    text: question.text.trim(),
+    options: question.options.map((option) => option.trim()),
+    optionIds: question.optionIds ? [...question.optionIds] : undefined,
+    correctIndex: question.correctIndex,
+    correctIndexes:
+      question.selectionMode === "multiple"
+        ? getQuestionCorrectIndexes(question)
+        : undefined,
+    questionType: question.questionType,
+    selectionMode: question.selectionMode,
+    explanation: question.explanation.trim() || undefined,
+    imageEnabled: question.imageEnabled,
+    imageUrl: question.imageUrl,
+    points: Math.max(1, Math.round(question.points)),
+    estimatedMinutes: Math.max(1, Math.round(question.estimatedMinutes)),
+    answerOrder: question.answerOrder,
+    required: question.required,
+  };
 }
 
 export function QuizBuilderWorkspace({
@@ -401,6 +433,7 @@ export function QuizBuilderWorkspace({
       editingQuiz.questions.map((question) => ({
         ...question,
         questionType: question.questionType ?? "Multiple choice",
+        optionIds: question.optionIds ? [...question.optionIds] : undefined,
         selectionMode: question.selectionMode ?? "single",
         options: [...question.options],
         correctIndexes:
@@ -647,6 +680,29 @@ export function QuizBuilderWorkspace({
       }
 
       if (
+        question.questionType === "Multiple choice" &&
+        question.options.filter((option) => option.trim()).length < 2
+      ) {
+        issues.push({
+          id: `${question.id}-missing-options`,
+          questionId: question.id,
+          tone: "danger",
+          label: `Question ${index + 1} needs answer options`,
+          detail: "Add at least two non-empty answer options before saving.",
+        });
+      }
+
+      if (question.options.some((option) => !option.trim())) {
+        issues.push({
+          id: `${question.id}-empty-option`,
+          questionId: question.id,
+          tone: "danger",
+          label: `Question ${index + 1} has an empty option`,
+          detail: "Fill in every answer option or remove the empty one.",
+        });
+      }
+
+      if (
         getQuestionCorrectIndexes(question).some(
           (correctIndex) =>
             correctIndex < 0 || correctIndex >= question.options.length,
@@ -663,18 +719,19 @@ export function QuizBuilderWorkspace({
       }
 
       if (
-        question.selectionMode === "multiple" &&
-        getQuestionCorrectIndexes(question).length < 2
+        question.selectionMode === "single" &&
+        getQuestionCorrectIndexes(question).length !== 1
       ) {
         issues.push({
-          id: `${question.id}-multiple-answer-selection`,
+          id: `${question.id}-single-answer-selection`,
           questionId: question.id,
-          tone: "warning",
-          label: `Question ${index + 1} needs at least two correct answers`,
-          detail:
-            "If multiple-answer mode is enabled, mark at least two answers as correct.",
+          tone: "danger",
+          label: `Question ${index + 1} needs exactly one correct answer`,
+          detail: "Single-choice questions must have one correct option.",
         });
       }
+
+
 
       if (duplicateOptionCount) {
         issues.push({
@@ -972,6 +1029,7 @@ export function QuizBuilderWorkspace({
         {
           ...source,
           id: createQuestionId(),
+          optionIds: undefined,
           text: `${source.text} (copy)`,
           status: "edited",
         },
@@ -1045,26 +1103,8 @@ export function QuizBuilderWorkspace({
       return null;
     }
 
-    const normalizedQuestions: QuizQuestionRecord[] = questions.map(
-      (question) => ({
-        id: question.id,
-        text: question.text.trim(),
-        options: question.options.map((option) => option.trim()),
-        correctIndex: question.correctIndex,
-        correctIndexes:
-          question.selectionMode === "multiple"
-            ? getQuestionCorrectIndexes(question)
-            : undefined,
-        questionType: question.questionType,
-        selectionMode: question.selectionMode,
-        explanation: question.explanation.trim() || undefined,
-        imageEnabled: question.imageEnabled,
-        imageUrl: question.imageUrl,
-        points: Math.max(1, Math.round(question.points)),
-        estimatedMinutes: Math.max(1, Math.round(question.estimatedMinutes)),
-        answerOrder: question.answerOrder,
-        required: question.required,
-      }),
+    const normalizedQuestions = questions.map(
+      mapGeneratedQuestionToQuizQuestionRecord,
     );
     const topic = focus.trim() || "General review";
     const durationMinutes = Math.max(
@@ -1122,28 +1162,23 @@ export function QuizBuilderWorkspace({
       throw new Error("Quiz title is required.");
     }
 
+    const blockingIssue = validationIssues.find(
+      (issue) => issue.tone === "danger",
+    );
+    if (blockingIssue) {
+      setSelectedQuestionId(blockingIssue.questionId);
+      throw new Error(blockingIssue.detail);
+    }
+
     const payload = buildQuizSavePayload(targetStatus);
 
     if (!payload) {
-      return null;
-    }
-
-    if (
-      mode === "teacher" &&
-      payload.questions.some(
-        (question) =>
-          question.selectionMode === "multiple" &&
-          getQuestionCorrectIndexes(question as GeneratedQuestion).length > 1,
-      )
-    ) {
-      throw new Error(
-        "The backend attempt flow does not support multiple-answer questions yet.",
-      );
+      throw new Error("Add at least one valid question before saving.");
     }
 
     if (mode === "teacher" && generatedBackendQuizId) {
       const guidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-      await saveGeneratedQuizReview(generatedBackendQuizId, {
+      const reviewResult = await saveGeneratedQuizReview(generatedBackendQuizId, {
         title: payload.title,
         description: payload.description,
         isPublic: payload.visibility === "public",
@@ -1154,13 +1189,32 @@ export function QuizBuilderWorkspace({
             question.questionType === "True/False" ? "TrueFalse" : "MCQ",
           explanation: question.explanation ?? "",
           position: index + 1,
-          answers: question.options.map((option, optionIndex) => ({
-            text: option,
-            isCorrect:
-              getQuestionCorrectIndexes(question).includes(optionIndex),
-          })),
+          answers: question.options.map((option, optionIndex) => {
+            const optionId = question.optionIds?.[optionIndex];
+
+            return {
+              id: optionId && guidPattern.test(optionId) ? optionId : undefined,
+              text: option,
+              isCorrect:
+                getQuizRecordCorrectIndexes(question).includes(optionIndex),
+            };
+          }),
         })),
       });
+
+      const savedQuestions = mapGeneratedResultToQuestions(reviewResult);
+      const savedPayload = {
+        ...payload,
+        existingQuizId: reviewResult.quizId,
+        questionCount: savedQuestions.length,
+        questions: savedQuestions.map(mapGeneratedQuestionToQuizQuestionRecord),
+      };
+
+      setGeneratedBackendQuizId(reviewResult.quizId);
+      setQuestions(savedQuestions);
+      setSelectedQuestionId(savedQuestions[0]?.id ?? null);
+
+      return saveGeneratedQuiz(savedPayload);
     }
 
     return saveGeneratedQuiz(payload);
@@ -1172,20 +1226,29 @@ export function QuizBuilderWorkspace({
       return;
     }
 
-    const libraryTab = targetStatus === "draft" ? "drafts" : "my-quizzes";
-    navigate(
-      mode === "teacher"
-        ? "/dashboard/teacher/quiz-library"
-        : "/dashboard/student/quiz-library",
-      { state: { libraryTab } },
-    );
+    try {
+      const savedQuiz = await saveQuizRecord(targetStatus);
 
-    saveQuizRecord(targetStatus).catch((error) => {
+      if (!savedQuiz) {
+        return;
+      }
+
+      const libraryTab = targetStatus === "draft" ? "drafts" : "my-quizzes";
+      navigate(
+        mode === "teacher"
+          ? "/dashboard/teacher/quiz-library"
+          : "/dashboard/student/quiz-library",
+        { state: { libraryTab } },
+      );
+    } catch (error) {
+      setGenerationError(
+        error instanceof Error ? error.message : "Unable to save this quiz.",
+      );
       console.error(
         "Quiz save failed:",
         error instanceof Error ? error.message : error,
       );
-    });
+    }
   }
 
   async function handleOpenQuizFlow(targetStatus: QuizLibraryStatus) {
@@ -1358,6 +1421,11 @@ export function QuizBuilderWorkspace({
                           {!quizTitle.trim() ? (
                             <p className="text-xs text-[var(--dashboard-danger)]">
                               Quiz title is required.
+                            </p>
+                          ) : null}
+                          {generationError ? (
+                            <p className="text-xs text-[var(--dashboard-danger)]">
+                              {generationError}
                             </p>
                           ) : null}
                           <textarea
@@ -1798,116 +1866,6 @@ export function QuizBuilderWorkspace({
                               </label>
 
                               <div className="space-y-3">
-                                <div className="flex flex-wrap items-center gap-4 text-sm">
-                                  <span className="font-semibold text-[var(--dashboard-text-strong)]">
-                                    Choices*
-                                  </span>
-                                  <button
-                                    type="button"
-                                    className="inline-flex items-center gap-2 text-[var(--dashboard-text-soft)]"
-                                    onClick={() =>
-                                      handleQuestionChange(
-                                        selectedQuestion.id,
-                                        (question) =>
-                                          applyCorrectIndexes(
-                                            {
-                                              ...question,
-                                              selectionMode:
-                                                question.selectionMode ===
-                                                "multiple"
-                                                  ? "single"
-                                                  : "multiple",
-                                            },
-                                            question.selectionMode ===
-                                              "multiple"
-                                              ? [
-                                                  getQuestionCorrectIndexes(
-                                                    question,
-                                                  )[0] ?? 0,
-                                                ]
-                                              : Array.from(
-                                                  new Set([
-                                                    ...getQuestionCorrectIndexes(
-                                                      question,
-                                                    ),
-                                                    Math.min(
-                                                      1,
-                                                      question.options.length -
-                                                        1,
-                                                    ),
-                                                  ]),
-                                                ),
-                                          ),
-                                      )
-                                    }
-                                  >
-                                    <span>Multiple answer</span>
-                                    <span
-                                      className={cn(
-                                        "flex h-6 w-10 items-center rounded-full px-1 transition",
-                                        selectedQuestion.selectionMode ===
-                                          "multiple"
-                                          ? "bg-[#19b79f]"
-                                          : "bg-[var(--dashboard-surface-muted)]",
-                                      )}
-                                    >
-                                      <span
-                                        className={cn(
-                                          "h-4 w-4 rounded-full bg-white shadow-sm transition",
-                                          selectedQuestion.selectionMode ===
-                                            "multiple"
-                                            ? "ml-auto"
-                                            : "",
-                                        )}
-                                      />
-                                    </span>
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className="inline-flex items-center gap-2 text-[var(--dashboard-text-soft)]"
-                                    onClick={() => {
-                                      if (selectedQuestion.imageEnabled) {
-                                        handleQuestionChange(
-                                          selectedQuestion.id,
-                                          (question) => ({
-                                            ...question,
-                                            imageEnabled: false,
-                                            imageUrl: undefined,
-                                          }),
-                                        );
-                                        return;
-                                      }
-
-                                      handleQuestionChange(
-                                        selectedQuestion.id,
-                                        (question) => ({
-                                          ...question,
-                                          imageEnabled: true,
-                                        }),
-                                      );
-                                    }}
-                                  >
-                                    <span>Answer with image</span>
-                                    <span
-                                      className={cn(
-                                        "flex h-6 w-10 items-center rounded-full px-1 transition",
-                                        selectedQuestion.imageEnabled
-                                          ? "bg-[#19b79f]"
-                                          : "bg-[var(--dashboard-surface-muted)]",
-                                      )}
-                                    >
-                                      <span
-                                        className={cn(
-                                          "h-4 w-4 rounded-full bg-white shadow-sm transition",
-                                          selectedQuestion.imageEnabled
-                                            ? "ml-auto"
-                                            : "",
-                                        )}
-                                      />
-                                    </span>
-                                  </button>
-                                </div>
-
                                 {selectedQuestion.options.map(
                                   (option, optionIndex) => (
                                     <div
@@ -2381,7 +2339,7 @@ export function QuizBuilderWorkspace({
                                 <input
                                   type="number"
                                   min={1}
-                                  max={100}
+                                  max={10}
                                   value={selectedQuestion.points}
                                   onChange={(event) =>
                                     handleQuestionChange(

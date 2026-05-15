@@ -52,4 +52,14 @@ public class QuizController : ControllerBase
         if (quiz is null) return NotFound(new { message = "Quiz not found" });
         return Ok(quiz);
     }
+
+    [HttpPut("{id}")]
+    [Authorize]
+    public async Task<IActionResult> UpdateQuiz(Guid id, [FromBody] UpdateQuizDto dto)
+    {
+        var userId = Guid.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+        var (result, error) = await _quizService.UpdateQuizAsync(id, dto, userId);
+        if (result is null) return BadRequest(new { message = error });
+        return Ok(result);
+    }
 }

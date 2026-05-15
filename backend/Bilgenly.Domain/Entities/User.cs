@@ -10,6 +10,8 @@ public class User
     public bool IsSuspended { get; set; }
     public DateTime? SuspendedUntil { get; set; }
     public string? SuspensionReason { get; set; }
+    public string? Bio { get; set; }
+    public string? AvatarUrl { get; set; }
     public ICollection<Quiz> Quizzes { get; set; } = new List<Quiz>();
     public ICollection<Attempt> Attempts { get; set; } = new List<Attempt>();
 }

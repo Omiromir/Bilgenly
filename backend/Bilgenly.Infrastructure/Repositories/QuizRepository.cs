@@ -16,10 +16,15 @@ public class QuizRepository : IQuizRepository
     public void Remove(Quiz quiz)
         => _context.Quizzes.Remove(quiz);
 
-    public async Task<Quiz?> GetByIdAsync(Guid id) 
+    public async Task<Quiz?> GetByIdAsync(Guid id)
         => await _context.Quizzes
             .Include(q => q.Questions)
             .ThenInclude(q => q.Answers)
+            .Include(q => q.User)
+            .FirstOrDefaultAsync(q => q.Id == id);
+
+    public async Task<Quiz?> GetByIdShallowAsync(Guid id)
+        => await _context.Quizzes
             .Include(q => q.User)
             .FirstOrDefaultAsync(q => q.Id == id);
 
@@ -40,6 +45,9 @@ public class QuizRepository : IQuizRepository
     
     public async Task AddAsync(Quiz quiz)
         => await _context.Quizzes.AddAsync(quiz);
+
+    public async Task AddQuestionsRangeAsync(IEnumerable<Question> questions)
+        => await _context.Set<Question>().AddRangeAsync(questions);
     public async Task SaveChangesAsync()
         => await _context.SaveChangesAsync();
     public async Task<IEnumerable<Quiz>> GetHiddenQuizzesAsync()
@@ -48,4 +56,17 @@ public class QuizRepository : IQuizRepository
             .Include(q => q.User)
             .OrderByDescending(q => q.CreatedAt)
             .ToListAsync();
+
+    public async Task DeleteQuizQuestionsAsync(Guid quizId)
+    {
+        await _context.Database.ExecuteSqlAsync(
+            $"""DELETE FROM "Answer" WHERE "QuestionId" IN (SELECT "Id" FROM "Question" WHERE "QuizId" = {quizId})""");
+        await _context.Database.ExecuteSqlAsync(
+            $"""DELETE FROM "Question" WHERE "QuizId" = {quizId}""");
+
+        foreach (var entry in _context.ChangeTracker.Entries<Answer>().ToList())
+            entry.State = Microsoft.EntityFrameworkCore.EntityState.Detached;
+        foreach (var entry in _context.ChangeTracker.Entries<Question>().ToList())
+            entry.State = Microsoft.EntityFrameworkCore.EntityState.Detached;
+    }
 }

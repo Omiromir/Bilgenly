@@ -19,6 +19,7 @@ export interface ParsedSource {
 
 export interface GeneratedQuestion {
   id: string;
+  optionIds?: string[];
   questionType: QuestionType;
   selectionMode: QuestionSelectionMode;
   text: string;

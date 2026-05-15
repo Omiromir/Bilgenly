@@ -1,4 +1,4 @@
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { useDeferredValue, useMemo, useState } from "react";
 import { Link } from "react-router";
 import {
   Download,
@@ -26,8 +26,6 @@ import {
   TableRow,
 } from "../../../components/ui/table";
 import { useTeacherClasses } from "../../../app/providers/TeacherClassesProvider";
-import { getStudentSummaryForTeacher } from "../../../features/dashboard/api/analyticsApi";
-import type { StudentSummaryDto } from "../../../features/dashboard/api/dashboardApiTypes";
 import {
   DashboardButton,
   dashboardPageClassName,
@@ -81,22 +79,11 @@ function buildStudentReference(student: TeacherClassStudent) {
   return compactId ? compactId.toUpperCase() : "—";
 }
 
-function buildStudentRosterMetadata(
-  student: TeacherClassStudent,
-  summaries: Map<string, StudentSummaryDto>,
-) {
-  const linkedId = student.linkedUserId ?? "";
-  const summary = linkedId ? summaries.get(linkedId) : undefined;
-  const averageGradeLabel = summary
-    ? summary.attemptsCount === 0
-      ? "No results"
-      : `${Math.round(summary.averageGradePercent)}%`
-    : "—";
-
+function buildStudentRosterMetadata(student: TeacherClassStudent) {
   return {
     studentRef: buildStudentReference(student),
     genderLabel: "—",
-    averageGradeLabel,
+    averageGradeLabel: "—",
     missingDaysLabel: "—",
   } satisfies Pick<
     TeacherStudentRosterRow,
@@ -116,42 +103,6 @@ export function TeacherStudentsPage() {
     [classes],
   );
 
-  const [studentSummaries, setStudentSummaries] = useState<Map<string, StudentSummaryDto>>(
-    new Map(),
-  );
-  const fetchedIdsRef = useRef<Set<string>>(new Set());
-
-  useEffect(() => {
-    const linkedUserIds = Array.from(
-      new Set(
-        classes
-          .flatMap((c) => c.students)
-          .map((s) => s.linkedUserId)
-          .filter((id): id is string => Boolean(id) && !fetchedIdsRef.current.has(id)),
-      ),
-    );
-
-    if (!linkedUserIds.length) return;
-
-    linkedUserIds.forEach((id) => fetchedIdsRef.current.add(id));
-
-    Promise.allSettled(
-      linkedUserIds.map((id) =>
-        getStudentSummaryForTeacher(id).then((summary) => ({ id, summary })),
-      ),
-    ).then((results) => {
-      setStudentSummaries((prev) => {
-        const next = new Map(prev);
-        results.forEach((result) => {
-          if (result.status === "fulfilled") {
-            next.set(result.value.id, result.value.summary);
-          }
-        });
-        return next;
-      });
-    });
-  }, [classes]);
-
   const [classFilter, setClassFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] =
     useState<"all" | TeacherClassStudentStatus>("all");
@@ -166,22 +117,18 @@ export function TeacherStudentsPage() {
   const rosterRows = useMemo<TeacherStudentRosterRow[]>(
     () =>
       classes.flatMap((teacherClass) =>
-        teacherClass.students.map((student) => {
-          const metadata = buildStudentRosterMetadata(student, studentSummaries);
-
-          return {
-            rowId: `${teacherClass.id}-${student.id}`,
-            classId: teacherClass.id,
-            className: teacherClass.name,
-            classSubject: teacherClass.subject,
-            inviteCode: teacherClass.inviteCode,
-            quizCount: teacherClass.quizCount,
-            student,
-            ...metadata,
-          };
-        }),
+        teacherClass.students.map((student) => ({
+          rowId: `${teacherClass.id}-${student.id}`,
+          classId: teacherClass.id,
+          className: teacherClass.name,
+          classSubject: teacherClass.subject,
+          inviteCode: teacherClass.inviteCode,
+          quizCount: teacherClass.quizCount,
+          student,
+          ...buildStudentRosterMetadata(student),
+        })),
       ),
-    [classes, studentSummaries],
+    [classes],
   );
 
   const filteredRows = useMemo(() => {
@@ -190,19 +137,10 @@ export function TeacherStudentsPage() {
         deferredClassFilter === "all" ? true : row.classId === deferredClassFilter;
       const matchesStatus =
         statusFilter === "all" ? true : row.student.status === statusFilter;
-      const summary = row.student.linkedUserId
-        ? studentSummaries.get(row.student.linkedUserId)
-        : undefined;
-      const avgGrade = summary?.averageGradePercent ?? null;
-      const matchesGrade =
-        gradeFilter === "all" ||
-        (gradeFilter === "high" && avgGrade !== null && avgGrade >= 80) ||
-        (gradeFilter === "mid" && avgGrade !== null && avgGrade >= 60 && avgGrade < 80) ||
-        (gradeFilter === "needs-attention" && avgGrade !== null && avgGrade < 60);
-
+      const matchesGrade = gradeFilter === "all";
       return matchesClass && matchesStatus && matchesGrade;
     });
-  }, [deferredClassFilter, gradeFilter, rosterRows, statusFilter, studentSummaries]);
+  }, [deferredClassFilter, gradeFilter, rosterRows, statusFilter]);
 
   const totalStudentsLabel = new Set(
     rosterRows.map((row) => row.student.email.trim().toLowerCase()),

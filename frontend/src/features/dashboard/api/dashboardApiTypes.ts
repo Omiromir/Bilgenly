@@ -190,6 +190,10 @@ export interface CreateQuizQuestionRequest {
   text: string;
   questionType: string;
   position: number;
+  explanation?: string;
+  points?: number;
+  estimatedMinutes?: number;
+  imageUrl?: string;
   answers: CreateQuizAnswerRequest[];
 }
 
@@ -198,6 +202,31 @@ export interface CreateQuizRequest {
   description: string;
   isPublic: boolean;
   questions: CreateQuizQuestionRequest[];
+}
+
+export interface UpdateQuizAnswerRequest {
+  id?: string;
+  text: string;
+  isCorrect: boolean;
+}
+
+export interface UpdateQuizQuestionRequest {
+  id?: string;
+  text: string;
+  questionType: string;
+  explanation: string;
+  position: number;
+  points: number;
+  estimatedMinutes: number;
+  imageUrl?: string;
+  answers: UpdateQuizAnswerRequest[];
+}
+
+export interface UpdateQuizRequest {
+  title: string;
+  description: string;
+  isPublic: boolean;
+  questions: UpdateQuizQuestionRequest[];
 }
 
 export interface QuizAnswerDto {
@@ -210,7 +239,11 @@ export interface QuizQuestionDto {
   id: string;
   text: string;
   questionType: string;
+  explanation: string;
   position: number;
+  points: number;
+  estimatedMinutes: number;
+  imageUrl?: string | null;
   answers: QuizAnswerDto[];
 }
 

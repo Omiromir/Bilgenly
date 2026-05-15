@@ -84,6 +84,7 @@ public class AiService : IAiService
                 {
                     Text         = item.Question,
                     QuestionType = "MCQ",
+                    Explanation  = item.Explanation ?? string.Empty,
                     Position     = position++,
                     Answers      = answers
                 });
@@ -100,8 +101,9 @@ public class AiService : IAiService
     );
 
     private sealed record MlQuestion(
-        [property: JsonPropertyName("question")] string Question,
-        [property: JsonPropertyName("options")]  Dictionary<string, string> Options,
-        [property: JsonPropertyName("answer")]   string Answer
+        [property: JsonPropertyName("question")]    string Question,
+        [property: JsonPropertyName("options")]     Dictionary<string, string> Options,
+        [property: JsonPropertyName("answer")]      string Answer,
+        [property: JsonPropertyName("explanation")] string? Explanation
     );
 }

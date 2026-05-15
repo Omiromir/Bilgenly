@@ -223,6 +223,45 @@ namespace Bilgenly.Infrastructure.Migrations
                     b.ToTable("Classes");
                 });
 
+            modelBuilder.Entity("Bilgenly.Domain.Entities.ClassInvitation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ClassId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("InviteCode")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("RecipientEmail")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("RespondedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("TeacherId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TeacherId");
+
+                    b.HasIndex("ClassId", "RecipientEmail");
+
+                    b.ToTable("ClassInvitations");
+                });
+
             modelBuilder.Entity("Bilgenly.Domain.Entities.ClassStudent", b =>
                 {
                     b.Property<Guid>("ClassId")
@@ -239,6 +278,103 @@ namespace Bilgenly.Infrastructure.Migrations
                     b.HasIndex("StudentId");
 
                     b.ToTable("ClassStudents");
+                });
+
+            modelBuilder.Entity("Bilgenly.Domain.Entities.Notification", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ActionType")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("AssignmentId")
+                        .HasColumnType("text");
+
+                    b.Property<string>("AttemptId")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("FollowUpKind")
+                        .HasColumnType("text");
+
+                    b.Property<string>("InviteCode")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Message")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("QuizId")
+                        .HasColumnType("text");
+
+                    b.Property<string>("QuizTitle")
+                        .HasColumnType("text");
+
+                    b.Property<bool>("Read")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("RecipientEmail")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("RecipientUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("RelatedClassId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("RelatedClassName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("SenderEmail")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("SenderName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("StudentEmail")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("StudentId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("StudentName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RecipientEmail");
+
+                    b.HasIndex("RecipientUserId");
+
+                    b.ToTable("Notifications");
                 });
 
             modelBuilder.Entity("Bilgenly.Domain.Entities.Question", b =>
@@ -292,11 +428,17 @@ namespace Bilgenly.Infrastructure.Migrations
                     b.Property<int>("DurationMinutes")
                         .HasColumnType("integer");
 
+                    b.Property<bool>("IsHidden")
+                        .HasColumnType("boolean");
+
                     b.Property<bool>("IsPublic")
                         .HasColumnType("boolean");
 
                     b.Property<string>("Language")
                         .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("ModerationNote")
                         .HasColumnType("text");
 
                     b.Property<string>("SourceType")
@@ -329,6 +471,60 @@ namespace Bilgenly.Infrastructure.Migrations
                     b.ToTable("Quizzes");
                 });
 
+            modelBuilder.Entity("Bilgenly.Domain.Entities.Report", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("ReportedQuizId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("ReportedUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ReporterId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ReviewNote")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("ReviewedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("ReviewerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ReportedQuizId");
+
+                    b.HasIndex("ReportedUserId");
+
+                    b.HasIndex("ReporterId");
+
+                    b.HasIndex("ReviewerId");
+
+                    b.HasIndex("Status");
+
+                    b.ToTable("Reports");
+                });
+
             modelBuilder.Entity("Bilgenly.Domain.Entities.User", b =>
                 {
                     b.Property<Guid>("Id")
@@ -345,12 +541,21 @@ namespace Bilgenly.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<bool>("IsSuspended")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("PasswordHash")
                         .IsRequired()
                         .HasColumnType("text");
 
                     b.Property<int>("Role")
                         .HasColumnType("integer");
+
+                    b.Property<DateTime?>("SuspendedUntil")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("SuspensionReason")
+                        .HasColumnType("text");
 
                     b.Property<string>("Username")
                         .IsRequired()
@@ -380,6 +585,53 @@ namespace Bilgenly.Infrastructure.Migrations
                     b.HasIndex("BadgeId");
 
                     b.ToTable("UserBadges");
+                });
+
+            modelBuilder.Entity("Bilgenly.Domain.Entities.UserPreferences", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("DateFormat")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Language")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<bool>("NotifyEmailAchievementAlerts")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("NotifyEmailDeadlineReminders")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("NotifyEmailGradingUpdates")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("NotifyEmailQuizAssignments")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("NotifyPushRealTimeUpdates")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("NotifyPushWeeklySummaries")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("ThemeMode")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("TimeZone")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("UserId");
+
+                    b.ToTable("UserPreferences");
                 });
 
             modelBuilder.Entity("Bilgenly.Domain.Entities.Answer", b =>
@@ -469,6 +721,25 @@ namespace Bilgenly.Infrastructure.Migrations
                     b.Navigation("Teacher");
                 });
 
+            modelBuilder.Entity("Bilgenly.Domain.Entities.ClassInvitation", b =>
+                {
+                    b.HasOne("Bilgenly.Domain.Entities.Class", "Class")
+                        .WithMany()
+                        .HasForeignKey("ClassId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Bilgenly.Domain.Entities.User", "Teacher")
+                        .WithMany()
+                        .HasForeignKey("TeacherId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Class");
+
+                    b.Navigation("Teacher");
+                });
+
             modelBuilder.Entity("Bilgenly.Domain.Entities.ClassStudent", b =>
                 {
                     b.HasOne("Bilgenly.Domain.Entities.Class", "Class")
@@ -486,6 +757,16 @@ namespace Bilgenly.Infrastructure.Migrations
                     b.Navigation("Class");
 
                     b.Navigation("Student");
+                });
+
+            modelBuilder.Entity("Bilgenly.Domain.Entities.Notification", b =>
+                {
+                    b.HasOne("Bilgenly.Domain.Entities.User", "Recipient")
+                        .WithMany()
+                        .HasForeignKey("RecipientUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Recipient");
                 });
 
             modelBuilder.Entity("Bilgenly.Domain.Entities.Question", b =>
@@ -510,6 +791,38 @@ namespace Bilgenly.Infrastructure.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("Bilgenly.Domain.Entities.Report", b =>
+                {
+                    b.HasOne("Bilgenly.Domain.Entities.Quiz", "ReportedQuiz")
+                        .WithMany()
+                        .HasForeignKey("ReportedQuizId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("Bilgenly.Domain.Entities.User", "ReportedUser")
+                        .WithMany()
+                        .HasForeignKey("ReportedUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("Bilgenly.Domain.Entities.User", "Reporter")
+                        .WithMany()
+                        .HasForeignKey("ReporterId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Bilgenly.Domain.Entities.User", "Reviewer")
+                        .WithMany()
+                        .HasForeignKey("ReviewerId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("ReportedQuiz");
+
+                    b.Navigation("ReportedUser");
+
+                    b.Navigation("Reporter");
+
+                    b.Navigation("Reviewer");
+                });
+
             modelBuilder.Entity("Bilgenly.Domain.Entities.UserBadge", b =>
                 {
                     b.HasOne("Bilgenly.Domain.Entities.Badge", "Badge")
@@ -525,6 +838,17 @@ namespace Bilgenly.Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("Badge");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("Bilgenly.Domain.Entities.UserPreferences", b =>
+                {
+                    b.HasOne("Bilgenly.Domain.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.Navigation("User");
                 });

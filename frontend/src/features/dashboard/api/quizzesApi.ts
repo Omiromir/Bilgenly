@@ -1,5 +1,9 @@
 import { apiRequest } from "../../../lib/apiClient";
-import type { CreateQuizRequest, QuizDto } from "./dashboardApiTypes";
+import type {
+  CreateQuizRequest,
+  QuizDto,
+  UpdateQuizRequest,
+} from "./dashboardApiTypes";
 
 export function createQuiz(payload: CreateQuizRequest) {
   return apiRequest<QuizDto>("/api/Quiz", {
@@ -18,6 +22,14 @@ export function getMyQuizzes() {
 export function getQuizById(quizId: string) {
   return apiRequest<QuizDto>(`/api/Quiz/${quizId}`, {
     fallbackErrorMessage: "Unable to load quiz details.",
+  });
+}
+
+export function updateQuiz(quizId: string, payload: UpdateQuizRequest) {
+  return apiRequest<QuizDto>(`/api/Quiz/${quizId}`, {
+    method: "PUT",
+    body: payload,
+    fallbackErrorMessage: "Unable to update quiz.",
   });
 }
 

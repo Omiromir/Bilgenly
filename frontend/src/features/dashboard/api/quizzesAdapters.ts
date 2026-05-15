@@ -54,8 +54,11 @@ function mapQuizQuestionDto(question: QuizDto["questions"][number]): QuizQuestio
     correctIndexes,
     questionType: normalizeQuestionType(question.questionType),
     selectionMode: normalizeSelectionMode(question.answers),
-    points: 1,
-    estimatedMinutes: 1,
+    explanation: question.explanation,
+    imageEnabled: Boolean(question.imageUrl),
+    imageUrl: question.imageUrl ?? undefined,
+    points: question.points ?? 1,
+    estimatedMinutes: question.estimatedMinutes ?? 1,
     answerOrder: "fixed",
     required: true,
   };

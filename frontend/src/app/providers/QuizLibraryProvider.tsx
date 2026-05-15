@@ -20,6 +20,7 @@ import {
   deleteQuiz as deleteQuizRequest,
   getMyQuizzes,
   getQuizById as getQuizByIdRequest,
+  updateQuiz as updateQuizRequest,
 } from "../../features/dashboard/api/quizzesApi";
 import { mapQuizDtoToQuizRecord } from "../../features/dashboard/api/quizzesAdapters";
 import { useAuth } from "./AuthProvider";
@@ -156,12 +157,67 @@ function getCorrectAnswerIndexes(question: QuizQuestionRecord) {
   return [question.correctIndex];
 }
 
-function isBackendQuizCompatible(quiz: Pick<QuizRecord, "questions">) {
-  return quiz.questions.every(
-    (question) =>
-      question.selectionMode !== "multiple" &&
-      getCorrectAnswerIndexes(question).length <= 1,
-  );
+
+function mapQuizRecordToCreateQuizRequest(quiz: QuizRecord) {
+  return {
+    title: quiz.title,
+    description: quiz.description,
+    isPublic: quiz.visibility === "public",
+    questions: quiz.questions.map((question, index) => {
+      const correctIndexes = getCorrectAnswerIndexes(question);
+
+      return {
+        text: question.text,
+        questionType: toCreateQuizQuestionType(question),
+        explanation: question.explanation ?? "",
+        position: index + 1,
+        points: Math.max(1, Math.round(question.points ?? 1)),
+        estimatedMinutes: Math.max(
+          1,
+          Math.round(question.estimatedMinutes ?? 1),
+        ),
+        imageUrl: question.imageUrl,
+        answers: question.options.map((option, optionIndex) => ({
+          text: option,
+          isCorrect: correctIndexes.includes(optionIndex),
+        })),
+      };
+    }),
+  };
+}
+
+function mapQuizRecordToUpdateQuizRequest(quiz: QuizRecord) {
+  return {
+    title: quiz.title,
+    description: quiz.description,
+    isPublic: quiz.visibility === "public",
+    questions: quiz.questions.map((question, index) => {
+      const correctIndexes = getCorrectAnswerIndexes(question);
+
+      return {
+        id: isGuidString(question.id) ? question.id : undefined,
+        text: question.text,
+        questionType: toCreateQuizQuestionType(question),
+        explanation: question.explanation ?? "",
+        position: index + 1,
+        points: Math.max(1, Math.round(question.points ?? 1)),
+        estimatedMinutes: Math.max(
+          1,
+          Math.round(question.estimatedMinutes ?? 1),
+        ),
+        imageUrl: question.imageUrl,
+        answers: question.options.map((option, optionIndex) => {
+          const optionId = question.optionIds?.[optionIndex];
+
+          return {
+            id: optionId && isGuidString(optionId) ? optionId : undefined,
+            text: option,
+            isCorrect: correctIndexes.includes(optionIndex),
+          };
+        }),
+      };
+    }),
+  };
 }
 
 function loadQuizLibraryFromStorage(scope: string) {
@@ -609,32 +665,44 @@ export function QuizLibraryProvider({ children }: QuizLibraryProviderProps) {
   };
 
   const createTeacherQuizOnBackend = async (quiz: QuizRecord) => {
-    if (!isBackendQuizCompatible(quiz)) {
-      throw new Error(
-        "The backend attempt flow does not support multiple-answer questions yet.",
-      );
-    }
-
-    const createdQuiz = await createQuizRequest({
-      title: quiz.title,
-      description: quiz.description,
-      isPublic: quiz.visibility === "public",
-      questions: quiz.questions.map((question, index) => {
-        const correctIndexes = getCorrectAnswerIndexes(question);
-
-        return {
-          text: question.text,
-          questionType: toCreateQuizQuestionType(question),
-          position: index,
-          answers: question.options.map((option, optionIndex) => ({
-            text: option,
-            isCorrect: correctIndexes.includes(optionIndex),
-          })),
-        };
-      }),
-    });
+    const createdQuiz = await createQuizRequest(
+      mapQuizRecordToCreateQuizRequest(quiz),
+    );
 
     const mappedQuiz = mapQuizDtoToQuizRecord(createdQuiz, {
+      ownerUserId: currentUser?.id,
+      ownerRole: "teacher",
+      ownerName: getOwnerName("teacher", currentUser?.fullName),
+      topic: quiz.topic,
+      difficulty: quiz.difficulty,
+      language: quiz.language,
+      status: quiz.status,
+      visibility: quiz.visibility,
+      tags: quiz.tags,
+      sourceLabel: quiz.sourceLabel,
+      note: quiz.note,
+      durationMinutes: quiz.durationMinutes,
+    });
+
+    setRemoteOwnedQuizzes((current) => upsertQuizRecord(current, mappedQuiz));
+    upsertLocalQuiz({
+      ...mappedQuiz,
+      practiceState: quiz.practiceState,
+      practiceProgressLabel: quiz.practiceProgressLabel,
+      averageScore: quiz.averageScore,
+      attemptCount: quiz.attemptCount,
+    });
+
+    return mappedQuiz;
+  };
+
+  const updateTeacherQuizOnBackend = async (quiz: QuizRecord) => {
+    const updatedQuiz = await updateQuizRequest(
+      quiz.id,
+      mapQuizRecordToUpdateQuizRequest(quiz),
+    );
+
+    const mappedQuiz = mapQuizDtoToQuizRecord(updatedQuiz, {
       ownerUserId: currentUser?.id,
       ownerRole: "teacher",
       ownerName: getOwnerName("teacher", currentUser?.fullName),
@@ -690,8 +758,10 @@ export function QuizLibraryProvider({ children }: QuizLibraryProviderProps) {
           practiceState: input.practiceState,
         };
 
-        if (input.ownerRole === "teacher" && !isGuidString(quiz.id)) {
-          return createTeacherQuizOnBackend(quiz);
+        if (input.ownerRole === "teacher") {
+          return isGuidString(quiz.id)
+            ? updateTeacherQuizOnBackend(quiz)
+            : createTeacherQuizOnBackend(quiz);
         }
 
         upsertLocalQuiz(quiz);

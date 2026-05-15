@@ -106,28 +106,61 @@ public class QuizGenerationService
         var quiz = await _quizRepository.GetByIdAsync(quizId);
         if (quiz is null) return (null, "Quiz not found");
         if (quiz.UserId != userId) return (null, "Access denied");
+        if (string.IsNullOrWhiteSpace(dto.Title))
+            return (null, "Title is required");
+        if (!dto.Questions.Any())
+            return (null, "At least one question is required");
+        foreach (var q in dto.Questions)
+        {
+            if (string.IsNullOrWhiteSpace(q.Text))
+                return (null, "Every question must include text");
+            if (q.Answers.Count(a => !string.IsNullOrWhiteSpace(a.Text)) < 2)
+                return (null, "Every question must include at least two answer options");
+            if (q.Answers.Count(a => a.IsCorrect) != 1)
+                return (null, "Every question must include exactly one correct answer");
+        }
 
-        quiz.Title = dto.Title;
-        quiz.Description = dto.Description;
+        quiz.Title = dto.Title.Trim();
+        quiz.Description = dto.Description.Trim();
         quiz.IsPublic = dto.IsPublic;
         quiz.Status = dto.IsPublic ? "published-public" : "published-private";
 
-        quiz.Questions.Clear();
-        quiz.Questions = dto.Questions.Select((q, index) => new Question
+        var incomingQuestionIds = dto.Questions
+            .Where(q => q.Id.HasValue)
+            .Select(q => q.Id!.Value)
+            .ToHashSet();
+
+        foreach (var existingQuestion in quiz.Questions
+                     .Where(q => !incomingQuestionIds.Contains(q.Id))
+                     .ToList())
         {
-            Id = q.Id ?? Guid.NewGuid(),
-            QuizId = quiz.Id,
-            Text = q.Text,
-            QuestionType = q.QuestionType,
-            Explanation = q.Explanation,
-            Position = q.Position > 0 ? q.Position : index + 1,
-            Answers = q.Answers.Select(a => new Answer
+            quiz.Questions.Remove(existingQuestion);
+        }
+
+        for (var index = 0; index < dto.Questions.Count; index++)
+        {
+            var q = dto.Questions[index];
+            var question = q.Id.HasValue
+                ? quiz.Questions.FirstOrDefault(existing => existing.Id == q.Id.Value)
+                : null;
+
+            if (question is null)
             {
-                Id = a.Id ?? Guid.NewGuid(),
-                Text = a.Text,
-                IsCorrect = a.IsCorrect
-            }).ToList()
-        }).ToList();
+                question = new Question
+                {
+                    Id = Guid.NewGuid(),
+                    QuizId = quiz.Id
+                };
+                quiz.Questions.Add(question);
+            }
+
+            question.Text = q.Text.Trim();
+            question.QuestionType = q.QuestionType;
+            question.Explanation = q.Explanation.Trim();
+            question.Position = q.Position > 0 ? q.Position : index + 1;
+
+            ApplyAnswerUpdates(question, q.Answers);
+        }
 
         await _quizRepository.SaveChangesAsync();
 
@@ -159,7 +192,11 @@ public class QuizGenerationService
                 Id = Guid.NewGuid(),
                 Text = q.Text,
                 QuestionType = q.QuestionType,
+                Explanation = q.Explanation,
                 Position = q.Position > 0 ? q.Position : index + 1,
+                Points = q.Points > 0 ? q.Points : 1,
+                EstimatedMinutes = q.EstimatedMinutes > 0 ? q.EstimatedMinutes : 1,
+                ImageUrl = q.ImageUrl,
                 Answers = q.Answers.Select(a => new Answer
                 {
                     Id = Guid.NewGuid(),
@@ -199,4 +236,39 @@ public class QuizGenerationService
                 }).ToList()
             }).OrderBy(q => q.Position).ToList()
         };
+
+    private static void ApplyAnswerUpdates(Question question, List<UpdateAnswerDto> answers)
+    {
+        var incomingAnswerIds = answers
+            .Where(a => a.Id.HasValue)
+            .Select(a => a.Id!.Value)
+            .ToHashSet();
+
+        foreach (var existingAnswer in question.Answers
+                     .Where(a => !incomingAnswerIds.Contains(a.Id))
+                     .ToList())
+        {
+            question.Answers.Remove(existingAnswer);
+        }
+
+        foreach (var incomingAnswer in answers)
+        {
+            var answer = incomingAnswer.Id.HasValue
+                ? question.Answers.FirstOrDefault(existing => existing.Id == incomingAnswer.Id.Value)
+                : null;
+
+            if (answer is null)
+            {
+                answer = new Answer
+                {
+                    Id = Guid.NewGuid(),
+                    QuestionId = question.Id
+                };
+                question.Answers.Add(answer);
+            }
+
+            answer.Text = incomingAnswer.Text.Trim();
+            answer.IsCorrect = incomingAnswer.IsCorrect;
+        }
+    }
 }
