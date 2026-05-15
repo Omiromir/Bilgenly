@@ -1,7 +1,6 @@
 import {
   AlertCircle,
   CheckCircle2,
-  LoaderCircle,
   PencilLine,
   PlayCircle,
   RefreshCw,
@@ -40,6 +39,17 @@ interface QuizBuilderGenerateStageProps {
   validationIssues: ValidationIssue[];
 }
 
+const STEP_THRESHOLDS = [0, 30, 120] as const;
+const TOTAL_ESTIMATE = 180;
+
+function getStepState(stepIndex: number, elapsedSeconds: number) {
+  const startAt = STEP_THRESHOLDS[stepIndex];
+  const nextStart = STEP_THRESHOLDS[stepIndex + 1] ?? Infinity;
+  if (elapsedSeconds < startAt) return "waiting";
+  if (elapsedSeconds < nextStart) return "active";
+  return "done";
+}
+
 export function QuizBuilderGenerateStage({
   contextValue,
   copy,
@@ -58,6 +68,19 @@ export function QuizBuilderGenerateStage({
   setHasEnteredReview,
   validationIssues,
 }: QuizBuilderGenerateStageProps) {
+  const steps = [
+    { label: "Parsing source", sublabel: "Reading & chunking document" },
+    { label: "Generating questions", sublabel: "AI building Q&A pairs" },
+    { label: "Assembling draft", sublabel: "Formatting final output" },
+  ];
+
+  const progressPct = Math.min(96, (elapsedSeconds / TOTAL_ESTIMATE) * 100);
+  const minutes = Math.floor(elapsedSeconds / 60);
+  const seconds = elapsedSeconds % 60;
+  const elapsedLabel = minutes > 0
+    ? `${minutes}m ${seconds}s`
+    : `${seconds}s`;
+
   return (
     <DashboardSurface
       asChild
@@ -67,77 +90,215 @@ export function QuizBuilderGenerateStage({
     >
       <section className="space-y-5">
         {generationState === "running" ? (
-          <>
-            <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="space-y-8">
+            {/* Header */}
+            <div className="flex flex-col items-center gap-6 py-4 text-center">
+              {/* Pulsing icon */}
+              <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <span style={{
+                  position: "absolute",
+                  width: 88,
+                  height: 88,
+                  borderRadius: "50%",
+                  background: "rgba(91, 76, 240, 0.12)",
+                  animation: "qb-pulse-outer 2.4s ease-in-out infinite",
+                }} />
+                <span style={{
+                  position: "absolute",
+                  width: 66,
+                  height: 66,
+                  borderRadius: "50%",
+                  background: "rgba(91, 76, 240, 0.22)",
+                  animation: "qb-pulse-inner 2.4s ease-in-out infinite 0.35s",
+                }} />
+                <div style={{
+                  position: "relative",
+                  zIndex: 1,
+                  width: 52,
+                  height: 52,
+                  borderRadius: "50%",
+                  background: "linear-gradient(135deg, #6d5ce7 0%, #a78bfa 100%)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  boxShadow: "0 0 24px rgba(109,92,231,0.5)",
+                  animation: "qb-logo-breathe 2.4s ease-in-out infinite",
+                }}>
+                  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 2a8 8 0 0 1 8 8c0 3-1.5 5.5-4 7l-1 .7V20H9v-2.3L8 17C5.5 15.5 4 13 4 10a8 8 0 0 1 8-8z"/>
+                    <line x1="9" y1="21" x2="15" y2="21"/>
+                  </svg>
+                </div>
+              </div>
+
               <div>
-                <h2 className="text-[1.45rem] font-semibold text-[var(--dashboard-text-strong)]">
+                <h2 className="text-[1.5rem] font-bold text-[var(--dashboard-text-strong)]">
                   Generating quiz draft
                 </h2>
-                <p className="mt-2 text-[15px] leading-7 text-[var(--dashboard-text-soft)]">
-                  Bilgenly is parsing, generating, and assembling the draft. This stage
-                  replaces configuration until the draft is ready.
+                <p className="mt-1 text-[15px] text-[var(--dashboard-text-soft)]">
+                  AI is reading your source and building questions
                 </p>
               </div>
-              <DashboardBadge tone="brand" size="md">
-                {elapsedSeconds}s elapsed
-              </DashboardBadge>
+
+              {/* Elapsed timer pill */}
+              <div style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                padding: "6px 16px",
+                borderRadius: 999,
+                background: "rgba(109,92,231,0.15)",
+                border: "1px solid rgba(109,92,231,0.3)",
+              }}>
+                <span style={{
+                  width: 7,
+                  height: 7,
+                  borderRadius: "50%",
+                  background: "#a78bfa",
+                  animation: "qb-blink 1.2s ease-in-out infinite",
+                  display: "inline-block",
+                }} />
+                <span className="text-sm font-semibold" style={{ color: "#a78bfa" }}>
+                  {elapsedLabel} elapsed
+                </span>
+              </div>
             </div>
 
-            <div className="space-y-4 rounded-[24px] border border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-elevated)] px-5 py-5 shadow-[var(--dashboard-shadow-card)]">
-              <div className="h-3 overflow-hidden rounded-full bg-[var(--dashboard-surface-muted)]">
-                <div
-                  className="h-full rounded-full bg-[var(--dashboard-brand)] transition-all"
-                  style={{
-                    width: `${Math.min(96, 24 + elapsedSeconds * 18)}%`,
-                  }}
-                />
-              </div>
-
-              <div className="grid gap-3 md:grid-cols-3">
-                {[
-                  { label: "Parsing source", ready: elapsedSeconds >= 1 },
-                  { label: "Generating questions", ready: elapsedSeconds >= 2 },
-                  { label: "Assembling draft", ready: elapsedSeconds >= 3 },
-                ].map((step) => (
-                  <div
-                    key={step.label}
-                    className={cn(
-                      "rounded-[18px] border px-4 py-4",
-                      step.ready
-                        ? "border-[var(--dashboard-brand)] bg-[var(--dashboard-brand-soft-alt)]"
-                        : "border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-muted)]",
-                    )}
-                  >
-                    <div className="flex items-center gap-2">
-                      {step.ready ? (
-                        <CheckCircle2 className="h-4.5 w-4.5 text-[var(--dashboard-brand)]" />
-                      ) : (
-                        <LoaderCircle className="h-4.5 w-4.5 animate-spin text-[var(--dashboard-text-faint)]" />
-                      )}
-                      <span className="text-sm font-semibold text-[var(--dashboard-text-strong)]">
-                        {step.label}
-                      </span>
-                    </div>
+            {/* Progress card */}
+            <div className="rounded-[24px] border border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-elevated)] px-6 py-6 shadow-[var(--dashboard-shadow-card)] space-y-6">
+              {/* Progress bar */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-xs text-[var(--dashboard-text-faint)]">
+                  <span>Progress</span>
+                  <span>{Math.round(progressPct)}%</span>
+                </div>
+                <div style={{
+                  height: 8,
+                  borderRadius: 999,
+                  background: "var(--dashboard-surface-muted)",
+                  overflow: "hidden",
+                  position: "relative",
+                }}>
+                  <div style={{
+                    height: "100%",
+                    borderRadius: 999,
+                    width: `${progressPct}%`,
+                    background: "linear-gradient(90deg, #6d5ce7 0%, #a78bfa 60%, #c4b5fd 100%)",
+                    transition: "width 1s linear",
+                    position: "relative",
+                    overflow: "hidden",
+                  }}>
+                    {/* shimmer */}
+                    <span style={{
+                      position: "absolute",
+                      inset: 0,
+                      background: "linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.25) 50%, transparent 100%)",
+                      animation: "qb-shimmer 1.8s ease-in-out infinite",
+                    }} />
                   </div>
-                ))}
+                </div>
               </div>
 
-              <div className="flex flex-wrap items-center justify-between gap-3">
+              {/* Steps */}
+              <div className="grid gap-3 md:grid-cols-3">
+                {steps.map((step, index) => {
+                  const state = getStepState(index, elapsedSeconds);
+                  return (
+                    <div
+                      key={step.label}
+                      className={cn(
+                        "rounded-[18px] border px-4 py-4 transition-all duration-500",
+                        state === "done"
+                          ? "border-[var(--dashboard-brand)] bg-[var(--dashboard-brand-soft-alt)]"
+                          : state === "active"
+                            ? "border-[var(--dashboard-brand)]/50 bg-[var(--dashboard-brand-soft-alt)]/40"
+                            : "border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-muted)] opacity-50",
+                      )}
+                    >
+                      <div className="flex items-center gap-2">
+                        {state === "done" ? (
+                          <CheckCircle2 className="h-4.5 w-4.5 shrink-0 text-[var(--dashboard-brand)]" />
+                        ) : state === "active" ? (
+                          <span style={{
+                            display: "inline-block",
+                            width: 16,
+                            height: 16,
+                            borderRadius: "50%",
+                            border: "2px solid #a78bfa",
+                            borderTopColor: "transparent",
+                            animation: "spin 0.8s linear infinite",
+                            flexShrink: 0,
+                          }} />
+                        ) : (
+                          <span style={{
+                            display: "inline-block",
+                            width: 16,
+                            height: 16,
+                            borderRadius: "50%",
+                            border: "2px solid var(--dashboard-border)",
+                            flexShrink: 0,
+                          }} />
+                        )}
+                        <div className="min-w-0">
+                          <p className={cn(
+                            "text-sm font-semibold truncate",
+                            state === "waiting"
+                              ? "text-[var(--dashboard-text-faint)]"
+                              : "text-[var(--dashboard-text-strong)]",
+                          )}>
+                            {step.label}
+                          </p>
+                          <p className="text-xs text-[var(--dashboard-text-faint)] truncate mt-0.5">
+                            {step.sublabel}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--dashboard-border-soft)] pt-4">
                 <p className="text-sm leading-6 text-[var(--dashboard-text-soft)]">
-                  The AI is assistive here. You will still review wording, correctness,
-                  and student readability before the quiz is used.
+                  Large PDFs can take 3–5 minutes. Your source is being processed securely.
                 </p>
                 <DashboardButton
                   type="button"
                   variant="ghost"
-                  size="lg"
+                  size="sm"
                   onClick={handleCancelGeneration}
                 >
                   Cancel
                 </DashboardButton>
               </div>
             </div>
-          </>
+
+            <style>{`
+              @keyframes qb-pulse-outer {
+                0%, 100% { transform: scale(1); opacity: 0.5; }
+                50% { transform: scale(1.4); opacity: 0; }
+              }
+              @keyframes qb-pulse-inner {
+                0%, 100% { transform: scale(1); opacity: 0.6; }
+                50% { transform: scale(1.25); opacity: 0.15; }
+              }
+              @keyframes qb-logo-breathe {
+                0%, 100% { transform: scale(1); }
+                50% { transform: scale(1.07); }
+              }
+              @keyframes qb-blink {
+                0%, 100% { opacity: 1; }
+                50% { opacity: 0.3; }
+              }
+              @keyframes qb-shimmer {
+                0% { transform: translateX(-100%); }
+                100% { transform: translateX(200%); }
+              }
+              @keyframes spin {
+                to { transform: rotate(360deg); }
+              }
+            `}</style>
+          </div>
         ) : null}
 
         {generationState === "cancelled" ? (
