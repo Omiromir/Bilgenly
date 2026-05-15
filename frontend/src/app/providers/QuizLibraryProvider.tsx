@@ -253,6 +253,8 @@ function mergeRemoteQuizWithLocalMetadata(
 
   return {
     ...remoteQuiz,
+    title: localQuiz.title || remoteQuiz.title,
+    description: localQuiz.description ?? remoteQuiz.description,
     ownerName: localQuiz.ownerName || remoteQuiz.ownerName,
     sourceQuizId: localQuiz.sourceQuizId,
     savedByRoles: localQuiz.savedByRoles,

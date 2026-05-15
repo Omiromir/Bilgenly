@@ -24,7 +24,6 @@ import {
   RefreshCw,
   Save,
   Trash2,
-  Wand2,
   XCircle,
 } from "../../components/icons/AppIcons";
 import { AnimatePresence, motion } from "motion/react";
@@ -1539,10 +1538,6 @@ export function QuizBuilderWorkspace({
                                             label: "Duplicate",
                                             action: "duplicate" as const,
                                           },
-                                          {
-                                            label: "Regenerate",
-                                            action: "regenerate" as const,
-                                          },
                                           { label: "Delete", action: "delete" as const },
                                         ].map((item) => (
                                           <button
@@ -1696,10 +1691,6 @@ export function QuizBuilderWorkspace({
                                 <div className="absolute right-0 top-10 z-20 w-44 rounded-[16px] border border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-elevated)] p-2 shadow-[var(--dashboard-shadow-card)]">
                                   {[
                                     {
-                                      label: "Regenerate",
-                                      action: "regenerate" as const,
-                                    },
-                                    {
                                       label: "Duplicate",
                                       action: "duplicate" as const,
                                     },
@@ -1733,19 +1724,7 @@ export function QuizBuilderWorkspace({
                               </p>
                             </div>
 
-                            <div className="flex flex-wrap gap-2">
-                              <DashboardButton
-                                type="button"
-                                variant="secondary"
-                                size="sm"
-                                onClick={() =>
-                                  handleRegenerateQuestion(selectedQuestion.id)
-                                }
-                              >
-                                <Wand2 className="h-4 w-4" />
-                                Regenerate
-                              </DashboardButton>
-                            </div>
+                            <div className="flex flex-wrap gap-2" />
                           </div>
 
                           <div className="mt-6 grid gap-5 xl:grid-cols-[minmax(0,1fr)_260px] xl:pl-6">
