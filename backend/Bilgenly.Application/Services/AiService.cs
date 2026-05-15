@@ -23,10 +23,9 @@ public class AiService : IAiService
         string additionalInstructions)
     {
         using var form = new MultipartFormDataContent();
-        form.Add(new StringContent(text),                    "text");
-        form.Add(new StringContent(questionCount.ToString()), "num_questions");
+        form.Add(new StringContent(text), "text");
 
-        var response = await _httpClient.PostAsync("/generate/text", form);
+        var response = await _httpClient.PostAsync($"/generate/text?num_questions={questionCount}", form);
         response.EnsureSuccessStatusCode();
 
         var mlResponse = await response.Content.ReadFromJsonAsync<MlResponse>()
@@ -49,9 +48,8 @@ public class AiService : IAiService
         fileContent.Headers.ContentType =
             new System.Net.Http.Headers.MediaTypeHeaderValue("application/pdf");
         form.Add(fileContent, "file", "upload.pdf");
-        form.Add(new StringContent(questionCount.ToString()), "num_questions");
 
-        var response = await _httpClient.PostAsync("/generate/pdf", form);
+        var response = await _httpClient.PostAsync($"/generate/pdf?num_questions={questionCount}", form);
         response.EnsureSuccessStatusCode();
 
         var mlResponse = await response.Content.ReadFromJsonAsync<MlResponse>()

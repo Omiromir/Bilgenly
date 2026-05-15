@@ -1274,21 +1274,15 @@ export function QuizBuilderWorkspace({
               canGenerate={canGenerate}
               contextValue={contextValue}
               copy={copy}
-              focus={focus}
               handleGenerateQuiz={handleGenerateQuiz}
               handleReplaceSource={handleReplaceSource}
-              instructions={instructions}
               mode={mode}
               parsedSource={parsedSource}
               questionCount={questionCount}
-              questionTypes={questionTypes}
               quizTitle={quizTitle}
               setContextValue={setContextValue}
-              setFocus={setFocus}
-              setInstructions={setInstructions}
               setQuestionCount={setQuestionCount}
               setQuizTitle={setQuizTitle}
-              toggleQuestionType={toggleQuestionType}
             />
           ) : null}
 
