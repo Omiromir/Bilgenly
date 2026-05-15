@@ -1317,49 +1317,36 @@ export function QuizBuilderWorkspace({
                         >
                           <ChevronRight className="h-4.5 w-4.5 rotate-180" />
                         </DashboardButton>
-                        <div className="min-w-0 flex-1 space-y-3">
-                          <div className="space-y-1">
-                            <label className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--dashboard-text-faint)]">
-                              Quiz title *
-                            </label>
-                            <input
-                              type="text"
-                              value={quizTitle}
-                              onChange={(event) => setQuizTitle(event.target.value)}
-                              placeholder="Enter quiz title..."
-                              aria-label="Quiz title"
-                              className={cn(
-                                dashboardInputVariants({ size: "lg" }),
-                                "h-11 w-full text-[1.2rem] font-semibold text-[var(--dashboard-text-strong)]",
-                                !quizTitle.trim()
-                                  ? "border-[var(--dashboard-danger)]/60 focus-visible:ring-[var(--dashboard-danger)]/30"
-                                  : "",
-                              )}
-                            />
-                            {!quizTitle.trim() ? (
-                              <p className="text-xs text-[var(--dashboard-danger)]">
-                                Title is required to save.
-                              </p>
-                            ) : null}
-                          </div>
-                          <div className="space-y-1">
-                            <label className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--dashboard-text-faint)]">
-                              Description
-                            </label>
-                            <textarea
-                              value={quizDescription}
-                              onChange={(event) =>
-                                setQuizDescription(event.target.value)
-                              }
-                              placeholder="Add a short description (optional)"
-                              aria-label="Quiz description"
-                              rows={2}
-                              className={cn(
-                                dashboardTextareaVariants({ size: "sm" }),
-                                "min-h-[56px] w-full text-sm text-[var(--dashboard-text-soft)]",
-                              )}
-                            />
-                          </div>
+                        <div className="min-w-0 flex-1 space-y-2">
+                          <input
+                            type="text"
+                            value={quizTitle}
+                            onChange={(event) => setQuizTitle(event.target.value)}
+                            placeholder="Quiz title"
+                            aria-label="Quiz title"
+                            className={cn(
+                              dashboardInputVariants({ size: "lg" }),
+                              "h-11 w-full border border-[var(--dashboard-border-soft)] bg-transparent px-3 text-[1.35rem] font-semibold text-[var(--dashboard-text-strong)] shadow-none",
+                            )}
+                          />
+                          {!quizTitle.trim() ? (
+                            <p className="text-xs text-[var(--dashboard-danger)]">
+                              Quiz title is required.
+                            </p>
+                          ) : null}
+                          <textarea
+                            value={quizDescription}
+                            onChange={(event) =>
+                              setQuizDescription(event.target.value)
+                            }
+                            placeholder="Add a short description for this quiz (optional)."
+                            aria-label="Quiz description"
+                            rows={2}
+                            className={cn(
+                              dashboardTextareaVariants({ size: "sm" }),
+                              "min-h-[44px] w-full border border-[var(--dashboard-border-soft)] bg-transparent px-3 text-sm text-[var(--dashboard-text-soft)] shadow-none",
+                            )}
+                          />
                         </div>
                       </div>
 
