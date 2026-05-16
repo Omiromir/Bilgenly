@@ -103,6 +103,12 @@ namespace Bilgenly.Infrastructure.Migrations
                     b.Property<DateTime>("DateTaken")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<int?>("DurationSeconds")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("FinishedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<bool>("IsCompleted")
                         .HasColumnType("boolean");
 
@@ -383,9 +389,18 @@ namespace Bilgenly.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<int>("EstimatedMinutes")
+                        .HasColumnType("integer");
+
                     b.Property<string>("Explanation")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<string>("ImageUrl")
+                        .HasColumnType("text");
+
+                    b.Property<int>("Points")
+                        .HasColumnType("integer");
 
                     b.Property<int>("Position")
                         .HasColumnType("integer");
@@ -428,6 +443,12 @@ namespace Bilgenly.Infrastructure.Migrations
                     b.Property<int>("DurationMinutes")
                         .HasColumnType("integer");
 
+                    b.Property<DateTime?>("HiddenAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("HiddenByUserId")
+                        .HasColumnType("uuid");
+
                     b.Property<bool>("IsHidden")
                         .HasColumnType("boolean");
 
@@ -465,6 +486,10 @@ namespace Bilgenly.Infrastructure.Migrations
                         .HasColumnType("uuid");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("HiddenByUserId");
+
+                    b.HasIndex("IsHidden");
 
                     b.HasIndex("UserId");
 
@@ -537,6 +562,9 @@ namespace Bilgenly.Infrastructure.Migrations
                     b.Property<string>("Bio")
                         .HasColumnType("text");
 
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("Email")
                         .IsRequired()
                         .HasColumnType("text");
@@ -550,6 +578,12 @@ namespace Bilgenly.Infrastructure.Migrations
 
                     b.Property<int>("Role")
                         .HasColumnType("integer");
+
+                    b.Property<DateTime?>("SuspendedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("SuspendedByUserId")
+                        .HasColumnType("uuid");
 
                     b.Property<DateTime?>("SuspendedUntil")
                         .HasColumnType("timestamp with time zone");
@@ -565,6 +599,12 @@ namespace Bilgenly.Infrastructure.Migrations
 
                     b.HasIndex("Email")
                         .IsUnique();
+
+                    b.HasIndex("IsSuspended");
+
+                    b.HasIndex("Role");
+
+                    b.HasIndex("SuspendedByUserId");
 
                     b.ToTable("Users");
                 });
@@ -782,11 +822,18 @@ namespace Bilgenly.Infrastructure.Migrations
 
             modelBuilder.Entity("Bilgenly.Domain.Entities.Quiz", b =>
                 {
+                    b.HasOne("Bilgenly.Domain.Entities.User", "HiddenBy")
+                        .WithMany()
+                        .HasForeignKey("HiddenByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("Bilgenly.Domain.Entities.User", "User")
                         .WithMany("Quizzes")
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("HiddenBy");
 
                     b.Navigation("User");
                 });
@@ -821,6 +868,16 @@ namespace Bilgenly.Infrastructure.Migrations
                     b.Navigation("Reporter");
 
                     b.Navigation("Reviewer");
+                });
+
+            modelBuilder.Entity("Bilgenly.Domain.Entities.User", b =>
+                {
+                    b.HasOne("Bilgenly.Domain.Entities.User", "SuspendedBy")
+                        .WithMany()
+                        .HasForeignKey("SuspendedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("SuspendedBy");
                 });
 
             modelBuilder.Entity("Bilgenly.Domain.Entities.UserBadge", b =>

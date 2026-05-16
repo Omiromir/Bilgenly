@@ -14,6 +14,9 @@ public class Quiz
     public int DurationMinutes { get; set; } = 0;
     public bool IsHidden { get; set; }
     public string? ModerationNote { get; set; }
+    public DateTime? HiddenAt { get; set; }
+    public Guid? HiddenByUserId { get; set; }
+    public User? HiddenBy { get; set; }
     public Guid UserId { get; set; }
     public User User { get; set; } = null!;
     public DateTime CreatedAt { get; set; }

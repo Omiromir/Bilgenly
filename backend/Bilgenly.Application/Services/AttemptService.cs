@@ -84,6 +84,8 @@ public class AttemptService
         var quiz = await _quizRepository.GetByIdAsync(quizId);
         if (quiz is null)
             return (null, "Quiz not found");
+        if (quiz.IsHidden)
+            return (null, "This quiz is not available.");
 
         // If this quiz is assigned to one of the student's classes with a
         // max-attempts cap, enforce it server-side. The frontend already gates

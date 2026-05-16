@@ -146,6 +146,28 @@ public class AppDbContext : DbContext
             e.HasIndex(n => n.RecipientUserId);
             e.HasIndex(n => n.RecipientEmail);
         });
+
+        // Moderation audit trail
+        modelBuilder.Entity<Quiz>(e =>
+        {
+            e.HasOne(q => q.HiddenBy)
+                .WithMany()
+                .HasForeignKey(q => q.HiddenByUserId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.SetNull);
+            e.HasIndex(q => q.IsHidden);
+        });
+
+        modelBuilder.Entity<User>(e =>
+        {
+            e.HasOne(u => u.SuspendedBy)
+                .WithMany()
+                .HasForeignKey(u => u.SuspendedByUserId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.SetNull);
+            e.HasIndex(u => u.IsSuspended);
+            e.HasIndex(u => u.Role);
+        });
     }
     
 }

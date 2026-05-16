@@ -60,6 +60,34 @@ export interface HideQuizRequest {
   moderationNote?: string | null;
 }
 
+export interface ModerationQuizDto {
+  id: string;
+  title: string;
+  description: string;
+  creatorId: string;
+  creatorName: string;
+  creatorEmail: string;
+  isPublic: boolean;
+  isHidden: boolean;
+  moderationNote: string | null;
+  hiddenAt: string | null;
+  status: string;
+  questionsCount: number;
+  createdAt: string;
+}
+
+export interface ModerationUserDto {
+  id: string;
+  username: string;
+  email: string;
+  role: string;
+  isSuspended: boolean;
+  suspendedAt: string | null;
+  suspendedUntil: string | null;
+  suspensionReason: string | null;
+  createdAt: string;
+}
+
 export function getModeratorDashboard() {
   return apiRequest<ModeratorDashboardDto>("/api/moderation/dashboard", {
     fallbackErrorMessage: "Unable to load moderator dashboard.",
@@ -127,5 +155,17 @@ export function unhideQuiz(quizId: string) {
   return apiRequest<void>(`/api/moderation/quizzes/${quizId}/unhide`, {
     method: "PUT",
     fallbackErrorMessage: "Unable to unhide quiz.",
+  });
+}
+
+export function getAllQuizzesForModeration() {
+  return apiRequest<ModerationQuizDto[]>("/api/moderation/quizzes", {
+    fallbackErrorMessage: "Unable to load quizzes.",
+  });
+}
+
+export function getAllUsersForModeration() {
+  return apiRequest<ModerationUserDto[]>("/api/moderation/users", {
+    fallbackErrorMessage: "Unable to load users.",
   });
 }

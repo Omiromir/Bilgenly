@@ -108,4 +108,20 @@ public class ModerationController : ControllerBase
         if (error is not null) return BadRequest(new { message = error });
         return Ok();
     }
+
+    [HttpGet("quizzes")]
+    [Authorize(Roles = "Moderator")]
+    public async Task<IActionResult> GetAllQuizzes()
+    {
+        var results = await _moderationService.GetAllQuizzesAsync();
+        return Ok(results);
+    }
+
+    [HttpGet("users")]
+    [Authorize(Roles = "Moderator")]
+    public async Task<IActionResult> GetAllUsers()
+    {
+        var results = await _moderationService.GetAllUsersAsync();
+        return Ok(results);
+    }
 }

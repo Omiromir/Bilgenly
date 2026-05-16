@@ -9,4 +9,5 @@ public interface IUserRepository
     Task SaveChangesAsync();
     Task<User?> GetByIdAsync(Guid id);
     Task<IEnumerable<User>> GetSuspendedUsersAsync();
+    Task<IEnumerable<User>> GetAllAsync();
 }

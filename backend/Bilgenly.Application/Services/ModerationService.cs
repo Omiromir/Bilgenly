@@ -96,6 +96,8 @@ public class ModerationService
         user.IsSuspended = true;
         user.SuspensionReason = dto.Reason;
         user.SuspendedUntil = dto.SuspendedUntil?.ToUniversalTime();
+        user.SuspendedAt = DateTime.UtcNow;
+        user.SuspendedByUserId = moderatorId;
         await _userRepository.SaveChangesAsync();
 
         return (new SuspendedUserDto
@@ -141,6 +143,8 @@ public class ModerationService
 
         quiz.IsHidden = true;
         quiz.ModerationNote = dto.ModerationNote;
+        quiz.HiddenAt = DateTime.UtcNow;
+        quiz.HiddenByUserId = moderatorId;
         await _quizRepository.SaveChangesAsync();
 
         return (new HiddenQuizDto
@@ -174,6 +178,44 @@ public class ModerationService
             AuthorName = q.User?.Username ?? "Unknown",
             ModerationNote = q.ModerationNote,
             CreatedAt = q.CreatedAt,
+        });
+    }
+
+    public async Task<IEnumerable<ModerationQuizDto>> GetAllQuizzesAsync()
+    {
+        var quizzes = await _quizRepository.GetAllForModerationAsync();
+        return quizzes.Select(q => new ModerationQuizDto
+        {
+            Id = q.Id,
+            Title = q.Title,
+            Description = q.Description,
+            CreatorId = q.UserId,
+            CreatorName = q.User?.Username ?? "Unknown",
+            CreatorEmail = q.User?.Email ?? "",
+            IsPublic = q.IsPublic,
+            IsHidden = q.IsHidden,
+            ModerationNote = q.ModerationNote,
+            HiddenAt = q.HiddenAt,
+            Status = q.Status,
+            QuestionsCount = q.Questions.Count,
+            CreatedAt = q.CreatedAt,
+        });
+    }
+
+    public async Task<IEnumerable<ModerationUserDto>> GetAllUsersAsync()
+    {
+        var users = await _userRepository.GetAllAsync();
+        return users.Select(u => new ModerationUserDto
+        {
+            Id = u.Id,
+            Username = u.Username,
+            Email = u.Email,
+            Role = u.Role.ToString(),
+            IsSuspended = u.IsSuspended,
+            SuspendedAt = u.SuspendedAt,
+            SuspendedUntil = u.SuspendedUntil,
+            SuspensionReason = u.SuspensionReason,
+            CreatedAt = u.CreatedAt,
         });
     }
 

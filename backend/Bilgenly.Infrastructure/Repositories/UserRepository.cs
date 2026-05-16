@@ -24,4 +24,10 @@ public class UserRepository : IUserRepository
         => await _context.Users.FirstOrDefaultAsync(u => u.Id == id);
     public async Task<IEnumerable<User>> GetSuspendedUsersAsync()
         => await _context.Users.Where(u => u.IsSuspended).ToListAsync();
+
+    public async Task<IEnumerable<User>> GetAllAsync()
+        => await _context.Users
+            .OrderBy(u => u.Role)
+            .ThenBy(u => u.Username)
+            .ToListAsync();
 }

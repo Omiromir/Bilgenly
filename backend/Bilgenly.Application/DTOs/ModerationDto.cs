@@ -67,3 +67,33 @@ public class HiddenQuizDto
     public string? ModerationNote { get; set; }
     public DateTime CreatedAt { get; set; }
 }
+
+public class ModerationQuizDto
+{
+    public Guid Id { get; set; }
+    public string Title { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public Guid CreatorId { get; set; }
+    public string CreatorName { get; set; } = string.Empty;
+    public string CreatorEmail { get; set; } = string.Empty;
+    public bool IsPublic { get; set; }
+    public bool IsHidden { get; set; }
+    public string? ModerationNote { get; set; }
+    public DateTime? HiddenAt { get; set; }
+    public string Status { get; set; } = string.Empty;
+    public int QuestionsCount { get; set; }
+    public DateTime CreatedAt { get; set; }
+}
+
+public class ModerationUserDto
+{
+    public Guid Id { get; set; }
+    public string Username { get; set; } = string.Empty;
+    public string Email { get; set; } = string.Empty;
+    public string Role { get; set; } = string.Empty;
+    public bool IsSuspended { get; set; }
+    public DateTime? SuspendedAt { get; set; }
+    public DateTime? SuspendedUntil { get; set; }
+    public string? SuspensionReason { get; set; }
+    public DateTime CreatedAt { get; set; }
+}

@@ -65,6 +65,8 @@ public class AuthService
             return (null, "No account found with this email");
         if (!BCrypt.Net.BCrypt.Verify(dto.Password, user.PasswordHash))
             return (null, "Incorrect password");
+        if (user.IsSuspended)
+            return (null, "Your account has been suspended. Please contact support.");
 
         return (new AuthResponseDto
         {

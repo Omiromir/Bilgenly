@@ -30,7 +30,7 @@ public class QuizRepository : IQuizRepository
 
     public async Task<IEnumerable<Quiz>> GetAllPublicAsync()
         => await _context.Quizzes
-            .Where(q => q.IsPublic)
+            .Where(q => q.IsPublic && !q.IsHidden)
             .Include(q => q.Questions)
             .ThenInclude(q => q.Answers)
             .Include(q => q.User)
@@ -54,6 +54,13 @@ public class QuizRepository : IQuizRepository
         => await _context.Quizzes
             .Where(q => q.IsHidden)
             .Include(q => q.User)
+            .OrderByDescending(q => q.CreatedAt)
+            .ToListAsync();
+
+    public async Task<IEnumerable<Quiz>> GetAllForModerationAsync()
+        => await _context.Quizzes
+            .Include(q => q.User)
+            .Include(q => q.Questions)
             .OrderByDescending(q => q.CreatedAt)
             .ToListAsync();
 
