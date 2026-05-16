@@ -7,6 +7,8 @@ public class MyAttemptDto
     public string QuizTitle { get; set; } = string.Empty;
     public int Score { get; set; }
     public DateTime DateTaken { get; set; }
+    public DateTime? FinishedAt { get; set; }
+    public int? DurationSeconds { get; set; }
     public bool IsCompleted { get; set; }
     public int TotalQuestions { get; set; }
     public int CorrectAnswers { get; set; }

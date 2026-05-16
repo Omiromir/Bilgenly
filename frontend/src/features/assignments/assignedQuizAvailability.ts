@@ -251,12 +251,16 @@ export function buildAssignedQuizAvailability({
     Boolean(latestCompletedAttempt?.questions?.length);
 
   let status: AssignedQuizAvailabilityStatus;
-  if (hasInProgressAttempt && !deadlinePassed) {
-    status = "in_progress";
-  } else if (exhaustedAttempts) {
+  // Priority: exhausted/completed beats lingering in-progress flags. A stale
+  // backend in-progress attempt should never make a finished quiz read as
+  // "In Progress" — the student has used all their attempts (or has completed
+  // it) and that is the truth we surface in the UI.
+  if (exhaustedAttempts) {
     status = "attempts_exhausted";
   } else if (deadlinePassed && !hasCompletedAttempt) {
     status = "expired";
+  } else if (hasInProgressAttempt && !deadlinePassed) {
+    status = "in_progress";
   } else if (hasCompletedAttempt) {
     status = "completed";
   } else {

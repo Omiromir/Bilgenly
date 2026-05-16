@@ -6,8 +6,9 @@ import {
   User,
 } from "../../../components/icons/AppIcons";
 import type { ChangeEvent, ReactNode } from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
+import { useAuth } from "../../../app/providers/AuthProvider";
 import { Input } from "../../../components/ui/input";
 import { Textarea } from "../../../components/ui/textarea";
 import { cn } from "../../../components/ui/utils";
@@ -23,7 +24,6 @@ import type {
   EmailNotificationPreferenceKey,
   PushNotificationPreferenceKey,
   ThemeMode,
-  UserSettingsProfile,
 } from "../settings/userSettings";
 import {
   DashboardButton,
@@ -42,18 +42,6 @@ interface DashboardSettingsPageProps {
   title: string;
   subtitle: string;
   metadata: SettingsScreenMetadata;
-}
-
-interface AccountFormValues {
-  fullName: string;
-  email: string;
-  bio: string;
-  country: string;
-}
-
-interface AccountFormErrors {
-  fullName?: string;
-  email?: string;
 }
 
 interface PasswordFormValues {
@@ -85,33 +73,17 @@ const emptyPasswordForm: PasswordFormValues = {
   confirmPassword: "",
 };
 
-function buildAccountFormValues(profile: UserSettingsProfile): AccountFormValues {
-  return {
-    fullName: profile.fullName,
-    email: profile.email,
-    bio: profile.bio,
-    country: profile.country,
-  };
-}
-
-function validateEmail(value: string) {
-  const normalizedValue = value.trim();
-
-  if (!normalizedValue) {
-    return "Email is required.";
+function buildRoleLabel(role: string | null | undefined) {
+  switch (role) {
+    case "teacher":
+      return "Teacher";
+    case "student":
+      return "Student";
+    case "moderator":
+      return "Moderator";
+    default:
+      return "User";
   }
-
-  const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  return emailPattern.test(normalizedValue)
-    ? undefined
-    : "Enter a valid email address.";
-}
-
-function validateAccountForm(values: AccountFormValues): AccountFormErrors {
-  return {
-    fullName: values.fullName.trim() ? undefined : "Full name is required.",
-    email: validateEmail(values.email),
-  };
 }
 
 function validatePasswordForm(values: PasswordFormValues): PasswordFormErrors {
@@ -145,31 +117,15 @@ export function DashboardSettingsPage({
   subtitle,
   metadata,
 }: DashboardSettingsPageProps) {
+  const { role } = useAuth();
   const {
     settings,
-    isHydrated,
-    saveProfileSettings,
     updateThemeMode,
     updateNotificationPreference,
     updatePreferenceField,
     updatePassword,
   } = useSettings();
   const [activeTab, setActiveTab] = useState<SettingsTab>("account");
-  const persistedAccountValues = useMemo(
-    () => buildAccountFormValues(settings.profile),
-    [settings.profile],
-  );
-  const [accountValues, setAccountValues] = useState<AccountFormValues>(
-    persistedAccountValues,
-  );
-  const [accountTouched, setAccountTouched] = useState<
-    Record<keyof AccountFormValues, boolean>
-  >({
-    fullName: false,
-    email: false,
-    bio: false,
-    country: false,
-  });
   const [passwordValues, setPasswordValues] =
     useState<PasswordFormValues>(emptyPasswordForm);
   const [passwordTouched, setPasswordTouched] = useState<
@@ -179,98 +135,17 @@ export function DashboardSettingsPage({
     newPassword: false,
     confirmPassword: false,
   });
-  const [isSavingAccount, setIsSavingAccount] = useState(false);
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
-
-  useEffect(() => {
-    setAccountValues(persistedAccountValues);
-    setAccountTouched({
-      fullName: false,
-      email: false,
-      bio: false,
-      country: false,
-    });
-  }, [persistedAccountValues]);
-
-  const accountErrors = useMemo(
-    () => validateAccountForm(accountValues),
-    [accountValues],
-  );
   const passwordErrors = useMemo(
     () => validatePasswordForm(passwordValues),
     [passwordValues],
   );
-  const accountDirty =
-    JSON.stringify(accountValues) !== JSON.stringify(persistedAccountValues);
-  const canSaveAccount =
-    isHydrated && accountDirty && !hasErrors(accountErrors) && !isSavingAccount;
   const canUpdatePassword =
     !isUpdatingPassword &&
     !hasErrors(passwordErrors) &&
     passwordValues.currentPassword.trim() !== "" &&
     passwordValues.newPassword.trim() !== "" &&
     passwordValues.confirmPassword.trim() !== "";
-
-  const handleAccountFieldChange =
-    (field: keyof AccountFormValues) =>
-    (
-      event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>,
-    ) => {
-      const nextValue = event.target.value;
-
-      setAccountValues((current) => ({
-        ...current,
-        [field]: nextValue,
-      }));
-    };
-
-  const handleAccountFieldBlur = (field: keyof AccountFormValues) => () => {
-    setAccountTouched((current) => ({
-      ...current,
-      [field]: true,
-    }));
-  };
-
-  const handleAccountSave = async () => {
-    const nextTouched = {
-      fullName: true,
-      email: true,
-      bio: true,
-      country: true,
-    };
-    setAccountTouched(nextTouched);
-
-    if (hasErrors(accountErrors)) {
-      toast.error("Please fix the highlighted account fields.");
-      return;
-    }
-
-    if (!accountDirty) {
-      return;
-    }
-
-    setIsSavingAccount(true);
-
-    try {
-      saveProfileSettings({
-        ...settings.profile,
-        ...accountValues,
-      });
-      toast.success("Settings saved.");
-    } finally {
-      setIsSavingAccount(false);
-    }
-  };
-
-  const handleAccountCancel = () => {
-    setAccountValues(persistedAccountValues);
-    setAccountTouched({
-      fullName: false,
-      email: false,
-      bio: false,
-      country: false,
-    });
-  };
 
   const handlePasswordFieldChange =
     (field: keyof PasswordFormValues) =>
@@ -353,51 +228,22 @@ export function DashboardSettingsPage({
         <div className="space-y-6">
           {activeTab === "account" ? (
             <>
-              <SettingsPanel title="Account Information">
+              <SettingsPanel title="Personal Information">
                 <div className="space-y-4">
                   <p className="text-sm text-[var(--dashboard-text-soft)]">
-                    Edit your name, bio, and avatar from My Profile.
+                    Edit your name, bio, avatar, and country from My Profile. This settings section is read-only so personal details live in one place.
                   </p>
-                </div>
-              </SettingsPanel>
-
-              <SettingsPanel title="Location">
-                <div className="space-y-5">
                   <div className="grid gap-5 lg:grid-cols-2">
-                    {metadata.account.location.map((field) => (
-                      <SelectLikeField
-                        key={field.id}
-                        field={field}
-                        value={accountValues[field.id as keyof AccountFormValues] ?? ""}
-                        onBlur={handleAccountFieldBlur(
-                          field.id as keyof AccountFormValues,
-                        )}
-                        onChange={handleAccountFieldChange(
-                          field.id as keyof AccountFormValues,
-                        )}
-                      />
-                    ))}
+                    <ReadOnlyField label="Full Name" value={settings.profile.fullName} />
+                    <ReadOnlyField label="Email" value={settings.profile.email} />
+                    <ReadOnlyField label="Country" value={settings.profile.country} />
+                    <ReadOnlyField label="Role" value={buildRoleLabel(role)} />
                   </div>
-
-                  <div className="flex flex-wrap gap-3 pt-1">
-                    <DashboardButton
-                      type="button"
-                      size="lg"
-                      onClick={handleAccountSave}
-                      disabled={!canSaveAccount}
-                    >
-                      Save Changes
-                    </DashboardButton>
-                    <DashboardButton
-                      type="button"
-                      variant="secondary"
-                      size="lg"
-                      onClick={handleAccountCancel}
-                      disabled={!accountDirty}
-                    >
-                      Cancel
-                    </DashboardButton>
-                  </div>
+                  <ReadOnlyField
+                    label="Bio"
+                    value={settings.profile.bio || "No bio added yet."}
+                    multiline
+                  />
                 </div>
               </SettingsPanel>
             </>
@@ -574,6 +420,34 @@ function SettingsPanel({
   );
 }
 
+function ReadOnlyField({
+  label,
+  value,
+  multiline = false,
+}: {
+  label: string;
+  value: string;
+  multiline?: boolean;
+}) {
+  return (
+    <div className="space-y-2">
+      <p className="text-sm font-medium text-[var(--dashboard-text-strong)]">
+        {label}
+      </p>
+      <div
+        className={cn(
+          "w-full rounded-[18px] border border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-elevated)] text-[var(--dashboard-text-strong)] shadow-none",
+          multiline
+            ? "min-h-[106px] whitespace-pre-wrap px-4 py-4 text-[15px] leading-7"
+            : "flex min-h-[56px] items-center px-4 py-3 text-base",
+        )}
+      >
+        {value || "Not provided"}
+      </div>
+    </div>
+  );
+}
+
 function FieldRenderer({
   field,
   value,
@@ -614,9 +488,16 @@ function FieldRenderer({
           onChange={onChange}
           onBlur={onBlur}
           aria-invalid={Boolean(error)}
+          // Email cannot be changed once an account is created — the backend
+          // does not support an email-change verification flow, so we render
+          // it as a non-editable display in the settings page.
+          disabled={field.id === "email"}
+          readOnly={field.id === "email"}
           className={cn(
             dashboardInputVariants({ size: "lg" }),
             "border-0 shadow-none focus-visible:ring-0",
+            field.id === "email" &&
+              "cursor-not-allowed opacity-70",
           )}
         />
       )}

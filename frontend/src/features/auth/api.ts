@@ -102,6 +102,7 @@ export async function getMe() {
     onboardingCompleted: boolean;
     bio?: string | null;
     avatarUrl?: string | null;
+    createdAt?: string | null;
   }>("/api/auth/me", {
     fallbackErrorMessage: "Unauthorized",
   });

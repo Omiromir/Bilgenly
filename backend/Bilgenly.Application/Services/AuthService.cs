@@ -40,7 +40,8 @@ public class AuthService
             Username = dto.Username,
             Email = dto.Email,
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password),
-            Role = role
+            Role = role,
+            CreatedAt = DateTime.UtcNow,
         };
 
         await _userRepository.AddAsync(user);
@@ -103,10 +104,22 @@ public class AuthService
         if (user is null) return (null, "User not found");
 
         if (!string.IsNullOrWhiteSpace(dto.Username))
-            user.Username = dto.Username.Trim();
+        {
+            var trimmedUsername = dto.Username.Trim();
+            if (trimmedUsername.Length < 2)
+                return (null, "Full name must be at least 2 characters.");
+            if (trimmedUsername.Length > 50)
+                return (null, "Full name must be 50 characters or fewer.");
+            user.Username = trimmedUsername;
+        }
 
         if (dto.Bio is not null)
-            user.Bio = dto.Bio.Trim();
+        {
+            var trimmedBio = dto.Bio.Trim();
+            if (trimmedBio.Length > 280)
+                return (null, "Bio must be 280 characters or fewer.");
+            user.Bio = trimmedBio;
+        }
 
         if (dto.AvatarUrl is not null)
         {

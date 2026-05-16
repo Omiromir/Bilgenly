@@ -52,6 +52,8 @@ export interface MyAttemptDto {
   quizTitle: string;
   score: number;
   dateTaken: string;
+  finishedAt?: string | null;
+  durationSeconds?: number | null;
   isCompleted: boolean;
   totalQuestions: number;
   correctAnswers: number;

@@ -60,7 +60,7 @@ export function AssignmentSettingsForm({
               }
               className={cn(
                 dashboardInputVariants({ size: "md" }),
-                "border-[var(--dashboard-border-soft)] bg-white",
+                "border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-elevated)] text-[var(--dashboard-text-strong)]",
               )}
             />
           </label>
@@ -78,7 +78,7 @@ export function AssignmentSettingsForm({
               }
               className={cn(
                 dashboardInputVariants({ size: "md" }),
-                "border-[var(--dashboard-border-soft)] bg-white",
+                "border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-elevated)] text-[var(--dashboard-text-strong)]",
               )}
             />
           </label>
@@ -111,7 +111,7 @@ export function AssignmentSettingsForm({
           }
           className={cn(
             dashboardSelectVariants({ size: "md" }),
-            "w-full border-[var(--dashboard-border-soft)] bg-white",
+            "w-full border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-elevated)] text-[var(--dashboard-text-strong)]",
           )}
         >
           <option value="1">1 attempt</option>

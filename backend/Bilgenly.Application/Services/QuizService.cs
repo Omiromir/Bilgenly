@@ -14,6 +14,10 @@ public class QuizService
 
     public async Task<QuizDto> CreateQuizAsync(CreateQuizDto dto, Guid userId, string username)
     {
+        var validationError = QuizPayloadValidator.ValidateCreate(dto);
+        if (validationError is not null)
+            throw new ArgumentException(validationError);
+
         var quiz = new Quiz
         {
             Id = Guid.NewGuid(),
@@ -91,6 +95,10 @@ public class QuizService
             return (null, "Title is required");
         if (!dto.Questions.Any())
             return (null, "At least one question is required");
+
+        var validationError = QuizPayloadValidator.ValidateUpdate(dto);
+        if (validationError is not null)
+            return (null, validationError);
 
         quiz.Title = dto.Title.Trim();
         quiz.Description = dto.Description.Trim();

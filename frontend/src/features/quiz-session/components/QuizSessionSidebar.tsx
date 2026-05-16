@@ -60,9 +60,6 @@ export function QuizSessionSidebar({
         </div>
 
         <div className="flex flex-wrap gap-2">
-          <DashboardBadge tone="white" size="md">
-            {session.quiz.language}
-          </DashboardBadge>
           {assignmentConstraints ? (
             <span className={cn(dashboardBadgeVariants({ tone: "white", size: "md" }))}>
               Attempt {session.attemptNumber}

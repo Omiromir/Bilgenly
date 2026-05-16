@@ -110,6 +110,11 @@ public class QuizGenerationService
             return (null, "Title is required");
         if (!dto.Questions.Any())
             return (null, "At least one question is required");
+
+        var validationError = QuizPayloadValidator.ValidateReview(dto);
+        if (validationError is not null)
+            return (null, validationError);
+
         foreach (var q in dto.Questions)
         {
             if (string.IsNullOrWhiteSpace(q.Text))

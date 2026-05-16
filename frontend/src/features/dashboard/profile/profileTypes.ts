@@ -44,4 +44,5 @@ export interface ProfileFormErrors {
   email?: string;
   bio?: string;
   avatarUrl?: string;
+  location?: string;
 }

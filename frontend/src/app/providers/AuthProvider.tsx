@@ -105,6 +105,9 @@ function readStoredUser(): StoredAuthUserProfile | null {
       role: parsedUser.role,
       userId: parsedUser.userId,
       username: parsedUser.username,
+      bio: parsedUser.bio,
+      avatarUrl: parsedUser.avatarUrl,
+      createdAt: parsedUser.createdAt,
     });
   } catch {
     localStorage.removeItem(AUTH_USER_KEY);
@@ -128,6 +131,22 @@ function getInitials(name: string) {
     .slice(0, 2);
 }
 
+const joinedFormatter = new Intl.DateTimeFormat("en-US", {
+  month: "long",
+  year: "numeric",
+});
+
+function formatJoinedLabel(createdAt?: string | null) {
+  if (!createdAt) {
+    return "Member";
+  }
+  const date = new Date(createdAt);
+  if (Number.isNaN(date.getTime())) {
+    return "Member";
+  }
+  return `Joined ${joinedFormatter.format(date)}`;
+}
+
 function mapAuthUserToDashboardUser(
   authUser: StoredAuthUserProfile,
   fallbackRole: UserRole | null,
@@ -145,7 +164,7 @@ function mapAuthUserToDashboardUser(
     fullName: authUser.username,
     email: authUser.email,
     initials: getInitials(authUser.username),
-    joinedLabel: "Join date unavailable",
+    joinedLabel: formatJoinedLabel(authUser.createdAt ?? null),
     location: "",
     bio: authUser.bio ?? "",
     avatarUrl: authUser.avatarUrl ?? null,

@@ -8,11 +8,16 @@ public class AttemptService
 {
     private readonly IAttemptRepository _attemptRepository;
     private readonly IQuizRepository _quizRepository;
+    private readonly IClassRepository _classRepository;
 
-    public AttemptService(IAttemptRepository attemptRepository, IQuizRepository quizRepository)
+    public AttemptService(
+        IAttemptRepository attemptRepository,
+        IQuizRepository quizRepository,
+        IClassRepository classRepository)
     {
         _attemptRepository = attemptRepository;
         _quizRepository = quizRepository;
+        _classRepository = classRepository;
     }
     public async Task<IEnumerable<MyAttemptDto>> GetMyAttemptsAsync(Guid userId)
     {
@@ -65,6 +70,8 @@ public class AttemptService
                 QuizTitle = a.Quiz.Title,
                 Score = a.Score,
                 DateTaken = a.DateTaken,
+                FinishedAt = a.FinishedAt,
+                DurationSeconds = a.DurationSeconds,
                 IsCompleted = a.IsCompleted,
                 TotalQuestions = a.Quiz.Questions.Count,
                 CorrectAnswers = a.AttemptAnswers.Count(attemptAnswer => attemptAnswer.IsCorrect),
@@ -77,6 +84,52 @@ public class AttemptService
         var quiz = await _quizRepository.GetByIdAsync(quizId);
         if (quiz is null)
             return (null, "Quiz not found");
+
+        // If this quiz is assigned to one of the student's classes with a
+        // max-attempts cap, enforce it server-side. The frontend already gates
+        // this, but a refresh or analytics retake can bypass the UI check.
+        var classes = await _classRepository.GetByStudentIdAsync(userId);
+        var capsForQuiz = classes
+            .SelectMany(c => c.Assignments ?? Enumerable.Empty<Assignment>())
+            .Where(a => a.QuizId == quizId && a.MaxAttempts.HasValue)
+            .Select(a => a.MaxAttempts!.Value)
+            .ToList();
+
+        if (capsForQuiz.Count > 0)
+        {
+            var lowestCap = capsForQuiz.Min();
+            var userAttempts = (await _attemptRepository.GetByUserIdAsync(userId)).ToList();
+            var completedForQuiz = userAttempts.Count(a => a.QuizId == quizId && a.IsCompleted);
+
+            if (completedForQuiz >= lowestCap)
+                return (null, "You have used all attempts for this assignment.");
+
+            // Prevent the "refresh and restart" exploit: if there's an unfinished
+            // attempt for this quiz, count it as used and treat the new request as
+            // an abandonment + retake. A stale in-progress attempt is auto-closed
+            // so the student can't fish for known questions across attempts.
+            var staleInProgress = userAttempts
+                .Where(a => a.QuizId == quizId && !a.IsCompleted)
+                .ToList();
+
+            if (staleInProgress.Count > 0)
+            {
+                // Auto-finalize abandoned in-progress attempts so they count.
+                foreach (var stale in staleInProgress)
+                {
+                    stale.IsCompleted = true;
+                    // Score stays 0 if no answers submitted — the assignment
+                    // attempt is consumed either way.
+                }
+
+                await _attemptRepository.SaveChangesAsync();
+
+                // Re-check cap after marking the abandoned attempt as used.
+                completedForQuiz = userAttempts.Count(a => a.QuizId == quizId && a.IsCompleted);
+                if (completedForQuiz >= lowestCap)
+                    return (null, "You have used all attempts for this assignment.");
+            }
+        }
 
         var attempt = new Attempt
         {
@@ -182,6 +235,9 @@ public class AttemptService
 
         attempt.Score = score;
         attempt.IsCompleted = true;
+        attempt.FinishedAt = DateTime.UtcNow;
+        attempt.DurationSeconds = (int)Math.Max(0,
+            (attempt.FinishedAt.Value - attempt.DateTaken).TotalSeconds);
         await _attemptRepository.AddAnswersAsync(attemptAnswers);
         await _attemptRepository.SaveChangesAsync();
 

@@ -16,6 +16,7 @@ import {
   STATIC_AVATAR_OPTIONS,
   resolveAvatarUrl,
 } from "../../profile/avatars";
+import { SETTINGS_COUNTRY_OPTIONS } from "../settings/settingsPreferences";
 import type {
   ProfileStat,
 } from "../profile/profileTypes";
@@ -104,7 +105,10 @@ export function DashboardProfilePage({
                       <div className="space-y-2">
                         <Input
                           value={formValues.fullName}
-                          onChange={(event) => updateField("fullName", event.target.value)}
+                          onChange={(event) =>
+                            updateField("fullName", event.target.value.slice(0, 40))
+                          }
+                          maxLength={40}
                           aria-invalid={Boolean(formErrors.fullName)}
                           className={cn(
                             dashboardInputVariants({ size: "lg" }),
@@ -130,19 +134,20 @@ export function DashboardProfilePage({
                   <div className="flex flex-col gap-3 text-sm text-[var(--dashboard-text-soft)] md:flex-row md:flex-wrap md:gap-x-10">
                     {isEditing ? (
                       <>
-                        <EditableInfoLine
-                          icon={Mail}
-                          value={formValues.email}
-                          error={formErrors.email}
-                          type="email"
-                          onChange={(value) => updateField("email", value)}
-                        />
+                        {/* Email is intentionally read-only — changing email
+                            would require re-verification flow that the backend
+                            doesn't support yet. */}
+                        <InfoLine icon={Mail} text={profile.email} />
                         <InfoLine icon={CalendarDays} text={profile.joinedLabel} />
-                        <EditableInfoLine
+                        <EditableSelectInfoLine
                           icon={MapPin}
                           value={formValues.location}
-                          placeholder="Location"
-                          onChange={(value) => updateField("location", value)}
+                          label="Country"
+                          options={SETTINGS_COUNTRY_OPTIONS}
+                          onChange={(value) =>
+                            updateField("location", value)
+                          }
+                          error={formErrors.location}
                         />
                       </>
                     ) : (
@@ -333,36 +338,43 @@ function InfoLine({
   );
 }
 
-function EditableInfoLine({
+function EditableSelectInfoLine({
   icon: Icon,
   value,
   error,
-  placeholder,
-  type = "text",
+  label,
+  options,
   onChange,
 }: {
   icon: LucideIcon;
   value: string;
   error?: string;
-  placeholder?: string;
-  type?: "text" | "email";
+  label: string;
+  options: readonly string[];
   onChange: (value: string) => void;
 }) {
   return (
     <label className="min-w-0 space-y-1">
       <span className="inline-flex min-w-0 items-center gap-2">
         <Icon className="h-4 w-4 shrink-0 text-[var(--dashboard-text-faint)]" />
-        <Input
-          type={type}
-          value={value}
-          placeholder={placeholder}
-          onChange={(event) => onChange(event.target.value)}
-          aria-invalid={Boolean(error)}
-          className={cn(
-            dashboardInputVariants({ size: "sm" }),
-            "h-9 min-w-[220px] rounded-[12px] border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-elevated)] px-3 shadow-none focus-visible:ring-0",
-          )}
-        />
+        <div className="relative min-w-[220px]">
+          <select
+            value={value}
+            aria-label={label}
+            onChange={(event) => onChange(event.target.value)}
+            aria-invalid={Boolean(error)}
+            className={cn(
+              dashboardInputVariants({ size: "sm" }),
+              "h-9 w-full appearance-none rounded-[12px] border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-elevated)] px-3 pr-8 shadow-none focus-visible:ring-0",
+            )}
+          >
+            {options.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
+        </div>
       </span>
       {error ? <p className="pl-6 text-sm text-[var(--dashboard-danger)]">{error}</p> : null}
     </label>

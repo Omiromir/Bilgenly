@@ -50,6 +50,7 @@ public class AuthController  : ControllerBase
             role = user.Role.ToString(),
             bio = user.Bio,
             avatarUrl = user.AvatarUrl,
+            createdAt = user.CreatedAt,
             onboardingCompleted = true
         });
     }

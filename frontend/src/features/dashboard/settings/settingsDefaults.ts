@@ -46,7 +46,7 @@ export function createDefaultUserSettings({
       avatarUrl,
     },
     appearance: {
-      themeMode: "light",
+      themeMode: "system",
     },
     notifications: {
       email: {

@@ -240,16 +240,17 @@ export function formatQuizAttemptDate(value: string) {
   return formatCurrentDate(value);
 }
 
-export function formatQuizAttemptDuration(session: QuizSessionRecord) {
-  const endTimestamp = getSessionTimestamp(session.finishedAt ?? session.updatedAt);
-  const startTimestamp = getSessionTimestamp(session.startedAt);
-  if (endTimestamp === startTimestamp || startTimestamp === 0) {
+export function formatDurationFromSeconds(
+  durationInSeconds: number | null | undefined,
+) {
+  if (
+    durationInSeconds === null ||
+    durationInSeconds === undefined ||
+    !Number.isFinite(durationInSeconds) ||
+    durationInSeconds <= 0
+  ) {
     return "--";
   }
-  const durationInSeconds = Math.max(
-    0,
-    Math.round((endTimestamp - startTimestamp) / 1000),
-  );
   const minutes = Math.floor(durationInSeconds / 60);
   const seconds = durationInSeconds % 60;
 
@@ -262,6 +263,19 @@ export function formatQuizAttemptDuration(session: QuizSessionRecord) {
   }
 
   return `${minutes} min ${seconds} sec`;
+}
+
+export function formatQuizAttemptDuration(session: QuizSessionRecord) {
+  const endTimestamp = getSessionTimestamp(session.finishedAt ?? session.updatedAt);
+  const startTimestamp = getSessionTimestamp(session.startedAt);
+  if (endTimestamp === startTimestamp || startTimestamp === 0) {
+    return "--";
+  }
+  const durationInSeconds = Math.max(
+    0,
+    Math.round((endTimestamp - startTimestamp) / 1000),
+  );
+  return formatDurationFromSeconds(durationInSeconds);
 }
 
 export function buildQuizPlaybackSummary(

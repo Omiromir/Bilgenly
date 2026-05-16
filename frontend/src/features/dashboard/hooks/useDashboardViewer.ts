@@ -12,14 +12,23 @@ export function useDashboardViewer() {
       return null;
     }
 
+    // Prefer backend-synced fields over localStorage settings — settings is
+    // only used as a fallback (e.g. during initial hydration before getMe
+    // resolves) and for locally-managed values like phone/country that the
+    // backend doesn't store yet.
+    const fullName = currentUser.fullName || settings.profile.fullName;
+    const email = currentUser.email || settings.profile.email;
+    const bio = currentUser.bio ?? settings.profile.bio;
+    const avatarUrl = currentUser.avatarUrl ?? settings.profile.avatarUrl;
+
     return {
       ...currentUser,
-      fullName: settings.profile.fullName,
-      email: settings.profile.email,
-      initials: getProfileInitials(settings.profile.fullName),
-      avatarUrl: settings.profile.avatarUrl,
+      fullName,
+      email,
+      initials: getProfileInitials(fullName),
+      avatarUrl,
       location: settings.profile.country,
-      bio: settings.profile.bio,
+      bio,
       roleLabel: role ? role.charAt(0).toUpperCase() + role.slice(1) : "User",
       phoneNumber: settings.profile.phoneNumber,
     };

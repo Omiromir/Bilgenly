@@ -12,6 +12,7 @@ public class User
     public string? SuspensionReason { get; set; }
     public string? Bio { get; set; }
     public string? AvatarUrl { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public ICollection<Quiz> Quizzes { get; set; } = new List<Quiz>();
     public ICollection<Attempt> Attempts { get; set; } = new List<Attempt>();
 }

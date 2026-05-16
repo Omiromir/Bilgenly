@@ -305,14 +305,17 @@ export function buildAssignmentConstraintState(
   const bestScore = completedAttempts.length
     ? Math.max(...completedAttempts.map((session) => getSessionScore(session)))
     : null;
-  const status: AssignmentProgressStatus = activeAttempt && !deadlinePassed
-    ? "in_progress"
+  // Priority: exhausted beats lingering in-progress sessions. Otherwise a
+  // forgotten session in localStorage would make a finished quiz read as
+  // "In Progress" even after the student has used every available attempt.
+  const status: AssignmentProgressStatus = exhaustedAttempts
+    ? "attempts_exhausted"
     : deadlinePassed && !hasOnTimeCompletion
       ? "expired"
-      : hasCompletedAttempt
-        ? "completed"
-        : exhaustedAttempts
-          ? "attempts_exhausted"
+      : activeAttempt && !deadlinePassed
+        ? "in_progress"
+        : hasCompletedAttempt
+          ? "completed"
           : "active";
 
   return {

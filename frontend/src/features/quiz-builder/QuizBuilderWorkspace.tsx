@@ -12,7 +12,6 @@ import {
   ArrowUp,
   Camera,
   CheckCircle2,
-  ChevronDown,
   ChevronRight,
   CircleDot,
   Clock3,
@@ -54,7 +53,7 @@ import { QuizBuilderGenerateStage } from "./components/QuizBuilderGenerateStage"
 import { QuizBuilderInputStage } from "./components/QuizBuilderInputStage";
 import { QuizBuilderReviewChecks } from "./components/QuizBuilderReviewChecks";
 import { QuizBuilderStepper } from "./components/QuizBuilderStepper";
-import { questionTypeOptions, workspaceCopy } from "./quizBuilderCopy";
+import { workspaceCopy } from "./quizBuilderCopy";
 import { QUIZ_BUILDER_LIMITS, clampText } from "./quizBuilderLimits";
 import type {
   GeneratedQuestion,
@@ -71,7 +70,6 @@ import type {
 } from "./quizBuilderTypes";
 import {
   applyCorrectIndexes,
-  applyQuestionType,
   buildGeneratedQuestions,
   buildMockExtract,
   buildQuizDescription,
@@ -1075,6 +1073,13 @@ export function QuizBuilderWorkspace({
   }
 
   function handleAddQuestion() {
+    if (questions.length >= QUIZ_BUILDER_LIMITS.maxQuestionsPerQuiz) {
+      setGenerationError(
+        `A quiz can have at most ${QUIZ_BUILDER_LIMITS.maxQuestionsPerQuiz} questions.`,
+      );
+      return;
+    }
+
     const newQuestion: GeneratedQuestion = {
       id: createQuestionId(),
       questionType: "Multiple choice",
@@ -1096,6 +1101,7 @@ export function QuizBuilderWorkspace({
     setQuestions((current) => [...current, newQuestion]);
     setSelectedQuestionId(newQuestion.id);
     setHasEnteredReview(true);
+    setGenerationError(null);
   }
 
   function buildQuizSavePayload(targetStatus: QuizLibraryStatus) {
@@ -1431,8 +1437,14 @@ export function QuizBuilderWorkspace({
                           <textarea
                             value={quizDescription}
                             onChange={(event) =>
-                              setQuizDescription(event.target.value)
+                              setQuizDescription(
+                                clampText(
+                                  event.target.value,
+                                  QUIZ_BUILDER_LIMITS.quizDescription,
+                                ),
+                              )
                             }
+                            maxLength={QUIZ_BUILDER_LIMITS.quizDescription}
                             placeholder="Add a short description for this quiz (optional)."
                             aria-label="Quiz description"
                             rows={2}
@@ -1715,34 +1727,14 @@ export function QuizBuilderWorkspace({
                         <div className="relative rounded-[30px] border border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-elevated)] px-6 py-6 shadow-[var(--dashboard-shadow-card)]">
                           <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[var(--dashboard-border-soft)] pb-5">
                             <div className="flex flex-wrap items-center gap-2">
-                              <label className="inline-flex items-center gap-2 rounded-[12px] border border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-muted)] px-3 py-2 text-sm font-medium text-[var(--dashboard-text-strong)]">
+                              {/* Question type is fixed to Multiple choice for
+                                  the current backend attempt flow. A dropdown
+                                  here previously implied a choice that didn't
+                                  actually work. */}
+                              <span className="inline-flex items-center gap-2 rounded-[12px] border border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-muted)] px-3 py-2 text-sm font-medium text-[var(--dashboard-text-strong)]">
                                 <CircleDot className="h-4 w-4" />
-                                <select
-                                  value={selectedQuestion.questionType}
-                                  onChange={(event) =>
-                                    handleQuestionChange(
-                                      selectedQuestion.id,
-                                      (question) =>
-                                        applyQuestionType(
-                                          question,
-                                          event.target.value as QuestionType,
-                                        ),
-                                    )
-                                  }
-                                  className="appearance-none pr-1 text-sm font-medium text-[var(--dashboard-text-strong)] outline-none"
-                                  style={{ background: "var(--dashboard-surface-muted)", colorScheme: "dark" }}
-                                >
-                                  {questionTypeOptions.map((questionType) => (
-                                    <option
-                                      key={questionType}
-                                      value={questionType}
-                                    >
-                                      {questionType}
-                                    </option>
-                                  ))}
-                                </select>
-                                <ChevronDown className="h-4 w-4 text-[var(--dashboard-text-faint)]" />
-                              </label>
+                                Multiple choice
+                              </span>
                             </div>
 
                             <div className="relative flex flex-wrap items-center gap-2">
@@ -2074,9 +2066,17 @@ export function QuizBuilderWorkspace({
                                   size="sm"
                                   disabled={
                                     selectedQuestion.questionType ===
-                                    "True/False"
+                                      "True/False" ||
+                                    selectedQuestion.options.length >=
+                                      QUIZ_BUILDER_LIMITS.maxOptionsPerQuestion
                                   }
-                                  onClick={() =>
+                                  onClick={() => {
+                                    if (
+                                      selectedQuestion.options.length >=
+                                      QUIZ_BUILDER_LIMITS.maxOptionsPerQuestion
+                                    ) {
+                                      return;
+                                    }
                                     handleQuestionChange(
                                       selectedQuestion.id,
                                       (question) => ({
@@ -2086,8 +2086,8 @@ export function QuizBuilderWorkspace({
                                           `Option ${question.options.length + 1}`,
                                         ],
                                       }),
-                                    )
-                                  }
+                                    );
+                                  }}
                                 >
                                   <Plus className="h-4 w-4" />
                                   Add answers

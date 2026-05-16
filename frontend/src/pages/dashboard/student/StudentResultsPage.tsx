@@ -30,6 +30,7 @@ import { SectionCard } from "../../../features/dashboard/components/SectionCard"
 import { StatCard } from "../../../features/dashboard/components/StatCard";
 import { buildQuizSessionPath, buildQuizSessionSearch } from "../../../features/quiz-session/quizRouting";
 import {
+  formatDurationFromSeconds,
   formatQuizAttemptDate,
   formatQuizAttemptDuration,
   formatQuizPoints,
@@ -413,7 +414,9 @@ export function StudentResultsPage() {
                   ) : null}
                   <div className={dashboardIconTextRowClassName}>
                     <Clock3 className="h-4 w-4 text-[var(--dashboard-brand)]" />
-                    Time: {session ? formatQuizAttemptDuration(session) : "--"}
+                    Time: {session
+                      ? formatQuizAttemptDuration(session)
+                      : formatDurationFromSeconds(attempt.durationSeconds)}
                   </div>
                   <div className={dashboardIconTextRowClassName}>
                     <TrendingUp className="h-4 w-4 text-[var(--dashboard-brand)]" />

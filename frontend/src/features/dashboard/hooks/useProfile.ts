@@ -24,6 +24,9 @@ import {
 } from "../../quiz-session/quizSessionUtils";
 
 const MAX_BIO_LENGTH = 280;
+const MAX_FULLNAME_LENGTH = 40;
+const MIN_FULLNAME_LENGTH = 2;
+const MAX_LOCATION_LENGTH = 60;
 
 interface ProfileActivityEvent {
   title: string;
@@ -91,14 +94,34 @@ function validateEmail(value: string) {
     : "Enter a valid email address.";
 }
 
+function validateFullName(value: string): string | undefined {
+  const trimmed = value.trim();
+  if (!trimmed) return "Full name is required.";
+  if (trimmed.length < MIN_FULLNAME_LENGTH)
+    return `Full name must be at least ${MIN_FULLNAME_LENGTH} characters.`;
+  if (trimmed.length > MAX_FULLNAME_LENGTH)
+    return `Full name must be ${MAX_FULLNAME_LENGTH} characters or fewer.`;
+  if (!/^[\p{L}\p{N}\s'.-]+$/u.test(trimmed))
+    return "Full name contains invalid characters.";
+  return undefined;
+}
+
+function validateLocation(value: string): string | undefined {
+  const trimmed = value.trim();
+  if (trimmed.length > MAX_LOCATION_LENGTH)
+    return `Country must be ${MAX_LOCATION_LENGTH} characters or fewer.`;
+  return undefined;
+}
+
 function validateProfileForm(values: ProfileFormValues): ProfileFormErrors {
   return {
-    fullName: values.fullName.trim() ? undefined : "Full name is required.",
+    fullName: validateFullName(values.fullName),
     email: validateEmail(values.email),
     bio:
       values.bio.trim().length > MAX_BIO_LENGTH
         ? `Bio must be ${MAX_BIO_LENGTH} characters or fewer.`
         : undefined,
+    location: validateLocation(values.location),
   };
 }
 
@@ -304,16 +327,18 @@ export function useProfile(): UseProfileResult {
       return null;
     }
 
-    const joinedLabel = "Join date unavailable";
+    // Prefer backend-synced viewer data so the displayed profile survives a
+    // page refresh on a different device / cleared localStorage.
+    const joinedLabel = dashboardViewer.joinedLabel || "Member";
     const location = settings.profile.country;
-    const fullName = settings.profile.fullName;
-    const email = settings.profile.email;
-    const bio = settings.profile.bio.trim();
-    const avatarUrl = settings.profile.avatarUrl;
+    const fullName = dashboardViewer.fullName || settings.profile.fullName;
+    const email = dashboardViewer.email || settings.profile.email;
+    const bio = (dashboardViewer.bio ?? settings.profile.bio).trim();
+    const avatarUrl = dashboardViewer.avatarUrl ?? settings.profile.avatarUrl;
     const personalInfo: ProfileField[] = [
       { label: "Full Name", value: formatProfileValue(fullName) },
       { label: "Email", value: formatProfileValue(email) },
-      { label: "Location", value: formatProfileValue(location) },
+      { label: "Country", value: formatProfileValue(location) },
     ];
 
     if (role === "teacher") {
@@ -334,7 +359,7 @@ export function useProfile(): UseProfileResult {
         email,
         joinedLabel,
         location: formatProfileValue(location),
-        bio: bio || "Add a short bio from your profile or settings page.",
+        bio: bio || "Add a short bio from your profile page.",
         initials: getProfileInitials(fullName),
         avatarUrl,
         stats: buildTeacherStats(
@@ -400,7 +425,7 @@ export function useProfile(): UseProfileResult {
       email,
       joinedLabel,
       location: formatProfileValue(location),
-      bio: bio || "Add a short bio from your profile or settings page.",
+      bio: bio || "Add a short bio from your profile page.",
       initials: getProfileInitials(fullName),
       avatarUrl,
       stats: buildStudentStats(
