@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { toast } from "sonner";
+import { cn } from "../../../components/ui/utils";
 import { Dialog } from "../../../components/ui/dialog";
 import logoPng from "../../../assets/logo.png";
 import { useAuth } from "../../../app/providers/AuthProvider";
@@ -68,6 +69,7 @@ export function TeacherOverviewPage() {
   );
   const [assignmentError, setAssignmentError] = useState("");
   const [assignmentDeadlineError, setAssignmentDeadlineError] = useState("");
+  const [assignStep, setAssignStep] = useState<"select" | "configure">("select");
 
   const activeClasses = useMemo(
     () => classes.filter((teacherClass) => teacherClass.status === "active"),
@@ -117,6 +119,7 @@ export function TeacherOverviewPage() {
     setAssignmentSettings(DEFAULT_ASSIGNMENT_SETTINGS_VALUES);
     setAssignmentError("");
     setAssignmentDeadlineError("");
+    setAssignStep("select");
   };
 
   const handleAssignQuizToClasses = async () => {
@@ -315,137 +318,266 @@ export function TeacherOverviewPage() {
             setAssignmentSettings(DEFAULT_ASSIGNMENT_SETTINGS_VALUES);
             setAssignmentError("");
             setAssignmentDeadlineError("");
+            setAssignStep("select");
           }
         }}
       >
         <DashboardModalContent className="max-w-[720px]">
-          <DashboardModalHeader
-            title="Assign quiz to class"
-            description={
-              quizPendingAssignment
-                ? `Choose which classes should make "${quizPendingAssignment.title}" visible to class members.`
-                : "Choose classes for this assigned quiz."
-            }
-          />
+          <div className="flex min-h-0 flex-1 flex-col">
 
-          <DashboardModalBody className="space-y-5">
-            {quizPendingAssignment ? (
-              <div className="rounded-[22px] border border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-elevated)] px-5 py-4 shadow-[var(--dashboard-shadow-card)]">
-                <p className="text-[1.125rem] font-semibold tracking-[-0.02em] text-[var(--dashboard-text-strong)]">
-                  {quizPendingAssignment.title}
-                </p>
-                <p className="mt-1 text-sm leading-6 text-[var(--dashboard-text-soft)]">
-                  {quizPendingAssignment.subjectLabel} | {quizPendingAssignment.questionCount}{" "}
-                  {quizPendingAssignment.questionCount === 1 ? "question" : "questions"}
-                </p>
+            {/* ── Step indicator ── */}
+            <div className="flex items-center gap-3 px-6 pt-6 pb-1">
+              <div className="flex items-center gap-2">
+                <span
+                  className={cn(
+                    "flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold",
+                    assignStep === "select"
+                      ? "bg-[var(--dashboard-brand)] text-white"
+                      : "bg-[var(--dashboard-brand-soft)] text-[var(--dashboard-brand)]",
+                  )}
+                >
+                  {assignStep === "configure" ? "✓" : "1"}
+                </span>
+                <span
+                  className={cn(
+                    "text-sm font-medium",
+                    assignStep === "select"
+                      ? "text-[var(--dashboard-text-strong)]"
+                      : "text-[var(--dashboard-text-soft)]",
+                  )}
+                >
+                  Select classes
+                </span>
               </div>
-            ) : null}
-
-            <div className="space-y-3">
-              {activeClasses.length ? (
-                activeClasses.map((teacherClass) => {
-                  const alreadyAssigned = quizPendingAssignment
-                    ? getAssignedClassIdsForQuiz(quizPendingAssignment.quizId).includes(
-                        teacherClass.id,
-                      )
-                    : false;
-
-                  return (
-                    <label
-                      key={teacherClass.id}
-                      className="flex items-start justify-between gap-4 rounded-[22px] border border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-elevated)] px-5 py-4 shadow-[var(--dashboard-shadow-card)] transition-colors hover:border-[var(--dashboard-brand-soft)]"
-                    >
-                      <div className="flex items-start gap-4">
-                        <input
-                          type="checkbox"
-                          checked={selectedClassIds.includes(teacherClass.id)}
-                          disabled={alreadyAssigned}
-                          onChange={(event) => {
-                            const { checked } = event.target;
-
-                            setSelectedClassIds((current) =>
-                              checked
-                                ? [...current, teacherClass.id]
-                                : current.filter((item) => item !== teacherClass.id),
-                            );
-                            if (assignmentError) {
-                              setAssignmentError("");
-                            }
-                          }}
-                          className="mt-1 h-5 w-5 rounded border-[var(--dashboard-border-soft)] text-[var(--dashboard-brand)]"
-                        />
-                        <div>
-                          <p className="text-[1.125rem] font-semibold tracking-[-0.02em] text-[var(--dashboard-text-strong)]">
-                            {teacherClass.name}
-                          </p>
-                          <p className="mt-1 text-sm leading-6 text-[var(--dashboard-text-soft)]">
-                            {teacherClass.studentCount}{" "}
-                            {teacherClass.studentCount === 1 ? "student" : "students"} |{" "}
-                            {teacherClass.quizCount}{" "}
-                            {teacherClass.quizCount === 1 ? "quiz" : "quizzes"}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="flex flex-wrap justify-end gap-2 pt-0.5">
-                        {alreadyAssigned ? (
-                          <DashboardBadge tone="info">Already an assigned quiz</DashboardBadge>
-                        ) : null}
-                      </div>
-                    </label>
-                  );
-                })
-              ) : (
-                <div className="rounded-[22px] border border-dashed border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-elevated)] px-5 py-5">
-                  <p className="font-semibold text-[var(--dashboard-text-strong)]">
-                    No active classes available
-                  </p>
-                  <p className="mt-1 text-sm leading-6 text-[var(--dashboard-text-soft)]">
-                    Create a class or restore an archived one, then come back here to assign quizzes to it.
-                  </p>
-                </div>
-              )}
+              <div className="h-px flex-1 bg-[var(--dashboard-border-soft)]" />
+              <div className="flex items-center gap-2">
+                <span
+                  className={cn(
+                    "flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold",
+                    assignStep === "configure"
+                      ? "bg-[var(--dashboard-brand)] text-white"
+                      : "bg-[var(--dashboard-surface-muted)] text-[var(--dashboard-text-faint)]",
+                  )}
+                >
+                  2
+                </span>
+                <span
+                  className={cn(
+                    "text-sm font-medium",
+                    assignStep === "configure"
+                      ? "text-[var(--dashboard-text-strong)]"
+                      : "text-[var(--dashboard-text-faint)]",
+                  )}
+                >
+                  Settings
+                </span>
+              </div>
             </div>
 
-            <AssignmentSettingsForm
-              values={assignmentSettings}
-              deadlineError={assignmentDeadlineError}
-              onChange={(nextValues) => {
-                setAssignmentSettings(nextValues);
-                if (assignmentDeadlineError) {
-                  setAssignmentDeadlineError("");
-                }
-              }}
-            />
+            {/* ── Step 1: Select classes ── */}
+            {assignStep === "select" && (
+              <>
+                <DashboardModalHeader
+                  title="Select classes"
+                  description={
+                    quizPendingAssignment
+                      ? `Choose which classes should see "${quizPendingAssignment.title}".`
+                      : "Choose classes for this quiz."
+                  }
+                />
+                <DashboardModalBody className="space-y-5">
+                  {/* Quiz summary */}
+                  {quizPendingAssignment ? (
+                    <div className="rounded-[18px] border border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-elevated)] px-5 py-4">
+                      <p className="text-[1.05rem] font-semibold tracking-[-0.02em] text-[var(--dashboard-text-strong)]">
+                        {quizPendingAssignment.title}
+                      </p>
+                      <p className="mt-1 text-sm text-[var(--dashboard-text-soft)]">
+                        {quizPendingAssignment.subjectLabel} · {quizPendingAssignment.questionCount}{" "}
+                        {quizPendingAssignment.questionCount === 1 ? "question" : "questions"}
+                      </p>
+                    </div>
+                  ) : null}
 
-            {assignmentError ? (
-              <div className="rounded-[18px] border border-[var(--dashboard-danger-soft)] bg-[var(--dashboard-danger-soft)]/40 px-4 py-3">
-                <p className="text-sm leading-6 text-[var(--dashboard-danger)]">
-                  {assignmentError}
-                </p>
-              </div>
-            ) : null}
-          </DashboardModalBody>
+                  {/* Class checkboxes */}
+                  <div className="space-y-3">
+                    {activeClasses.length ? (
+                      activeClasses.map((teacherClass) => {
+                        const alreadyAssigned = quizPendingAssignment
+                          ? getAssignedClassIdsForQuiz(quizPendingAssignment.quizId).includes(
+                              teacherClass.id,
+                            )
+                          : false;
 
-          <DashboardModalFooter>
-            <DashboardButton
-              type="button"
-              size="lg"
-              variant="ghost"
-              onClick={() => {
-                setQuizPendingAssignment(null);
-                setSelectedClassIds([]);
-                setAssignmentSettings(DEFAULT_ASSIGNMENT_SETTINGS_VALUES);
-                setAssignmentError("");
-                setAssignmentDeadlineError("");
-              }}
-            >
-              Cancel
-            </DashboardButton>
-            <DashboardButton type="button" size="lg" onClick={handleAssignQuizToClasses}>
-              Assign quiz
-            </DashboardButton>
-          </DashboardModalFooter>
+                        return (
+                          <label
+                            key={teacherClass.id}
+                            htmlFor={`ov-class-checkbox-${teacherClass.id}`}
+                            className="flex items-start justify-between gap-4 rounded-[22px] border border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-elevated)] px-5 py-4 shadow-[var(--dashboard-shadow-card)] transition-colors hover:border-[var(--dashboard-brand-soft)]"
+                          >
+                            <div className="flex items-start gap-4">
+                              <input
+                                id={`ov-class-checkbox-${teacherClass.id}`}
+                                name={`ov-class-${teacherClass.id}`}
+                                type="checkbox"
+                                checked={selectedClassIds.includes(teacherClass.id)}
+                                disabled={alreadyAssigned}
+                                onChange={(event) => {
+                                  const { checked } = event.target;
+                                  setSelectedClassIds((current) =>
+                                    checked
+                                      ? [...current, teacherClass.id]
+                                      : current.filter((item) => item !== teacherClass.id),
+                                  );
+                                  if (assignmentError) setAssignmentError("");
+                                }}
+                                className="mt-1 h-5 w-5 rounded border-[var(--dashboard-border-soft)] text-[var(--dashboard-brand)] focus-visible:ring-2 focus-visible:ring-[var(--dashboard-brand)] focus-visible:ring-offset-2"
+                              />
+                              <div>
+                                <p className="text-[1.125rem] font-semibold tracking-[-0.02em] text-[var(--dashboard-text-strong)]">
+                                  {teacherClass.name}
+                                </p>
+                                <p className="mt-1 text-sm leading-6 text-[var(--dashboard-text-soft)]">
+                                  {teacherClass.studentCount}{" "}
+                                  {teacherClass.studentCount === 1 ? "student" : "students"} |{" "}
+                                  {teacherClass.quizCount}{" "}
+                                  {teacherClass.quizCount === 1 ? "quiz" : "quizzes"}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex flex-wrap justify-end gap-2 pt-0.5">
+                              {alreadyAssigned ? (
+                                <DashboardBadge tone="info">Already an assigned quiz</DashboardBadge>
+                              ) : null}
+                            </div>
+                          </label>
+                        );
+                      })
+                    ) : (
+                      <div className="rounded-[22px] border border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-elevated)] px-5 py-5">
+                        <p className="font-semibold text-[var(--dashboard-text-strong)]">
+                          No active classes available
+                        </p>
+                        <p className="mt-1 text-sm leading-6 text-[var(--dashboard-text-soft)]">
+                          Create a class or restore an archived one, then come back here to assign quizzes to it.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  {assignmentError ? (
+                    <div className="rounded-[18px] border border-[var(--dashboard-danger-soft)] bg-[var(--dashboard-danger-soft)]/40 px-4 py-3">
+                      <p className="text-sm leading-6 text-[var(--dashboard-danger)]">
+                        {assignmentError}
+                      </p>
+                    </div>
+                  ) : null}
+                </DashboardModalBody>
+
+                <DashboardModalFooter>
+                  <DashboardButton
+                    type="button"
+                    size="lg"
+                    variant="ghost"
+                    onClick={() => {
+                      setQuizPendingAssignment(null);
+                      setSelectedClassIds([]);
+                      setAssignmentSettings(DEFAULT_ASSIGNMENT_SETTINGS_VALUES);
+                      setAssignmentError("");
+                      setAssignmentDeadlineError("");
+                      setAssignStep("select");
+                    }}
+                  >
+                    Cancel
+                  </DashboardButton>
+                  <DashboardButton
+                    type="button"
+                    size="lg"
+                    disabled={!selectedClassIds.length}
+                    onClick={() => {
+                      if (!selectedClassIds.length) {
+                        setAssignmentError("Select at least one active class to continue.");
+                        return;
+                      }
+                      setAssignmentError("");
+                      setAssignStep("configure");
+                    }}
+                  >
+                    Next →
+                  </DashboardButton>
+                </DashboardModalFooter>
+              </>
+            )}
+
+            {/* ── Step 2: Settings ── */}
+            {assignStep === "configure" && (
+              <>
+                <DashboardModalHeader
+                  title="Assignment settings"
+                  description="Configure deadline, attempts, and other options for this assignment."
+                />
+                <DashboardModalBody className="space-y-5">
+                  {/* Quiz summary */}
+                  {quizPendingAssignment ? (
+                    <div className="rounded-[18px] border border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-elevated)] px-5 py-4">
+                      <p className="text-[1.05rem] font-semibold tracking-[-0.02em] text-[var(--dashboard-text-strong)]">
+                        {quizPendingAssignment.title}
+                      </p>
+                      <p className="mt-1 text-sm text-[var(--dashboard-text-soft)]">
+                        {quizPendingAssignment.subjectLabel} · {quizPendingAssignment.questionCount}{" "}
+                        {quizPendingAssignment.questionCount === 1 ? "question" : "questions"}
+                      </p>
+                    </div>
+                  ) : null}
+
+                  {/* Selected classes summary */}
+                  <p className="text-sm text-[var(--dashboard-text-soft)]">
+                    Assigning to{" "}
+                    <span className="font-semibold text-[var(--dashboard-text-strong)]">
+                      {selectedClassIds.length}{" "}
+                      {selectedClassIds.length === 1 ? "class" : "classes"}
+                    </span>
+                  </p>
+
+                  <AssignmentSettingsForm
+                    values={assignmentSettings}
+                    deadlineError={assignmentDeadlineError}
+                    onChange={(nextValues) => {
+                      setAssignmentSettings(nextValues);
+                      if (assignmentDeadlineError) setAssignmentDeadlineError("");
+                    }}
+                  />
+
+                  {assignmentError ? (
+                    <div className="rounded-[18px] border border-[var(--dashboard-danger-soft)] bg-[var(--dashboard-danger-soft)]/40 px-4 py-3">
+                      <p className="text-sm leading-6 text-[var(--dashboard-danger)]">
+                        {assignmentError}
+                      </p>
+                    </div>
+                  ) : null}
+                </DashboardModalBody>
+
+                <DashboardModalFooter>
+                  <DashboardButton
+                    type="button"
+                    size="lg"
+                    variant="ghost"
+                    onClick={() => {
+                      setAssignStep("select");
+                      setAssignmentError("");
+                      setAssignmentDeadlineError("");
+                    }}
+                  >
+                    ← Back
+                  </DashboardButton>
+                  <DashboardButton type="button" size="lg" onClick={handleAssignQuizToClasses}>
+                    Assign quiz
+                  </DashboardButton>
+                </DashboardModalFooter>
+              </>
+            )}
+
+          </div>
         </DashboardModalContent>
       </Dialog>
     </div>

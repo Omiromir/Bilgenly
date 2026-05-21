@@ -13,7 +13,7 @@ export function Toggle({ options, selected, onChange, ariaLabel }: ToggleProps) 
     <div
       role="tablist"
       aria-label={ariaLabel || 'Toggle options'}
-      className="relative mx-auto h-[48px] w-full max-w-[360px] rounded-[50px] bg-[rgba(217,217,217,0.4)] sm:h-[55px]"
+      className="relative mx-auto h-[48px] w-full max-w-[360px] rounded-[50px] bg-[rgba(217,217,217,0.4)] sm:h-[55px] dark:bg-[#1b2944]"
     >
       <motion.div
         className="absolute top-0 h-full w-[52.78%] rounded-[50px] bg-[#2563EB]"
@@ -31,7 +31,7 @@ export function Toggle({ options, selected, onChange, ariaLabel }: ToggleProps) 
           className={clsx(
             "absolute top-0 z-10 h-full w-[52.78%] font-['Montserrat',sans-serif] text-[14px] font-semibold leading-[1.2] transition-all duration-200 ease-out sm:text-[19.2px] sm:leading-[30.72px]",
             index === 0 ? 'left-0' : 'left-[47.22%]',
-            selected === index ? 'text-white' : 'text-[#878484] hover:text-[#5F6368]'
+            selected === index ? 'text-white' : 'text-[#878484] hover:text-[#5F6368] dark:text-[#9aa8c6] dark:hover:text-[#dde6f7]'
           )}
         >
           {option}

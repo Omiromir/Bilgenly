@@ -30,6 +30,13 @@ interface StudentOverviewDataInput {
   /** Completed attempts from backend /api/attempts/my — sorted newest first. */
   completedAttempts: MyAttemptDto[];
   attemptsLoading: boolean;
+  /**
+   * Optional map of backendAttemptId → accurate points-based percentage from a
+   * local QuizSessionRecord. When present, overrides the backend's
+   * (correctAnswers/totalQuestions)-based score with the correct
+   * (earnedPoints/totalPoints)-based value.
+   */
+  correctedScoreByAttemptId?: Map<string, number>;
 }
 
 function getLocalDayStart(value: string) {
@@ -164,8 +171,12 @@ function buildOverviewStats(
   studentSources: StudentQuizLibrarySources,
   completedAttempts: MyAttemptDto[],
   attemptsLoading: boolean,
+  correctedScores?: Map<string, number>,
 ) {
-  const scores = completedAttempts.map((attempt) => attempt.score);
+  // Prefer session-based (points-accurate) percentage over backend score
+  const scores = completedAttempts.map(
+    (attempt) => correctedScores?.get(attempt.id) ?? attempt.score,
+  );
   const latestAttempt = completedAttempts[0] ?? null;
   const latestScore = scores[0] ?? null;
   const averageScore = scores.length
@@ -185,7 +196,7 @@ function buildOverviewStats(
 
   const latestDetailText =
     latestAttempt !== null
-      ? `Latest result ${latestAttempt.correctAnswers}/${latestAttempt.totalQuestions} correct · ${latestAttempt.score}%`
+      ? `Latest result ${latestAttempt.correctAnswers}/${latestAttempt.totalQuestions} correct · ${correctedScores?.get(latestAttempt.id) ?? latestAttempt.score}%`
       : "Complete a quiz to track your progress";
 
   return [
@@ -232,9 +243,13 @@ function buildOverviewStats(
   ] satisfies StudentOverviewStatItem[];
 }
 
-function buildRecentResults(completedAttempts: MyAttemptDto[]) {
+function buildRecentResults(
+  completedAttempts: MyAttemptDto[],
+  correctedScores?: Map<string, number>,
+) {
   return completedAttempts.slice(0, 3).map((attempt) => {
-    const score = attempt.score;
+    // Prefer session-based (points-accurate) percentage over backend score
+    const score = correctedScores?.get(attempt.id) ?? attempt.score;
 
     return {
       title: attempt.quizTitle,
@@ -250,9 +265,10 @@ export function buildStudentOverviewData({
   studentSources,
   completedAttempts,
   attemptsLoading,
+  correctedScoreByAttemptId,
 }: StudentOverviewDataInput) {
   return {
-    stats: buildOverviewStats(studentSources, completedAttempts, attemptsLoading),
-    recentResults: buildRecentResults(completedAttempts),
+    stats: buildOverviewStats(studentSources, completedAttempts, attemptsLoading, correctedScoreByAttemptId),
+    recentResults: buildRecentResults(completedAttempts, correctedScoreByAttemptId),
   };
 }

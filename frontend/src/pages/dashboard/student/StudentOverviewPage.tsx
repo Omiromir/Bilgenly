@@ -28,6 +28,7 @@ import { StatCard } from "../../../features/dashboard/components/StatCard";
 import {
   buildStudentOverviewData,
 } from "../../../features/dashboard/components/student-overview/studentOverviewData";
+import { getQuizSessionResultSummary } from "../../../features/quiz-session/quizSessionUtils";
 
 const scoreToneClassName = {
   blue: dashboardTextToneClassName.brand,
@@ -38,8 +39,9 @@ export function StudentOverviewPage() {
   const { currentUser } = useAuth();
   const { classes } = useTeacherClasses();
   const { quizzes } = useQuizLibrary();
-  const { sessions } = useQuizSessions();
+  const { sessions, getCompletedSessionsForRole } = useQuizSessions();
   const { openQuiz } = useQuizLauncher();
+  const completedSessions = getCompletedSessionsForRole("student");
   const studentViewer = currentUser?.role === "student" ? currentUser : null;
   const studentIdentity = useMemo(
     () => ({
@@ -80,14 +82,28 @@ export function StudentOverviewPage() {
       ),
     [allAttempts, attemptsError, attemptsLoading, classes, quizzes, sessions, studentIdentity],
   );
+  // Map backendAttemptId → accurate points-based percentage from local session.
+  // Overrides the backend's (correctAnswers/totalQuestions) score with the
+  // correct (earnedPoints/totalPoints) value wherever a local session exists.
+  const correctedScoreByAttemptId = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const session of completedSessions) {
+      if (session.backendAttemptId) {
+        map.set(session.backendAttemptId, getQuizSessionResultSummary(session).percentage);
+      }
+    }
+    return map;
+  }, [completedSessions]);
+
   const overview = useMemo(
     () =>
       buildStudentOverviewData({
         studentSources,
         completedAttempts,
         attemptsLoading,
+        correctedScoreByAttemptId,
       }),
-    [attemptsLoading, completedAttempts, studentSources],
+    [attemptsLoading, completedAttempts, studentSources, correctedScoreByAttemptId],
   );
   const assignedPreview = useMemo(
     () =>

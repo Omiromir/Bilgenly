@@ -32,6 +32,7 @@ import { getRequestErrorMessage } from "../../lib/apiClient";
 import {
   type MockDashboardUser,
 } from "../../features/dashboard/mock/mockUsers";
+import { ApiError } from "../../lib/apiClient";
 
 interface AuthContextValue {
   role: UserRole | null;
@@ -279,6 +280,20 @@ export function AuthProvider({ children }: AuthProviderProps) {
         persistSession(hydratedUser, token);
       } catch (error) {
         if (!isMounted) {
+          return;
+        }
+
+        // Only clear auth on genuine HTTP auth failures (401/403).
+        // Network errors (TypeError: Failed to fetch) and AbortErrors from
+        // page navigation must NOT clear auth — they are transient and would
+        // log the user out on every React Router navigate() call.
+        const isHttpAuthFailure =
+          error instanceof ApiError &&
+          (error.status === 401 || error.status === 403);
+
+        if (!isHttpAuthFailure) {
+          // Transient network error — keep the user signed in, just stop loading.
+          setIsLoading(false);
           return;
         }
 

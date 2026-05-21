@@ -110,6 +110,18 @@ public class ModerationService
         }, null);
     }
 
+    public async Task<string?> DeleteUserAsync(Guid userId, Guid moderatorId)
+    {
+        var user = await _userRepository.GetByIdAsync(userId);
+        if (user is null) return "User not found.";
+        if (user.Id == moderatorId) return "You cannot delete your own account from the moderation panel.";
+        if (user.Role == UserRole.Moderator) return "Moderator accounts cannot be deleted from the moderation panel.";
+
+        await _userRepository.DeleteAsync(user);
+        await _userRepository.SaveChangesAsync();
+        return null;
+    }
+
     public async Task<string?> UnsuspendUserAsync(Guid userId, Guid moderatorId)
     {
         var user = await _userRepository.GetByIdAsync(userId);

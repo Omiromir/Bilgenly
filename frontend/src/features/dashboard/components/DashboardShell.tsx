@@ -66,6 +66,9 @@ export function DashboardShell() {
         />
 
         <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Navigation menu"
           className={cn(
             "fixed inset-y-0 left-0 z-50 w-[290px] max-w-[85vw] transition-transform duration-200 ease-out lg:hidden",
             isMobileSidebarOpen ? "translate-x-0" : "-translate-x-full"

@@ -283,5 +283,36 @@ export const authStyles = `
     .auth-footer-links {
       gap: 18px;
     }
+    .auth-meta-row {
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+  }
+  @media (max-width: 420px) {
+    .auth-page {
+      padding: 20px 14px 0;
+    }
+    .auth-title {
+      font-size: 21px;
+    }
+    .auth-subtitle {
+      font-size: 13px;
+      margin-bottom: 24px;
+    }
+    .auth-brand {
+      margin-bottom: 20px;
+    }
+    .auth-input,
+    .auth-primary,
+    .auth-secondary {
+      height: 44px;
+      font-size: 14px;
+    }
+    .auth-label {
+      font-size: 12px;
+    }
+    .auth-strength-label {
+      font-size: 12px;
+    }
   }
 `;

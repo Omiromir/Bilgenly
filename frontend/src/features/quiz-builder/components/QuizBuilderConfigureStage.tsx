@@ -14,6 +14,7 @@ interface QuizBuilderConfigureStageProps {
   contextValue: string;
   copy: QuizBuilderCopy;
   handleGenerateQuiz: () => void;
+  handleMockGenerate?: () => void;
   handleReplaceSource: () => void;
   mode: "teacher" | "student";
   parsedSource: ParsedSource | null;
@@ -29,6 +30,7 @@ export function QuizBuilderConfigureStage({
   contextValue,
   copy,
   handleGenerateQuiz,
+  handleMockGenerate,
   handleReplaceSource,
   mode,
   parsedSource,
@@ -38,6 +40,7 @@ export function QuizBuilderConfigureStage({
   setQuestionCount,
   setQuizTitle,
 }: QuizBuilderConfigureStageProps) {
+  const isDev = import.meta.env.DEV;
   return (
     <DashboardSurface asChild radius="xl" padding="lg">
       <section className="space-y-6">
@@ -135,6 +138,18 @@ export function QuizBuilderConfigureStage({
           >
             {mode === "student" ? "Generate Practice Quiz" : "Generate Quiz"}
           </DashboardButton>
+          {isDev && handleMockGenerate ? (
+            <DashboardButton
+              type="button"
+              size="xl"
+              variant="ghost"
+              onClick={handleMockGenerate}
+              title="Dev only - skips the ML service and loads mock questions instantly"
+              className="border border-dashed border-[var(--dashboard-warning)] text-[var(--dashboard-warning)] hover:bg-[var(--dashboard-warning-soft)]"
+            >
+              Mock Generate
+            </DashboardButton>
+          ) : null}
           <p className="text-sm text-[var(--dashboard-text-soft)]">
             {mode === "student"
               ? "You will be able to start practicing right away after generation."

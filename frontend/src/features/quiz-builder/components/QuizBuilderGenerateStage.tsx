@@ -1,6 +1,8 @@
+import { useState } from "react";
 import {
   AlertCircle,
   CheckCircle2,
+  Download,
   PencilLine,
   PlayCircle,
   RefreshCw,
@@ -17,6 +19,7 @@ import type {
   GenerationState,
   ParsedSource,
   QuizBuilderCopy,
+  QuizExportFormat,
   ValidationIssue,
 } from "../quizBuilderTypes";
 
@@ -28,6 +31,7 @@ interface QuizBuilderGenerateStageProps {
   generationError: string | null;
   generationState: GenerationState;
   handleCancelGeneration: () => void;
+  handleDownloadQuizExport: (format: QuizExportFormat) => void;
   handleGenerateQuiz: () => void;
   handleOpenQuizFlow: (targetStatus: "draft") => void;
   handleRetryGeneration: () => void;
@@ -58,6 +62,7 @@ export function QuizBuilderGenerateStage({
   generationError,
   generationState,
   handleCancelGeneration,
+  handleDownloadQuizExport,
   handleGenerateQuiz,
   handleOpenQuizFlow,
   handleRetryGeneration,
@@ -68,6 +73,7 @@ export function QuizBuilderGenerateStage({
   setHasEnteredReview,
   validationIssues,
 }: QuizBuilderGenerateStageProps) {
+  const [exportFormat, setExportFormat] = useState<QuizExportFormat>("json");
   const steps = [
     { label: "Parsing source", sublabel: "Reading & chunking document" },
     { label: "Generating questions", sublabel: "AI building Q&A pairs" },
@@ -413,7 +419,7 @@ export function QuizBuilderGenerateStage({
               </div>
             </div>
 
-            <div className="flex flex-wrap gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               <DashboardButton
                 type="button"
                 size="lg"
@@ -443,6 +449,35 @@ export function QuizBuilderGenerateStage({
                 <RefreshCw className="h-4.5 w-4.5" />
                 Regenerate
               </DashboardButton>
+              <div
+                className="flex items-center gap-1 rounded-[var(--radius-lg)] border border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-muted)] p-1"
+                role="group"
+                aria-label="Export quiz"
+              >
+                <select
+                  value={exportFormat}
+                  onChange={(event) =>
+                    setExportFormat(event.target.value as QuizExportFormat)
+                  }
+                  aria-label="Export format"
+                  className="h-8 cursor-pointer rounded-[calc(var(--radius-lg)-4px)] border-0 bg-transparent px-2 text-xs font-medium text-[var(--dashboard-text-soft)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--dashboard-brand)] focus-visible:ring-offset-1"
+                >
+                  <option value="json">JSON</option>
+                  <option value="txt">Text</option>
+                  <option value="xml">Moodle XML</option>
+                </select>
+                <DashboardButton
+                  type="button"
+                  variant="secondary"
+                  size="icon"
+                  className="h-8 w-8 shrink-0"
+                  onClick={() => handleDownloadQuizExport(exportFormat)}
+                  title={`Export as ${exportFormat.toUpperCase()}`}
+                  aria-label={`Export as ${exportFormat.toUpperCase()}`}
+                >
+                  <Download className="h-4 w-4" />
+                </DashboardButton>
+              </div>
             </div>
           </>
         ) : null}

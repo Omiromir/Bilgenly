@@ -1176,6 +1176,8 @@ export function AssignQuizDialog({
   onOpenChange,
   onAssignQuiz,
 }: AssignQuizDialogProps) {
+  // Two-step wizard: "select" → "configure"
+  const [step, setStep] = useState<"select" | "configure">("select");
   const [search, setSearch] = useState("");
   const [selectedQuizId, setSelectedQuizId] = useState<string | null>(null);
   const [settings, setSettings] = useState<AssignmentSettingsFormValues>(
@@ -1186,6 +1188,7 @@ export function AssignQuizDialog({
 
   useEffect(() => {
     if (!open) {
+      setStep("select");
       setSearch("");
       setSelectedQuizId(null);
       setSettings(DEFAULT_ASSIGNMENT_SETTINGS_VALUES);
@@ -1200,36 +1203,39 @@ export function AssignQuizDialog({
 
   const filteredQuizzes = useMemo(() => {
     const query = deferredSearch.trim().toLowerCase();
-
     return quizzes.filter((quiz) => {
-      if (!query) {
-        return true;
-      }
-
+      if (!query) return true;
       return [quiz.title, quiz.topic, quiz.description]
         .join(" ")
         .toLowerCase()
         .includes(query);
     });
   }, [deferredSearch, quizzes]);
+
   const isArchivedClass = teacherClass?.status === "archived";
   const selectedQuiz =
     filteredQuizzes.find((quiz) => quiz.id === selectedQuizId) ??
     quizzes.find((quiz) => quiz.id === selectedQuizId) ??
     null;
 
-  const handleAssign = () => {
-    if (!selectedQuiz) {
-      return;
+  const handleNext = () => {
+    if (selectedQuiz) {
+      setStep("configure");
     }
+  };
 
+  const handleBack = () => {
+    setStep("select");
+    setDeadlineError("");
+  };
+
+  const handleAssign = () => {
+    if (!selectedQuiz) return;
     const validation = validateAssignmentSettings(settings);
-
     if (validation.errors.deadline) {
       setDeadlineError(validation.errors.deadline);
       return;
     }
-
     onAssignQuiz(selectedQuiz, {
       deadline: validation.deadline,
       maxAttempts: validation.maxAttempts,
@@ -1239,151 +1245,253 @@ export function AssignQuizDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DashboardModalContent className="max-w-[720px]">
+      <DashboardModalContent className="max-w-[680px]">
         <div className="flex min-h-0 flex-1 flex-col">
-        <DashboardModalHeader
-          title="Assign quiz"
-          description={
-            teacherClass
-              ? `Choose a quiz to make visible to class members in ${teacherClass.name}.`
-              : "Choose a quiz for this class."
-          }
-        />
 
-        <DashboardModalBody>
-          <DashboardSearchField
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search quizzes by title, topic, or description..."
-            inputClassName="h-12 rounded-[16px] border-[var(--dashboard-border)] bg-[var(--dashboard-surface-elevated)]"
-          />
+          {/* ── Step indicator ── */}
+          <div className="flex items-center gap-3 px-6 pt-6 pb-1">
+            <div className="flex items-center gap-2">
+              <span
+                className={cn(
+                  "flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold",
+                  step === "select"
+                    ? "bg-[var(--dashboard-brand)] text-white"
+                    : "bg-[var(--dashboard-brand-soft)] text-[var(--dashboard-brand)]",
+                )}
+              >
+                {step === "configure" ? "✓" : "1"}
+              </span>
+              <span
+                className={cn(
+                  "text-sm font-medium",
+                  step === "select"
+                    ? "text-[var(--dashboard-text-strong)]"
+                    : "text-[var(--dashboard-text-soft)]",
+                )}
+              >
+                Choose quiz
+              </span>
+            </div>
+            <div className="h-px flex-1 bg-[var(--dashboard-border-soft)]" />
+            <div className="flex items-center gap-2">
+              <span
+                className={cn(
+                  "flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold",
+                  step === "configure"
+                    ? "bg-[var(--dashboard-brand)] text-white"
+                    : "bg-[var(--dashboard-surface-muted)] text-[var(--dashboard-text-faint)]",
+                )}
+              >
+                2
+              </span>
+              <span
+                className={cn(
+                  "text-sm font-medium",
+                  step === "configure"
+                    ? "text-[var(--dashboard-text-strong)]"
+                    : "text-[var(--dashboard-text-faint)]",
+                )}
+              >
+                Settings
+              </span>
+            </div>
+          </div>
 
-          {isArchivedClass ? (
-            <EmptyStateBlock
-              title="Archived classes are read-only"
-              description="Restore this class before assigning more quizzes."
-              icon={Layers3}
-              className="border-dashed"
-            />
-          ) : filteredQuizzes.length ? (
-            <div className="space-y-5">
-              <div className="max-h-[320px] space-y-2 overflow-y-auto pr-1">
-              {filteredQuizzes.map((quiz) => {
-                const isAlreadyAssigned = assignedQuizIds.has(quiz.id);
-                const isSelected = selectedQuizId === quiz.id;
+          {/* ── Step 1: Select quiz ── */}
+          {step === "select" && (
+            <>
+              <DashboardModalHeader
+                title="Choose a quiz"
+                description={
+                  teacherClass
+                    ? `Select which quiz to assign to ${teacherClass.name}.`
+                    : "Select a quiz to assign."
+                }
+              />
+              <DashboardModalBody>
+                <DashboardSearchField
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Search by title, topic, or description..."
+                  inputClassName="h-12 rounded-[16px] border-[var(--dashboard-border)] bg-[var(--dashboard-surface-elevated)]"
+                />
 
-                return (
-                  <div
-                    key={quiz.id}
-                    className={cn(
-                      "flex items-center justify-between gap-4 rounded-[18px] border bg-[var(--dashboard-surface-elevated)] px-5 py-4 transition hover:shadow-[var(--dashboard-shadow-card)]",
-                      isSelected
-                        ? "border-[var(--dashboard-brand)]"
-                        : "border-[var(--dashboard-border-soft)] hover:border-[var(--dashboard-border)]",
-                    )}
-                  >
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap gap-2">
-                        <DashboardBadge
-                          tone="neutral"
-                          className="px-3 py-1 text-xs font-semibold capitalize"
+                {isArchivedClass ? (
+                  <EmptyStateBlock
+                    title="Archived classes are read-only"
+                    description="Restore this class before assigning more quizzes."
+                    icon={Layers3}
+                    className="border-dashed"
+                  />
+                ) : filteredQuizzes.length ? (
+                  <div className="max-h-[380px] space-y-2 overflow-y-auto pr-1">
+                    {filteredQuizzes.map((quiz) => {
+                      const isAlreadyAssigned = assignedQuizIds.has(quiz.id);
+                      const isSelected = selectedQuizId === quiz.id;
+                      return (
+                        <button
+                          key={quiz.id}
+                          type="button"
+                          disabled={isAlreadyAssigned}
+                          onClick={() => setSelectedQuizId(quiz.id)}
+                          className={cn(
+                            "w-full rounded-[18px] border bg-[var(--dashboard-surface-elevated)] px-5 py-4 text-left transition",
+                            isAlreadyAssigned
+                              ? "cursor-not-allowed opacity-50"
+                              : "hover:shadow-[var(--dashboard-shadow-card)]",
+                            isSelected
+                              ? "border-[var(--dashboard-brand)] ring-1 ring-[var(--dashboard-brand)]"
+                              : "border-[var(--dashboard-border-soft)] hover:border-[var(--dashboard-border)]",
+                          )}
                         >
-                          {quiz.status.replace("-", " ")}
-                        </DashboardBadge>
-                        <DashboardBadge
-                          tone="info"
-                          className="max-w-[220px] truncate px-3 py-1 text-xs font-semibold"
-                        >
-                          {quiz.topic}
-                        </DashboardBadge>
-                      </div>
-                      <p className="mt-3 text-[1.1rem] font-semibold text-[var(--dashboard-text-strong)]">
-                        {quiz.title}
-                      </p>
-                      <p className="mt-1 text-sm text-[var(--dashboard-text-soft)]">
-                        {quiz.questionCount}{" "}
-                        {quiz.questionCount === 1 ? "question" : "questions"} ·{" "}
-                        {quiz.updatedAt}
-                      </p>
-                    </div>
-
-                    <DashboardButton
-                      type="button"
-                      size="sm"
-                      variant={isAlreadyAssigned ? "ghost" : isSelected ? "primary" : "secondary"}
-                      className="min-w-[96px] rounded-[16px] px-5"
-                      disabled={isAlreadyAssigned}
-                      onClick={() => {
-                        setSelectedQuizId(quiz.id);
-                        if (deadlineError) {
-                          setDeadlineError("");
-                        }
-                      }}
-                    >
-                      {isAlreadyAssigned ? "Already visible" : isSelected ? "Selected" : "Choose"}
-                    </DashboardButton>
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="min-w-0">
+                              <div className="flex flex-wrap gap-2">
+                                <DashboardBadge
+                                  tone="neutral"
+                                  className="px-3 py-1 text-xs font-semibold capitalize"
+                                >
+                                  {quiz.status.replace("-", " ")}
+                                </DashboardBadge>
+                                <DashboardBadge
+                                  tone="info"
+                                  className="max-w-[200px] truncate px-3 py-1 text-xs font-semibold"
+                                >
+                                  {quiz.topic}
+                                </DashboardBadge>
+                              </div>
+                              <p className="mt-3 text-[1.05rem] font-semibold text-[var(--dashboard-text-strong)]">
+                                {quiz.title}
+                              </p>
+                              <p className="mt-1 text-sm text-[var(--dashboard-text-soft)]">
+                                {quiz.questionCount}{" "}
+                                {quiz.questionCount === 1 ? "question" : "questions"} · {quiz.updatedAt}
+                              </p>
+                            </div>
+                            {/* Selection indicator */}
+                            <span
+                              className={cn(
+                                "mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 text-xs font-bold transition",
+                                isSelected
+                                  ? "border-[var(--dashboard-brand)] bg-[var(--dashboard-brand)] text-white"
+                                  : "border-[var(--dashboard-border)] bg-transparent text-transparent",
+                              )}
+                            >
+                              ✓
+                            </span>
+                          </div>
+                          {isAlreadyAssigned ? (
+                            <p className="mt-2 text-xs text-[var(--dashboard-text-faint)]">
+                              Already assigned to this class
+                            </p>
+                          ) : null}
+                        </button>
+                      );
+                    })}
                   </div>
-                );
-              })}
-              </div>
+                ) : (
+                  <EmptyStateBlock
+                    title="No quizzes available"
+                    description={
+                      quizzes.length
+                        ? "No quizzes match the current search."
+                        : "Create or publish a quiz first, then assign it from here."
+                    }
+                    icon={BookOpen}
+                    className="border-dashed"
+                  />
+                )}
+              </DashboardModalBody>
 
-              {selectedQuiz ? (
-                <div className="space-y-4 rounded-[20px] border border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-elevated)] px-4 py-4">
-                  <div>
-                    <p className="font-semibold text-[var(--dashboard-text-strong)]">
-                      Assigned quiz settings
-                    </p>
-                    <p className="mt-1 text-sm leading-6 text-[var(--dashboard-text-soft)]">
+              <DashboardModalFooter>
+                <DashboardButton
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => onOpenChange(false)}
+                >
+                  Cancel
+                </DashboardButton>
+                {!isArchivedClass ? (
+                  <DashboardButton
+                    type="button"
+                    size="sm"
+                    disabled={!selectedQuiz}
+                    onClick={handleNext}
+                  >
+                    Next →
+                  </DashboardButton>
+                ) : null}
+              </DashboardModalFooter>
+            </>
+          )}
+
+          {/* ── Step 2: Configure settings ── */}
+          {step === "configure" && selectedQuiz && (
+            <>
+              <DashboardModalHeader
+                title="Assignment settings"
+                description="Set a deadline and attempt limit for this assignment."
+              />
+              <DashboardModalBody>
+                {/* Selected quiz summary */}
+                <div className="flex items-center justify-between gap-4 rounded-[18px] border border-[var(--dashboard-brand-soft)] bg-[var(--dashboard-brand-soft-alt)] px-5 py-4">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap gap-2">
+                      <DashboardBadge tone="info" className="px-3 py-1 text-xs font-semibold">
+                        {selectedQuiz.topic}
+                      </DashboardBadge>
+                    </div>
+                    <p className="mt-2 text-[1.05rem] font-semibold text-[var(--dashboard-text-strong)]">
                       {selectedQuiz.title}
                     </p>
+                    <p className="mt-0.5 text-sm text-[var(--dashboard-text-soft)]">
+                      {selectedQuiz.questionCount}{" "}
+                      {selectedQuiz.questionCount === 1 ? "question" : "questions"}
+                    </p>
                   </div>
-                  <AssignmentSettingsForm
-                    values={settings}
-                    deadlineError={deadlineError}
-                    onChange={(nextValues) => {
-                      setSettings(nextValues);
-                      if (deadlineError) {
-                        setDeadlineError("");
-                      }
-                    }}
-                  />
+                  <DashboardButton
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className="shrink-0 text-xs"
+                    onClick={handleBack}
+                  >
+                    Change
+                  </DashboardButton>
                 </div>
-              ) : null}
-            </div>
-          ) : (
-            <EmptyStateBlock
-              title="No quizzes available"
-              description={
-                quizzes.length
-                  ? "No quizzes match the current search."
-                  : "Create or publish a quiz first, then assign it from here."
-              }
-              icon={BookOpen}
-              className="border-dashed"
-            />
-          )}
-        </DashboardModalBody>
 
-        <DashboardModalFooter>
-          <DashboardButton
-            type="button"
-            size="sm"
-            variant="ghost"
-            onClick={() => onOpenChange(false)}
-          >
-            Close
-          </DashboardButton>
-          {!isArchivedClass ? (
-            <DashboardButton
-              type="button"
-              size="sm"
-              disabled={!selectedQuiz}
-              onClick={handleAssign}
-            >
-              Assign quiz
-            </DashboardButton>
-          ) : null}
-        </DashboardModalFooter>
+                {/* Settings form */}
+                <AssignmentSettingsForm
+                  values={settings}
+                  deadlineError={deadlineError}
+                  onChange={(nextValues) => {
+                    setSettings(nextValues);
+                    if (deadlineError) setDeadlineError("");
+                  }}
+                />
+              </DashboardModalBody>
+
+              <DashboardModalFooter>
+                <DashboardButton
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={handleBack}
+                >
+                  ← Back
+                </DashboardButton>
+                <DashboardButton
+                  type="button"
+                  size="sm"
+                  onClick={handleAssign}
+                >
+                  Assign quiz
+                </DashboardButton>
+              </DashboardModalFooter>
+            </>
+          )}
+
         </div>
       </DashboardModalContent>
     </Dialog>

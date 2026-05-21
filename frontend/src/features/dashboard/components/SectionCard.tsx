@@ -38,7 +38,7 @@ export function SectionCard({
           )}
         >
           <div>
-            <h2 className="text-[1.6rem] font-semibold tracking-tight text-[var(--dashboard-text-strong)]">
+            <h2 className="text-2xl font-semibold tracking-tight text-[var(--dashboard-text-strong)]">
               {title}
             </h2>
             {description ? (

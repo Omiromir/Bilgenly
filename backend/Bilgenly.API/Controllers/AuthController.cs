@@ -84,5 +84,18 @@ public class AuthController  : ControllerBase
 
         return Ok(new { message = "Password updated successfully" });
     }
-    
+
+    [HttpDelete("account")]
+    [Authorize]
+    public async Task<IActionResult> DeleteAccount()
+    {
+        var userId = Guid.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+        var (success, error) = await _authService.DeleteAccountAsync(userId);
+
+        if (!success)
+            return BadRequest(new { message = error });
+
+        return Ok(new { message = "Account deleted successfully" });
+    }
+
 }

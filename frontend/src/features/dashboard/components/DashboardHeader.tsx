@@ -135,7 +135,7 @@ export function DashboardHeader({ onOpenSidebar }: DashboardHeaderProps) {
       <div ref={headerRef} className="px-4 py-4 sm:px-6 lg:px-8">
         <div className="flex flex-col">
           <div className="flex w-full items-center justify-between gap-4">
-            <div className="flex items-center justify-between gap-3 xl:flex-1">
+            <div className="flex items-center gap-3">
               <DashboardButton
                 type="button"
                 onClick={onOpenSidebar}
@@ -144,7 +144,7 @@ export function DashboardHeader({ onOpenSidebar }: DashboardHeaderProps) {
                 className="border border-[var(--dashboard-border)] lg:hidden"
                 aria-label="Open navigation"
               >
-                <Menu className="h-5 w-5" />
+                <Menu className="h-5 w-5" aria-hidden="true" />
               </DashboardButton>
             </div>
 
@@ -159,6 +159,8 @@ export function DashboardHeader({ onOpenSidebar }: DashboardHeaderProps) {
                 size="icon"
                 className="relative text-[var(--dashboard-text)]"
                 aria-label="Notifications"
+                aria-expanded={isNotificationsOpen}
+                aria-haspopup="true"
               >
                 <Bell className="h-5 w-5" />
                 {unreadCount ? (
@@ -175,7 +177,9 @@ export function DashboardHeader({ onOpenSidebar }: DashboardHeaderProps) {
                 variant="ghost"
                 size="md"
                 className="px-3"
-                aria-label="Profile"
+                aria-label="Profile menu"
+                aria-expanded={isProfileOpen}
+                aria-haspopup="true"
               >
                 <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--dashboard-surface-elevated)] text-sm font-semibold text-[var(--dashboard-text-strong)] ring-1 ring-[var(--dashboard-border-soft)]">
                   {avatarUrl ? (
@@ -194,11 +198,13 @@ export function DashboardHeader({ onOpenSidebar }: DashboardHeaderProps) {
 
           <div className="relative flex justify-end">
             <DashboardSurface
+              role="region"
+              aria-label="Notifications panel"
               className={cn(
-                "fixed left-4 right-4 top-[84px] z-30 overflow-hidden rounded-[20px] shadow-[var(--dashboard-shadow-overlay)] sm:absolute sm:left-auto sm:right-16 sm:top-0 sm:w-[360px] sm:max-w-[360px] sm:rounded-[24px]",
+                "fixed left-4 right-4 top-[84px] z-30 overflow-hidden rounded-[20px] shadow-[var(--dashboard-shadow-overlay)] transition-[opacity,visibility] sm:absolute sm:left-auto sm:right-16 sm:top-0 sm:w-[360px] sm:max-w-[360px] sm:rounded-[24px]",
                 isNotificationsOpen
-                  ? "pointer-events-auto opacity-100"
-                  : "pointer-events-none opacity-0",
+                  ? "visible pointer-events-auto opacity-100"
+                  : "invisible pointer-events-none opacity-0",
               )}
               radius="lg"
               padding="none"
@@ -224,7 +230,7 @@ export function DashboardHeader({ onOpenSidebar }: DashboardHeaderProps) {
                       markNotificationRead(notification.id),
                     );
                   }}
-                  className="pt-1 text-sm font-medium text-[var(--dashboard-brand)] transition hover:text-[var(--dashboard-brand-strong)] disabled:cursor-not-allowed disabled:opacity-50"
+                  className="rounded-md pt-1 text-sm font-medium text-[var(--dashboard-brand)] transition hover:text-[var(--dashboard-brand-strong)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--dashboard-brand)] focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50"
                   disabled={!recipientUserId || unreadCount === 0}
                 >
                   Mark all as read
@@ -284,10 +290,10 @@ export function DashboardHeader({ onOpenSidebar }: DashboardHeaderProps) {
                               <button
                                 type="button"
                                 onClick={() => markNotificationRead(notification.id)}
-                                className="text-[var(--dashboard-text-faint)] transition hover:text-[var(--dashboard-text-soft)]"
-                                aria-label={`Mark ${notification.title} as read`}
+                                className="rounded-md text-[var(--dashboard-text-faint)] transition hover:text-[var(--dashboard-text-soft)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--dashboard-brand)] focus-visible:ring-offset-1"
+                                aria-label={`Mark "${notification.title}" as read`}
                               >
-                                <CircleCheckBig className="h-4 w-4" />
+                                <CircleCheckBig className="h-4 w-4" aria-hidden="true" />
                               </button>
                             ) : null}
                           </div>
@@ -317,10 +323,10 @@ export function DashboardHeader({ onOpenSidebar }: DashboardHeaderProps) {
             <DashboardSurface
               className={cn(
                 dropdownBaseClassName,
-                "w-full max-w-[260px] rounded-[16px] shadow-[var(--dashboard-shadow-overlay)]",
+                "w-full max-w-[280px] rounded-[16px] shadow-[var(--dashboard-shadow-overlay)] transition-[opacity,visibility]",
                 isProfileOpen
-                  ? "pointer-events-auto opacity-100"
-                  : "pointer-events-none opacity-0",
+                  ? "visible pointer-events-auto opacity-100"
+                  : "invisible pointer-events-none opacity-0",
               )}
               radius="lg"
               padding="none"
@@ -371,10 +377,10 @@ export function DashboardHeader({ onOpenSidebar }: DashboardHeaderProps) {
                 <button
                   type="button"
                   onClick={signOut}
-                  className="flex w-full items-center gap-3 px-4 py-3 text-[15px] font-medium text-[var(--dashboard-text)] transition hover:bg-[var(--dashboard-surface-muted)]"
+                  className="flex w-full items-center gap-3 px-4 py-3 text-[15px] font-medium text-[var(--dashboard-text)] transition hover:bg-[var(--dashboard-surface-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--dashboard-brand)]"
                 >
-                  <LogOut className="h-4 w-4" />
-                  Log out
+                  <LogOut className="h-4 w-4" aria-hidden="true" />
+                  Sign out
                 </button>
               </div>
             </DashboardSurface>

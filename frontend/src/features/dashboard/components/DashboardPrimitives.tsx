@@ -10,7 +10,7 @@ export const dashboardPageCenteredClassName =
   "mx-auto max-w-[920px] space-y-8 pt-2";
 export const dashboardPageIntroClassName = "space-y-2";
 export const dashboardPageTitleClassName =
-  "text-[2.75rem] font-semibold tracking-[-0.04em] text-[var(--dashboard-text-strong)] md:text-[3rem]";
+  "text-[2rem] font-semibold tracking-[-0.03em] text-[var(--dashboard-text-strong)] md:text-[2.25rem]";
 export const dashboardPageSubtitleClassName =
   "max-w-3xl text-[1.02rem] leading-7 text-[var(--dashboard-text-soft)]";
 export const dashboardSectionStackClassName = "space-y-4";
@@ -100,7 +100,7 @@ export function DashboardSurface({
 }
 
 export const dashboardButtonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap font-medium transition outline-none disabled:pointer-events-none disabled:opacity-60 [&_svg]:pointer-events-none [&_svg]:shrink-0",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap font-medium transition outline-none focus-visible:ring-2 focus-visible:ring-[var(--dashboard-brand)] focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-60 [&_svg]:pointer-events-none [&_svg]:shrink-0",
   {
     variants: {
       variant: {
@@ -123,7 +123,7 @@ export const dashboardButtonVariants = cva(
         lg: "h-12 rounded-[18px] px-5 text-[15px]",
         xl: "h-14 rounded-[20px] px-6 text-base",
         icon: "h-12 w-12 rounded-2xl",
-        iconSm: "h-9 w-9 rounded-full",
+        iconSm: "h-11 w-11 rounded-full",
       },
     },
     defaultVariants: {
@@ -235,7 +235,7 @@ export const dashboardIconChipVariants = cva(
 );
 
 export const dashboardInputVariants = cva(
-  "dashboard-input w-full border outline-none transition focus:border-[var(--dashboard-brand)] focus:bg-[var(--dashboard-surface-elevated)] disabled:pointer-events-none disabled:opacity-60",
+  "dashboard-input w-full border outline-none transition focus:border-[var(--dashboard-brand)] focus:bg-[var(--dashboard-surface-elevated)] focus-visible:ring-2 focus-visible:ring-[var(--dashboard-brand)] focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-60",
   {
     variants: {
       size: {
@@ -257,7 +257,7 @@ export const dashboardInputVariants = cva(
 );
 
 export const dashboardSelectVariants = cva(
-  "dashboard-input border outline-none transition focus:border-[var(--dashboard-brand)] focus:bg-[var(--dashboard-surface-elevated)]",
+  "dashboard-input border outline-none transition focus:border-[var(--dashboard-brand)] focus:bg-[var(--dashboard-surface-elevated)] focus-visible:ring-2 focus-visible:ring-[var(--dashboard-brand)] focus-visible:ring-offset-2",
   {
     variants: {
       size: {
@@ -272,7 +272,7 @@ export const dashboardSelectVariants = cva(
 );
 
 export const dashboardTextareaVariants = cva(
-  "dashboard-input w-full resize-none border outline-none transition focus:border-[var(--dashboard-brand)] focus:bg-[var(--dashboard-surface-elevated)]",
+  "dashboard-input w-full resize-none border outline-none transition focus:border-[var(--dashboard-brand)] focus:bg-[var(--dashboard-surface-elevated)] focus-visible:ring-2 focus-visible:ring-[var(--dashboard-brand)] focus-visible:ring-offset-2",
   {
     variants: {
       size: {
@@ -287,7 +287,7 @@ export const dashboardTextareaVariants = cva(
 );
 
 export const dashboardTabVariants = cva(
-  "flex w-full items-center gap-3 text-left font-semibold transition",
+  "flex w-full items-center gap-3 text-left font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--dashboard-brand)] focus-visible:ring-offset-1",
   {
     variants: {
       active: {
@@ -334,6 +334,7 @@ export function DashboardSearchField({
       />
       <input
         type="search"
+        aria-label={props["aria-label"] ?? (props.placeholder ? String(props.placeholder).replace(/…$/, "") : "Search")}
         className={cn(
           dashboardInputVariants({ size, withIcon: true }),
           inputClassName,

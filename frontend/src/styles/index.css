@@ -11,4 +11,11 @@ html {
 body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /*
+   * Use overflow-x: clip instead of hidden.
+   * 'clip' trims content at the padding edge without creating a BFC or
+   * a second scroll container — so only the html element scrolls vertically.
+   * 'hidden' would make body a scroll container, producing a double scrollbar.
+   */
+  overflow-x: clip;
 }

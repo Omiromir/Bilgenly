@@ -154,7 +154,7 @@ export function BrowserMockup({ url = 'bilgenly.com', children }: BrowserMockupP
       </div>
 
       {/* Content Area */}
-      <div className="h-[220px] bg-[rgba(135,132,132,0.15)] sm:h-[267px]">{children}</div>
+      <div className="h-[220px] bg-[rgba(135,132,132,0.15)] sm:h-[267px] dark:bg-[rgba(30,45,80,0.5)]">{children}</div>
     </div>
   );
 }

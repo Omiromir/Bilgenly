@@ -21,7 +21,9 @@ export function BilgenlyLogo({
         style={{ width: size, height: size, display: "block" }}
       />
       {showText ? (
-        <span className="auth-brand-name text-xl font-semibold">Bilgenly</span>
+        <span className="font-['Montserrat',sans-serif] text-[20px] font-extrabold tracking-[-0.03em] text-[#111827] dark:text-white">
+          Bilgenly
+        </span>
       ) : null}
     </Link>
   );

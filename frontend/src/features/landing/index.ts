@@ -15,3 +15,4 @@ export { StepCard } from './StepCard';
 export { MVVCard } from './MVVCard';
 export { FAQAccordionItem } from './FAQAccordionItem';
 export { RevealOnScroll } from './RevealOnScroll';
+export { StatsBar } from './StatsBar';

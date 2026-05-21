@@ -132,3 +132,10 @@ export async function revokeSessionById(_: string): Promise<SecurityActionResult
     window.setTimeout(() => resolve({ mode: "local-only" }), 250);
   });
 }
+
+export async function deleteMyAccount(): Promise<void> {
+  await apiRequest<{ message: string }>("/api/auth/account", {
+    method: "DELETE",
+    fallbackErrorMessage: "Unable to delete account.",
+  });
+}

@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router";
 import { toast } from "sonner";
 import { useQuizLibrary } from "../../../app/providers/QuizLibraryProvider";
@@ -77,6 +77,7 @@ export function QuizSessionPage({ viewerRole }: QuizSessionPageProps) {
     getLatestCompletedSession,
     getLatestInProgressSession,
     getSessionById,
+    isHydrated,
     sessions,
   } = useQuizSessions();
   const {
@@ -93,8 +94,10 @@ export function QuizSessionPage({ viewerRole }: QuizSessionPageProps) {
     () => resolveAssignmentContext(assignmentId, classes),
     [assignmentId, classes],
   );
-  const latestInProgressSession = quiz
-    ? getLatestInProgressSession(quiz.id, viewerRole, assignmentId)
+  // Use quizId from URL params directly so this resolves immediately on page
+  // refresh, before the quiz library has finished loading from the backend.
+  const latestInProgressSession = quizId
+    ? getLatestInProgressSession(quizId, viewerRole, assignmentId)
     : undefined;
   const backendAssignmentState = useMemo(
     () =>
@@ -159,20 +162,25 @@ export function QuizSessionPage({ viewerRole }: QuizSessionPageProps) {
     fallbackCompletedAttempt ??
     undefined;
   const assignmentConstraints = backendAssignmentState;
+  // Do NOT gate on `quiz` here. QuizPlayer is fully self-contained and reads
+  // all quiz data from the session snapshot stored in localStorage, so we can
+  // resolve an active in-progress session immediately on page refresh before
+  // the quiz library has loaded from the backend (Moodle-like seamless resume).
   const activeSession =
-    sessionId && quiz
+    sessionId
       ? (() => {
           const matchingSession = getSessionById(sessionId);
 
           if (
             matchingSession &&
-            matchingSession.quizId === quiz.id &&
-            matchingSession.viewerRole === viewerRole
+            matchingSession.viewerRole === viewerRole &&
+            (!quiz || matchingSession.quizId === quiz.id)
           ) {
             return matchingSession;
           }
 
-          return requestedCompletedSession ?? undefined;
+          // requestedCompletedSession requires quiz to be loaded
+          return (quiz ? requestedCompletedSession : null) ?? undefined;
         })()
       : undefined;
   const resolvedBackLink = useMemo(() => {
@@ -211,6 +219,88 @@ export function QuizSessionPage({ viewerRole }: QuizSessionPageProps) {
       void refreshAttempts();
     }
   }, [activeSession?.status, activeSession?.finishedAt, refreshAttempts, viewerRole]);
+
+  // Auto-resume: once localStorage is hydrated, if there is an in-progress
+  // session but the URL doesn't point at it (e.g. after a page refresh that
+  // stripped the ?session= param, or a direct navigation to the quiz page),
+  // immediately redirect into that session so the student can't accidentally
+  // start a duplicate attempt.
+  const autoResumedRef = useRef(false);
+  useEffect(() => {
+    if (!isHydrated || autoResumedRef.current) {
+      return;
+    }
+
+    // Only auto-resume when there is no active session already showing
+    if (activeSession?.status === "in-progress") {
+      return;
+    }
+
+    if (!latestInProgressSession || !quizId) {
+      return;
+    }
+
+    autoResumedRef.current = true;
+    navigate(
+      `${buildQuizSessionPath(viewerRole, quizId)}${buildQuizSessionSearch({
+        sessionId: latestInProgressSession.id,
+        assignmentId,
+      })}`,
+      { replace: true, state: navigationState ?? undefined },
+    );
+  }, [
+    activeSession?.status,
+    assignmentId,
+    isHydrated,
+    latestInProgressSession,
+    navigate,
+    navigationState,
+    quizId,
+    viewerRole,
+  ]);
+
+  // Block all interaction until localStorage sessions are hydrated.
+  // This is the primary guard that prevents the start-button race condition
+  // on page refresh (student pressing Start before their in-progress session
+  // is visible in the React session list).
+  if (!isHydrated) {
+    return (
+      <div className={dashboardPageNarrowClassName}>
+        <DashboardSurface radius="xl" padding="lg">
+          <div className="space-y-4 animate-pulse">
+            <div className="h-6 w-1/3 rounded-xl bg-[var(--dashboard-surface-muted)]" />
+            <div className="h-10 w-2/3 rounded-xl bg-[var(--dashboard-surface-muted)]" />
+            <div className="h-4 w-full rounded-xl bg-[var(--dashboard-surface-muted)]" />
+            <div className="h-4 w-5/6 rounded-xl bg-[var(--dashboard-surface-muted)]" />
+            <div className="mt-6 flex gap-3">
+              <div className="h-11 w-36 rounded-xl bg-[var(--dashboard-surface-muted)]" />
+              <div className="h-11 w-24 rounded-xl bg-[var(--dashboard-surface-muted)]" />
+            </div>
+          </div>
+        </DashboardSurface>
+      </div>
+    );
+  }
+
+  // Fast-path: if there is an active in-progress session, jump straight into
+  // the quiz player without waiting for the quiz library to finish loading.
+  // QuizPlayer is self-contained — it reads all quiz data from the session
+  // snapshot persisted in localStorage, so no quiz-library data is needed.
+  // This gives Moodle-like seamless resume: refresh → instantly back in quiz.
+  if (activeSession?.status === "in-progress") {
+    return (
+      <div className="mx-auto max-w-[1360px] space-y-6">
+        <div className="space-y-4">
+          <DashboardButton asChild type="button" size="lg" variant="ghost">
+            <Link to={resolvedBackLink.path} state={resolvedBackLink.state}>
+              Save and exit
+            </Link>
+          </DashboardButton>
+          <QuizPlayer sessionId={activeSession.id} />
+        </div>
+      </div>
+    );
+  }
 
   if (!quiz) {
     return (

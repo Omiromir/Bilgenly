@@ -10,6 +10,7 @@ import {
   Navbar,
   PricingSection,
   RevealOnScroll,
+  StatsBar,
 } from "..";
 
 export function LandingView() {
@@ -33,12 +34,15 @@ export function LandingView() {
   };
 
   return (
-    <div className="min-h-screen w-full overflow-x-hidden bg-white">
+    <div className="min-h-screen w-full bg-white dark:bg-[#0d1424]">
       <Navbar />
 
       <main className="mx-auto w-full">
         <RevealOnScroll>
           <HeroSection />
+        </RevealOnScroll>
+        <RevealOnScroll delay={0.05}>
+          <StatsBar />
         </RevealOnScroll>
         <RevealOnScroll delay={0.05}>
           <MVVSection />

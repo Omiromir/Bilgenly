@@ -275,7 +275,40 @@ export function formatQuizAttemptDuration(session: QuizSessionRecord) {
     0,
     Math.round((endTimestamp - startTimestamp) / 1000),
   );
+
   return formatDurationFromSeconds(durationInSeconds);
+}
+
+/**
+ * Derive a human-readable duration string from a raw attempt DTO.
+ * Priority:
+ *   1. `durationSeconds` field (if the backend populates it)
+ *   2. `finishedAt − dateTaken` (start → finish timestamps)
+ *   3. "--" fallback
+ */
+export function formatAttemptDtoDuration({
+  durationSeconds,
+  dateTaken,
+  finishedAt,
+}: {
+  durationSeconds?: number | null;
+  dateTaken: string;
+  finishedAt?: string | null;
+}) {
+  if (typeof durationSeconds === "number" && durationSeconds > 0) {
+    return formatDurationFromSeconds(durationSeconds);
+  }
+
+  if (finishedAt) {
+    const start = new Date(dateTaken).getTime();
+    const end = new Date(finishedAt).getTime();
+
+    if (Number.isFinite(start) && Number.isFinite(end) && end > start) {
+      return formatDurationFromSeconds(Math.round((end - start) / 1000));
+    }
+  }
+
+  return "--";
 }
 
 export function buildQuizPlaybackSummary(

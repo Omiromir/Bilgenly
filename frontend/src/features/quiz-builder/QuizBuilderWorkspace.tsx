@@ -35,6 +35,7 @@ import {
   saveGeneratedQuizReview,
   type GeneratedQuizResultDto,
 } from "./api/quizGenerationApi";
+import { buildMockGeneratedQuizResult } from "./quizGenerationMock";
 import { cn } from "../../components/ui/utils";
 import { DashboardPageHeader } from "../dashboard/components/DashboardPageHeader";
 import {
@@ -70,8 +71,6 @@ import type {
 } from "./quizBuilderTypes";
 import {
   applyCorrectIndexes,
-  buildGeneratedQuestions,
-  buildMockExtract,
   buildQuizDescription,
   createQuestionId,
   getQuestionCorrectIndexes,
@@ -299,7 +298,7 @@ export function QuizBuilderWorkspace({
   const presetContext = location.state?.presetContext as string | undefined;
   const [quizTitle, setQuizTitle] = useState(presetTitle ?? "");
   const [questionCount, setQuestionCount] = useState(8);
-  const [focus, setFocus] = useState(presetFocus ?? "Protein structure");
+  const [focus, setFocus] = useState(presetFocus ?? "");
   const [contextValue, setContextValue] = useState(
     presetContext ?? copy.defaultContextValue,
   );
@@ -479,10 +478,33 @@ export function QuizBuilderWorkspace({
     }
 
     const timeoutId = window.setTimeout(() => {
-      const sourceText =
-        activeInput === "paste"
-          ? pastedText.trim()
-          : buildMockExtract(selectedFile?.name ?? "lecture-notes.pdf");
+      if (activeInput === "upload") {
+        // PDF is sent directly to the AI service during generation —
+        // no client-side text extraction needed here.
+        if (!selectedFile) {
+          setParseStatus("error");
+          setParsedSource(null);
+          return;
+        }
+
+        const fileSizeMb = Math.max(1, Math.round(selectedFile.size / 1024 / 1024));
+        setParsedSource({
+          label: selectedFile.name,
+          lengthLabel: `${fileSizeMb} MB · PDF ready`,
+          pageEstimate: "Pages estimated after generation",
+          characterCount: selectedFile.size,
+          extractedText: "",
+        });
+        setParseStatus("ready");
+        setGenerationState("idle");
+        setGenerationError(null);
+        setQuestions([]);
+        setSelectedQuestionId(null);
+        setHasEnteredReview(false);
+        return;
+      }
+
+      const sourceText = pastedText.trim();
 
       if (sourceText.length < 180) {
         setParseStatus("error");
@@ -497,14 +519,8 @@ export function QuizBuilderWorkspace({
           : undefined;
 
       setParsedSource({
-        label:
-          activeInput === "upload"
-            ? (selectedFile?.name ?? "Uploaded source")
-            : "Pasted lecture text",
-        lengthLabel:
-          activeInput === "upload"
-            ? `${Math.max(1, Math.round((selectedFile?.size ?? 0) / 1024 / 1024))} MB source`
-            : `${Math.ceil(characterCount / 6)} words estimated`,
+        label: "Pasted lecture text",
+        lengthLabel: `${Math.ceil(characterCount / 6)} words estimated`,
         pageEstimate: `${Math.max(1, Math.ceil(characterCount / 1600))} pages estimated`,
         characterCount,
         extractedText: sourceText,
@@ -519,7 +535,7 @@ export function QuizBuilderWorkspace({
     }, 1400);
 
     return () => window.clearTimeout(timeoutId);
-  }, [activeInput, parseStatus, pastedText, selectedFile]);
+  }, [activeInput, parseStatus, pastedText, selectedFile?.name, selectedFile?.size]);
 
   useEffect(() => {
     if (generationState !== "running") {
@@ -534,39 +550,6 @@ export function QuizBuilderWorkspace({
     }, 1000);
 
     const runGeneration = async () => {
-      if (mode !== "teacher") {
-        window.setTimeout(() => {
-          if (isCancelled) {
-            return;
-          }
-
-          const shouldFail = parseStatus === "warning" && questionCount > 12;
-
-          if (shouldFail) {
-            setGenerationState("failed");
-            setGenerationError(
-              "Bilgenly could not assemble a reliable quiz draft from the current source. Your material and settings are still here, so you can adjust them and retry.",
-            );
-            return;
-          }
-
-          const generated = buildGeneratedQuestions(
-            resolvedQuizTitle,
-            focus,
-            questionCount,
-          );
-          setQuestions(generated);
-          setSelectedQuestionId(generated[0]?.id ?? null);
-          setGenerationState("success");
-          setHasEnteredReview(false);
-          setGenerationDurationLabel(
-            `${Math.max(12, Math.floor((Date.now() - startedAt) / 1000) + 12)} sec`,
-          );
-          setQuestionSeed((value) => value + 1);
-        }, 4200);
-        return;
-      }
-
       try {
         const questionType =
           questionTypes.includes("True/False") &&
@@ -851,6 +834,22 @@ export function QuizBuilderWorkspace({
     setGenerationError(null);
     setGenerationDurationLabel(null);
     setHasEnteredReview(false);
+  }
+
+  function handleMockGenerate() {
+    const mockResult = buildMockGeneratedQuizResult(
+      resolvedQuizTitle,
+      questionCount,
+    );
+    const generated = mapGeneratedResultToQuestions(mockResult);
+    setQuestions(generated);
+    setSelectedQuestionId(generated[0]?.id ?? null);
+    setGeneratedBackendQuizId(null);
+    setGenerationState("success");
+    setGenerationError(null);
+    setGenerationDurationLabel("instant (mock)");
+    setHasEnteredReview(false);
+    setQuestionSeed((value) => value + 1);
   }
 
   function handleCancelGeneration() {
@@ -1350,6 +1349,7 @@ export function QuizBuilderWorkspace({
               contextValue={contextValue}
               copy={copy}
               handleGenerateQuiz={handleGenerateQuiz}
+              handleMockGenerate={import.meta.env.DEV ? handleMockGenerate : undefined}
               handleReplaceSource={handleReplaceSource}
               mode={mode}
               parsedSource={parsedSource}
@@ -1370,6 +1370,7 @@ export function QuizBuilderWorkspace({
               generationError={generationError}
               generationState={generationState}
               handleCancelGeneration={handleCancelGeneration}
+              handleDownloadQuizExport={handleDownloadQuizExport}
               handleGenerateQuiz={handleGenerateQuiz}
               handleOpenQuizFlow={handleOpenQuizFlow}
               handleRetryGeneration={handleRetryGeneration}

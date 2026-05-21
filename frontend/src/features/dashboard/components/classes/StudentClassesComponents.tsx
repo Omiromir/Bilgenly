@@ -60,11 +60,12 @@ export function StudentClassCard({
       radius="xl"
       padding="md"
       className={cn(
-        "cursor-pointer border transition",
+        "cursor-pointer border transition-[colors,box-shadow] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--dashboard-brand)] focus-visible:ring-offset-1",
         isSelected &&
           "border-[var(--dashboard-brand)] shadow-[0_18px_40px_rgba(43,122,243,0.12)]",
       )}
       role="button"
+      aria-label={teacherClass.name}
       tabIndex={0}
       onClick={onOpen}
       onKeyDown={(event) => {
@@ -113,7 +114,6 @@ export function StudentClassesEmptyState() {
       title="No joined classes yet"
       description="Accept a class invite from Notifications to unlock a class workspace with assigned quizzes and teacher context."
       icon={Users}
-      className="border-dashed"
     />
   );
 }
@@ -135,7 +135,6 @@ export function StudentClassesSearchEmptyState({
           Clear search
         </DashboardButton>
       }
-      className="border-dashed"
     />
   );
 }
@@ -269,7 +268,6 @@ export function StudentClassDetailsPanel({
             title="No class quizzes available yet"
             description="You are already in this class, but there are no assigned quizzes available here yet."
             icon={BookOpen}
-            className="border-dashed"
           />
         )}
       </div>

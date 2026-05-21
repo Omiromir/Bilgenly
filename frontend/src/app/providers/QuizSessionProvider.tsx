@@ -55,6 +55,7 @@ const SHARED_ASSIGNED_QUIZ_SESSIONS_STORAGE_KEY =
 interface QuizSessionContextValue {
   sessions: QuizSessionRecord[];
   sharedAssignedSessions: SharedAssignedQuizSessionRecord[];
+  isHydrated: boolean;
   getSessionById: (sessionId: string) => QuizSessionRecord | undefined;
   getLatestInProgressSession: (
     quizId: string,
@@ -570,6 +571,10 @@ export function QuizSessionProvider({ children }: QuizSessionProviderProps) {
     );
 
     if (!savedValue) {
+      // No existing sessions — mark hydration complete and unlock persistence.
+      // hydratedStorageKey must be set so the persistence effect can write new
+      // sessions to localStorage (the guard requires hydratedStorageKey === storageKey).
+      setHydratedStorageKey(storageKey);
       setIsHydrated(true);
       return;
     }
@@ -1013,6 +1018,7 @@ export function QuizSessionProvider({ children }: QuizSessionProviderProps) {
     () => ({
       sessions,
       sharedAssignedSessions,
+      isHydrated,
       getSessionById: (sessionId) =>
         sessions.find((session) => session.id === sessionId),
       getLatestInProgressSession: (quizId, viewerRole, assignmentId) =>
@@ -1038,6 +1044,7 @@ export function QuizSessionProvider({ children }: QuizSessionProviderProps) {
           ),
         ),
       createSession: async (quiz, context) => {
+        // Primary guard: check React state (fast path, works after hydration)
         const existingSession = getLatestQuizSession(sessions, {
           quizId: quiz.id,
           viewerRole: context.viewerRole,
@@ -1047,6 +1054,50 @@ export function QuizSessionProvider({ children }: QuizSessionProviderProps) {
 
         if (existingSession) {
           return existingSession;
+        }
+
+        // Secondary guard: read localStorage directly in case React state hasn't
+        // hydrated yet (race condition on page refresh). Prevents a second
+        // startAttempt() call when the session is still in storage but not yet
+        // reflected in the sessions array.
+        try {
+          const rawStored = getScopedStorageValue(
+            QUIZ_SESSIONS_STORAGE_KEY,
+            getUserStorageScope({
+              userId: currentUser?.id ?? null,
+              email: currentUser?.email ?? null,
+              role,
+              token,
+            }),
+          );
+          if (rawStored) {
+            const parsed = JSON.parse(rawStored) as Partial<QuizSessionRecord>[];
+            if (Array.isArray(parsed)) {
+              const storedInProgress = parsed.find(
+                (s) =>
+                  s.status === "in-progress" &&
+                  s.quizId === quiz.id &&
+                  s.viewerRole === context.viewerRole &&
+                  s.assignmentContext?.assignmentId ===
+                    context.assignmentContext?.assignmentId,
+              );
+              if (storedInProgress) {
+                const sanitized = sanitizeQuizSessionRecord(storedInProgress);
+                if (sanitized) {
+                  // Re-hydrate into React state and return without creating a new attempt
+                  setSessions((current) => {
+                    const alreadyPresent = current.some((s) => s.id === sanitized.id);
+                    return alreadyPresent
+                      ? current
+                      : sortQuizSessionsByUpdatedAt([sanitized, ...current]);
+                  });
+                  return sanitized;
+                }
+              }
+            }
+          }
+        } catch {
+          // localStorage read failure is non-fatal — continue with normal creation
         }
 
         let nextQuiz = quiz;
@@ -1331,7 +1382,7 @@ export function QuizSessionProvider({ children }: QuizSessionProviderProps) {
         );
       },
     }),
-    [sessions, sharedAssignedSessions],
+    [sessions, sharedAssignedSessions, isHydrated],
   );
 
   return (

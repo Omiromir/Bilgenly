@@ -62,7 +62,7 @@ export function DashboardPageHeader({
             align === "center" ? "justify-center" : "justify-start",
           )}
         >
-          <h1 className={cn(dashboardPageTitleClassName, "md:text-5xl")}>
+          <h1 className={dashboardPageTitleClassName}>
             {title}
           </h1>
           {badge ? (
@@ -87,8 +87,8 @@ export function DashboardPageHeader({
       {resolvedActions ? (
         <div
           className={cn(
-            "shrink-0",
-            align === "center" ? "flex justify-center pt-2" : "flex justify-start lg:justify-end",
+            "flex shrink-0 flex-wrap gap-3",
+            align === "center" ? "justify-center pt-2" : "justify-start lg:justify-end",
           )}
         >
           {resolvedActions}

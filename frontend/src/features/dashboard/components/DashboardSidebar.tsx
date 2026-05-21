@@ -35,7 +35,7 @@ export function DashboardSidebar({
     item.path.endsWith("/settings"),
   );
   const navItemClassName =
-    "flex items-center gap-3 rounded-[18px] px-4 py-3 text-base font-medium text-[var(--dashboard-text-soft)] transition hover:bg-[var(--dashboard-surface-muted)] hover:text-[var(--dashboard-text)]";
+    "flex items-center gap-3 rounded-[18px] px-4 py-3 text-base font-medium text-[var(--dashboard-text-soft)] transition-colors hover:bg-[var(--dashboard-surface-muted)] hover:text-[var(--dashboard-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--dashboard-brand)] focus-visible:ring-offset-1";
   const collapsedNavItemClassName =
     "h-14 w-14 justify-center rounded-[18px] px-0 py-0";
 

@@ -162,6 +162,17 @@ public class AuthService
 
         return (true, null);
     }
+    public async Task<(bool Success, string? Error)> DeleteAccountAsync(Guid userId)
+    {
+        var user = await _userRepository.GetByIdAsync(userId);
+        if (user is null) return (false, "User not found");
+        if (user.Role == UserRole.Moderator) return (false, "Moderator accounts cannot be self-deleted");
+
+        await _userRepository.DeleteAsync(user);
+        await _userRepository.SaveChangesAsync();
+        return (true, null);
+    }
+
     public async Task<(AuthResponseDto? Response, string? Error)> UpdateRoleAsync(
         Guid userId, UpdateRoleDto dto)
     {

@@ -169,3 +169,10 @@ export function getAllUsersForModeration() {
     fallbackErrorMessage: "Unable to load users.",
   });
 }
+
+export function deleteUserByModerator(userId: string) {
+  return apiRequest<void>(`/api/moderation/users/${userId}`, {
+    method: "DELETE",
+    fallbackErrorMessage: "Unable to delete user.",
+  });
+}

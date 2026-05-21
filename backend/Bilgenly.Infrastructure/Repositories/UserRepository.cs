@@ -30,4 +30,10 @@ public class UserRepository : IUserRepository
             .OrderBy(u => u.Role)
             .ThenBy(u => u.Username)
             .ToListAsync();
+
+    public Task DeleteAsync(User user)
+    {
+        _context.Users.Remove(user);
+        return Task.CompletedTask;
+    }
 }

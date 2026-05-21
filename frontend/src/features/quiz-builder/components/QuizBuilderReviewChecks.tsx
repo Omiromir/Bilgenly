@@ -139,40 +139,38 @@ export function QuizBuilderReviewChecks({
               </p>
             </label>
 
-            {mode === "teacher" ? (
-              <div className="space-y-2 rounded-[18px] border border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-muted)] px-4 py-3.5">
-                <span className="block text-sm font-semibold text-[var(--dashboard-text-strong)]">
-                  Export quiz
-                </span>
-                <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] xl:grid-cols-1">
-                  <select
-                    value={exportFormat}
-                    onChange={(event) =>
-                      setExportFormat(event.target.value as QuizExportFormat)
-                    }
-                    className={cn(
-                      dashboardSelectVariants({ size: "md" }),
-                      "w-full border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-elevated)]",
-                    )}
-                    aria-label="Export quiz format"
-                  >
-                    <option value="json">JSON backup</option>
-                    <option value="txt">Readable text</option>
-                    <option value="xml">Moodle XML</option>
-                  </select>
-                  <DashboardButton
-                    type="button"
-                    variant="secondary"
-                    size="lg"
-                    className="w-full sm:w-auto xl:w-full"
-                    onClick={() => handleDownloadQuizExport(exportFormat)}
-                  >
-                    <Download className="h-4.5 w-4.5" />
-                    Export
-                  </DashboardButton>
-                </div>
+            <div className="space-y-2 rounded-[18px] border border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-muted)] px-4 py-3.5">
+              <span className="block text-sm font-semibold text-[var(--dashboard-text-strong)]">
+                Export quiz
+              </span>
+              <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] xl:grid-cols-1">
+                <select
+                  value={exportFormat}
+                  onChange={(event) =>
+                    setExportFormat(event.target.value as QuizExportFormat)
+                  }
+                  className={cn(
+                    dashboardSelectVariants({ size: "md" }),
+                    "w-full border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-elevated)]",
+                  )}
+                  aria-label="Export quiz format"
+                >
+                  <option value="json">JSON backup</option>
+                  <option value="txt">Readable text</option>
+                  <option value="xml">Moodle XML</option>
+                </select>
+                <DashboardButton
+                  type="button"
+                  variant="secondary"
+                  size="lg"
+                  className="w-full sm:w-auto xl:w-full"
+                  onClick={() => handleDownloadQuizExport(exportFormat)}
+                >
+                  <Download className="h-4.5 w-4.5" />
+                  Export
+                </DashboardButton>
               </div>
-            ) : null}
+            </div>
 
             <DashboardButton
               type="button"

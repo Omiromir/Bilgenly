@@ -22,7 +22,18 @@ import {
   getAllUsersForModeration,
   hideQuiz,
   suspendUser,
+  deleteUserByModerator,
 } from "../../../features/dashboard/api/moderationApi";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "../../../components/ui/alert-dialog";
 
 function formatDate(iso: string | null) {
   if (!iso) return "—";
@@ -88,6 +99,8 @@ export function ModeratorDashboardPage() {
     reason: string;
     suspendedUntil: string;
   }>({ userId: null, reason: "", suspendedUntil: "" });
+  const [deleteUserPending, setDeleteUserPending] = useState<ModerationUserDto | null>(null);
+  const [isDeletingUser, setIsDeletingUser] = useState(false);
 
   useEffect(() => {
     Promise.allSettled([
@@ -222,6 +235,21 @@ export function ModeratorDashboardPage() {
       }
     } catch {
       // error handled silently
+    }
+  }
+
+  async function handleDeleteUser() {
+    if (!deleteUserPending) return;
+    setIsDeletingUser(true);
+    try {
+      await deleteUserByModerator(deleteUserPending.id);
+      setAllUsers((prev) => prev.filter((u) => u.id !== deleteUserPending.id));
+      setSuspendedUsers((prev) => prev.filter((u) => u.id !== deleteUserPending.id));
+      setDeleteUserPending(null);
+    } catch {
+      // error handled silently
+    } finally {
+      setIsDeletingUser(false);
     }
   }
 
@@ -607,6 +635,15 @@ export function ModeratorDashboardPage() {
                           Unsuspend
                         </button>
                       )}
+
+                      {user.role !== "Moderator" && (
+                        <button
+                          onClick={() => setDeleteUserPending(user)}
+                          className="rounded-[8px] border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-100"
+                        >
+                          Delete
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -615,6 +652,35 @@ export function ModeratorDashboardPage() {
           )}
         </>
       )}
+
+      <AlertDialog
+        open={Boolean(deleteUserPending)}
+        onOpenChange={(open) => { if (!open) setDeleteUserPending(null); }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete user account?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteUserPending
+                ? `This will permanently delete "${deleteUserPending.username}" (${deleteUserPending.email}) and all their data — quizzes, attempts, and class memberships. This cannot be undone.`
+                : "This will permanently delete the user account."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeletingUser}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={isDeletingUser}
+              className="bg-red-600 text-white hover:bg-red-700"
+              onClick={(e) => {
+                e.preventDefault();
+                void handleDeleteUser();
+              }}
+            >
+              {isDeletingUser ? "Deleting…" : "Delete user"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

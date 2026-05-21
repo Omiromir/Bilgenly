@@ -302,7 +302,6 @@ export function StudentClassesPage() {
           title="Unable to load your classes"
           description={error}
           icon={BookOpen}
-          className="border-dashed"
         />
       ) : null}
 
@@ -386,11 +385,19 @@ export function StudentClassesPage() {
           />
 
           <DashboardModalBody className="space-y-4">
-            <label className="block space-y-2">
-              <span className="text-sm font-medium text-[var(--dashboard-text-strong)]">
+            <div className="space-y-2">
+              <label
+                htmlFor="invite-code-input"
+                className="block text-sm font-medium text-[var(--dashboard-text-strong)]"
+              >
                 Invite code
-              </span>
+              </label>
               <input
+                id="invite-code-input"
+                type="text"
+                name="inviteCode"
+                autoComplete="off"
+                spellCheck={false}
                 value={inviteCode}
                 onChange={(event) => {
                   setInviteCode(event.target.value.toUpperCase());
@@ -399,12 +406,16 @@ export function StudentClassesPage() {
                   }
                 }}
                 placeholder="ABC123"
-                className="h-14 w-full rounded-[18px] border border-[var(--dashboard-border)] bg-[var(--dashboard-surface-elevated)] px-5 text-base tracking-[0.22em] text-[var(--dashboard-text-strong)]"
+                aria-describedby={inviteCodeError ? "invite-code-error" : undefined}
+                aria-invalid={!!inviteCodeError}
+                className="h-14 w-full rounded-[18px] border border-[var(--dashboard-border)] bg-[var(--dashboard-surface-elevated)] px-5 text-base tracking-[0.22em] text-[var(--dashboard-text-strong)] outline-none transition focus:border-[var(--dashboard-brand)] focus:bg-[var(--dashboard-surface-elevated)] focus-visible:ring-2 focus-visible:ring-[var(--dashboard-brand)] focus-visible:ring-offset-2"
               />
               {inviteCodeError ? (
-                <p className="text-sm text-[var(--dashboard-danger)]">{inviteCodeError}</p>
+                <p id="invite-code-error" className="text-sm text-[var(--dashboard-danger)]">
+                  {inviteCodeError}
+                </p>
               ) : null}
-            </label>
+            </div>
           </DashboardModalBody>
 
           <DashboardModalFooter>

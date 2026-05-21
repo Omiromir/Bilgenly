@@ -30,7 +30,7 @@ import { SectionCard } from "../../../features/dashboard/components/SectionCard"
 import { StatCard } from "../../../features/dashboard/components/StatCard";
 import { buildQuizSessionPath, buildQuizSessionSearch } from "../../../features/quiz-session/quizRouting";
 import {
-  formatDurationFromSeconds,
+  formatAttemptDtoDuration,
   formatQuizAttemptDate,
   formatQuizAttemptDuration,
   formatQuizPoints,
@@ -86,6 +86,19 @@ export function StudentResultsPage() {
     [attempts],
   );
 
+  // Map backendAttemptId → points-based percentage from local session.
+  // Used to override the backend's (correctAnswers/totalQuestions)-based score
+  // with the accurate (earnedPoints/totalPoints)-based score wherever possible.
+  const sessionPercentageByAttemptId = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const session of completedSessions) {
+      if (session.backendAttemptId) {
+        map.set(session.backendAttemptId, getQuizSessionResultSummary(session).percentage);
+      }
+    }
+    return map;
+  }, [completedSessions]);
+
   const summary = useMemo(() => {
     if (!attemptSummaries.length) {
       return [
@@ -112,9 +125,15 @@ export function StudentResultsPage() {
       ];
     }
 
-    const percentages = attemptSummaries.map((attempt) => attempt.score);
+    // Prefer session-based percentage (points-accurate) over backend score
+    // (which uses correctAnswers/totalQuestions instead of earnedPoints/totalPoints).
+    const percentages = attemptSummaries.map((attempt) =>
+      sessionPercentageByAttemptId.get(attempt.attemptId) ?? attempt.score,
+    );
     const latestScore = percentages[0];
-    const averageScore = Math.round(analyticsState.data?.averageScore ?? 0);
+    const averageScore = Math.round(
+      percentages.reduce((sum, p) => sum + p, 0) / percentages.length,
+    );
     const bestScore = Math.max(...percentages);
     const completedCount = attemptSummaries.length;
 
@@ -143,7 +162,7 @@ export function StudentResultsPage() {
         note: `Recorded ${formatQuizAttemptDate(attemptSummaries[0]?.dateTaken ?? new Date().toISOString())}`,
       },
     ];
-  }, [analyticsState.data?.averageScore, attemptSummaries]);
+  }, [attemptSummaries, sessionPercentageByAttemptId]);
 
   const progressData = useMemo(
     () =>
@@ -152,9 +171,9 @@ export function StudentResultsPage() {
         .reverse()
         .map((attempt, index) => ({
           label: `Attempt ${index + 1}`,
-          value: attempt.score,
+          value: sessionPercentageByAttemptId.get(attempt.attemptId) ?? attempt.score,
         })),
-    [attemptSummaries],
+    [attemptSummaries, sessionPercentageByAttemptId],
   );
 
   const recentResults = useMemo(
@@ -195,8 +214,11 @@ export function StudentResultsPage() {
                 correctCount: attempt.correctAnswers,
                 incorrectCount: Math.max(attempt.totalQuestions - attempt.correctAnswers, 0),
                 totalQuestions: attempt.totalQuestions,
-                earnedPoints: 0,
-                totalPoints: 0,
+                // Use correct/total as a reasonable proxy when the local session
+                // is not available (e.g. after a hard refresh or on a new device).
+                // This keeps the Score row visible so the user sees meaningful data.
+                earnedPoints: attempt.correctAnswers,
+                totalPoints: attempt.totalQuestions,
               };
           const hasDetailedReview =
             Boolean(matchedSession) || attempt.questions.length > 0;
@@ -215,7 +237,7 @@ export function StudentResultsPage() {
               : null,
             retakeHref: buildQuizLink(
               attempt.quizId,
-              matchedSession?.assignmentContext?.assignmentId,
+              matchedSession?.assignmentContext?.assignmentId ?? attempt.assignmentId,
             ),
           };
         });
@@ -416,7 +438,7 @@ export function StudentResultsPage() {
                     <Clock3 className="h-4 w-4 text-[var(--dashboard-brand)]" />
                     Time: {session
                       ? formatQuizAttemptDuration(session)
-                      : formatDurationFromSeconds(attempt.durationSeconds)}
+                      : formatAttemptDtoDuration(attempt)}
                   </div>
                   <div className={dashboardIconTextRowClassName}>
                     <TrendingUp className="h-4 w-4 text-[var(--dashboard-brand)]" />
@@ -442,7 +464,7 @@ export function StudentResultsPage() {
                   )}
                   <DashboardButton asChild type="button" variant="secondary" size="lg">
                     <Link to={retakeHref}>
-                      {session?.assignmentContext ? "Open Assigned Quiz" : "Retake Quiz"}
+                      {(session?.assignmentContext || attempt.assignmentId) ? "Open Assigned Quiz" : "Retake Quiz"}
                     </Link>
                   </DashboardButton>
                 </div>

@@ -20,14 +20,15 @@ export function LandingButton({
   className
 }: LandingButtonProps) {
   const baseClasses =
-    "inline-flex cursor-pointer items-center justify-center whitespace-nowrap font-['Montserrat',sans-serif] font-semibold transition-all duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB]/50";
+    "inline-flex cursor-pointer items-center justify-center whitespace-nowrap font-['Montserrat',sans-serif] font-bold tracking-[-0.01em] transition-all duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB]/60 focus-visible:ring-offset-2";
 
   const variantClasses = {
     primary:
-      'rounded-xl bg-[#2191F6] text-white shadow-[0_6px_16px_rgba(37,99,235,0.3)] hover:-translate-y-[1px] hover:brightness-105 active:translate-y-0 active:scale-[0.98]',
+      'rounded-xl bg-[#2191F6] text-white shadow-[0_4px_14px_rgba(33,145,246,0.35)] hover:-translate-y-[2px] hover:bg-[#1a7de0] hover:shadow-[0_8px_24px_rgba(33,145,246,0.45)] active:translate-y-0 active:scale-[0.97] active:shadow-[0_2px_8px_rgba(33,145,246,0.25)]',
     secondary:
-      'rounded-xl bg-[#E5E7EB] text-[#111827] hover:-translate-y-[1px] hover:bg-[#D1D5DB] active:translate-y-0 active:scale-[0.98]',
-    ghost: 'bg-transparent text-[#4B5563] hover:-translate-y-[1px] hover:text-[#111827]'
+      'rounded-xl border border-[#D1D5DB] bg-white text-[#374151] shadow-[0_1px_3px_rgba(0,0,0,0.08)] hover:-translate-y-[2px] hover:border-[#2191F6]/40 hover:bg-[#F8FAFF] hover:text-[#1D4ED8] hover:shadow-[0_4px_12px_rgba(33,145,246,0.12)] active:translate-y-0 active:scale-[0.97] dark:border-[#2a3858] dark:bg-[#18233b] dark:text-[#dde6f7] dark:hover:border-[#7a72ff]/50 dark:hover:bg-[#1b2944] dark:hover:text-[#7a72ff]',
+    ghost:
+      'rounded-lg bg-transparent text-[#4B5563] hover:bg-[#F3F4F6] hover:text-[#111827] active:scale-[0.97] dark:text-[#9aa8c6] dark:hover:bg-[#1b2944] dark:hover:text-[#f5f8ff]',
   };
 
   const sizeClasses = {
@@ -38,11 +39,12 @@ export function LandingButton({
 
   return (
     <button
+      type="button"
       className={clsx(
         baseClasses,
         variantClasses[variant],
         sizeClasses[size],
-        disabled && 'opacity-50 cursor-not-allowed',
+        disabled && 'cursor-not-allowed opacity-50',
         className
       )}
       onClick={onClick}

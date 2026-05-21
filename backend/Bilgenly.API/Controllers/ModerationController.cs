@@ -81,6 +81,16 @@ public class ModerationController : ControllerBase
         return Ok();
     }
 
+    [HttpDelete("users/{id:guid}")]
+    [Authorize(Roles = "Moderator")]
+    public async Task<IActionResult> DeleteUser(Guid id)
+    {
+        var moderatorId = Guid.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+        var error = await _moderationService.DeleteUserAsync(id, moderatorId);
+        if (error is not null) return BadRequest(new { message = error });
+        return Ok();
+    }
+
     [HttpGet("quizzes/hidden")]
     [Authorize(Roles = "Moderator")]
     public async Task<IActionResult> GetHiddenQuizzes()

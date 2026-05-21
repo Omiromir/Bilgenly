@@ -3,12 +3,25 @@ import {
   ChevronDown,
   Lock,
   Palette,
+  Trash2,
   User,
 } from "../../../components/icons/AppIcons";
 import type { ChangeEvent, ReactNode } from "react";
 import { useMemo, useState } from "react";
+import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import { useAuth } from "../../../app/providers/AuthProvider";
+import { deleteMyAccount } from "../../../features/auth/api";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "../../../components/ui/alert-dialog";
 import { Input } from "../../../components/ui/input";
 import { Textarea } from "../../../components/ui/textarea";
 import { cn } from "../../../components/ui/utils";
@@ -117,7 +130,8 @@ export function DashboardSettingsPage({
   subtitle,
   metadata,
 }: DashboardSettingsPageProps) {
-  const { role } = useAuth();
+  const navigate = useNavigate();
+  const { role, signOut } = useAuth();
   const {
     settings,
     updateThemeMode,
@@ -136,6 +150,8 @@ export function DashboardSettingsPage({
     confirmPassword: false,
   });
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
+  const [showDeleteAccountDialog, setShowDeleteAccountDialog] = useState(false);
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const passwordErrors = useMemo(
     () => validatePasswordForm(passwordValues),
     [passwordValues],
@@ -195,6 +211,21 @@ export function DashboardSettingsPage({
       );
     } finally {
       setIsUpdatingPassword(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    setIsDeletingAccount(true);
+    try {
+      await deleteMyAccount();
+      signOut();
+      navigate("/");
+      toast.success("Your account has been permanently deleted.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to delete account.");
+    } finally {
+      setIsDeletingAccount(false);
+      setShowDeleteAccountDialog(false);
     }
   };
 
@@ -279,6 +310,29 @@ export function DashboardSettingsPage({
                     disabled={!canUpdatePassword}
                   >
                     Update Password
+                  </DashboardButton>
+                </div>
+              </SettingsPanel>
+
+              <SettingsPanel title="Danger Zone">
+                <div className="space-y-4">
+                  <div className="rounded-[18px] border border-[var(--dashboard-danger-soft)] bg-[var(--dashboard-danger-soft)]/30 px-5 py-4">
+                    <p className="text-sm font-semibold text-[var(--dashboard-danger)]">
+                      Delete Account
+                    </p>
+                    <p className="mt-1 text-sm leading-6 text-[var(--dashboard-text-soft)]">
+                      Permanently delete your account and all associated data. This action cannot be undone.
+                    </p>
+                  </div>
+                  <DashboardButton
+                    type="button"
+                    size="lg"
+                    variant="ghost"
+                    className="border border-[var(--dashboard-danger-soft)] text-[var(--dashboard-danger)] hover:bg-[var(--dashboard-danger-soft)]/40 hover:text-[var(--dashboard-danger)]"
+                    onClick={() => setShowDeleteAccountDialog(true)}
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Delete My Account
                   </DashboardButton>
                 </div>
               </SettingsPanel>
@@ -397,6 +451,31 @@ export function DashboardSettingsPage({
           ) : null}
         </div>
       </div>
+
+      <AlertDialog open={showDeleteAccountDialog} onOpenChange={setShowDeleteAccountDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete your account?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete your account, all quiz attempts, class memberships, and any quizzes you created. There is no way to recover your data after deletion.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeletingAccount}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={isDeletingAccount}
+              className="bg-[var(--dashboard-danger)] text-white hover:bg-[var(--dashboard-danger)]/90"
+              onClick={(e) => {
+                e.preventDefault();
+                void handleDeleteAccount();
+              }}
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              {isDeletingAccount ? "Deleting…" : "Delete my account"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
