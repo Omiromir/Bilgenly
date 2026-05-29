@@ -4,6 +4,7 @@ import {
   LoaderCircle,
   Search,
   Upload,
+  Wand2,
   XCircle,
 } from "../../../components/icons/AppIcons";
 import { cn } from "../../../components/ui/utils";
@@ -23,6 +24,7 @@ interface QuizBuilderInputStageProps {
   fileError: string | null;
   fileInputRef: RefObject<HTMLInputElement | null>;
   handleFileChange: (event: ChangeEvent<HTMLInputElement>) => void;
+  handleMockGenerate?: () => void;
   handleOpenFilePicker: () => void;
   handleStartParsing: () => void;
   parseStatus: ParseStatus;
@@ -41,6 +43,7 @@ export function QuizBuilderInputStage({
   fileError,
   fileInputRef,
   handleFileChange,
+  handleMockGenerate,
   handleOpenFilePicker,
   handleStartParsing,
   parseStatus,
@@ -51,6 +54,7 @@ export function QuizBuilderInputStage({
   setParsedSource,
   setPastedText,
 }: QuizBuilderInputStageProps) {
+  const isDev = import.meta.env.DEV;
   return (
     <DashboardSurface asChild radius="xl" padding="lg">
       <section className="space-y-6">
@@ -230,6 +234,29 @@ export function QuizBuilderInputStage({
               Add more lecture text or upload a fuller PDF. Nothing was lost, and
               you can retry immediately.
             </p>
+          </div>
+        ) : null}
+
+        {isDev && handleMockGenerate ? (
+          <div className="rounded-[20px] border border-dashed border-amber-400/60 bg-amber-50/60 px-4 py-3 dark:border-amber-500/40 dark:bg-amber-950/30">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400">
+                <span className="rounded-md bg-amber-400/20 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider">
+                  DEV
+                </span>
+                <span className="text-sm font-medium">
+                  Skip source — generate with mock data
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={handleMockGenerate}
+                className="flex items-center gap-1.5 rounded-[10px] border border-amber-400/50 bg-amber-400/15 px-3 py-1.5 text-xs font-semibold text-amber-700 transition hover:bg-amber-400/25 active:scale-[0.97] dark:text-amber-400"
+              >
+                <Wand2 className="h-3.5 w-3.5" />
+                Instant mock quiz
+              </button>
+            </div>
           </div>
         ) : null}
       </section>

@@ -27,8 +27,17 @@ public class ClassInvitationRepository : IClassInvitationRepository
             .OrderByDescending(i => i.CreatedAt)
             .ToListAsync();
 
+    public async Task<ClassInvitation?> GetByIdAsync(Guid id)
+        => await _context.ClassInvitations.FirstOrDefaultAsync(i => i.Id == id);
+
     public async Task AddAsync(ClassInvitation invitation)
         => await _context.ClassInvitations.AddAsync(invitation);
+
+    public Task DeleteAsync(ClassInvitation invitation)
+    {
+        _context.ClassInvitations.Remove(invitation);
+        return Task.CompletedTask;
+    }
 
     public async Task SaveChangesAsync()
         => await _context.SaveChangesAsync();

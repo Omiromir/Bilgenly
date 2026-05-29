@@ -225,12 +225,11 @@ const dashboardRoutes: DashboardRouteMeta[] = [
   {
     path: "/dashboard/moderator",
     role: "moderator",
-    label: "Moderator",
-    title: "Moderator Dashboard",
-    subtitle: "Access moderation tools and keep the existing moderator workflow stable.",
+    label: "Admin",
+    title: "Admin Dashboard",
+    subtitle: "Manage users, quizzes, and platform analytics from one place.",
     icon: ShieldCheck,
     navVisible: true,
-    badge: "Stable",
   },
 ];
 

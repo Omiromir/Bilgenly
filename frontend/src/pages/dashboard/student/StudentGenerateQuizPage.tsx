@@ -4,8 +4,8 @@ export function StudentGenerateQuizPage() {
   return (
     <QuizBuilderWorkspace
       mode="student"
-      title="Generate Quiz"
-      subtitle="Turn your notes, readings, or revision summaries into a personal practice quiz you can review and run yourself."
+      title="Build a Practice Quiz"
+      subtitle="Upload your notes or paste revision text and we'll turn it into a personal practice quiz you can run, review, and save to your library."
     />
   );
 }

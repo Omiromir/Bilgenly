@@ -134,4 +134,22 @@ public class ModerationController : ControllerBase
         var results = await _moderationService.GetAllUsersAsync();
         return Ok(results);
     }
+
+    [HttpDelete("quizzes/{id:guid}")]
+    [Authorize(Roles = "Moderator")]
+    public async Task<IActionResult> DeleteQuiz(Guid id)
+    {
+        var moderatorId = Guid.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+        var error = await _moderationService.DeleteQuizAsync(id, moderatorId);
+        if (error is not null) return BadRequest(new { message = error });
+        return Ok();
+    }
+
+    [HttpGet("analytics")]
+    [Authorize(Roles = "Moderator")]
+    public async Task<IActionResult> GetAnalytics()
+    {
+        var result = await _moderationService.GetAnalyticsAsync();
+        return Ok(result);
+    }
 }

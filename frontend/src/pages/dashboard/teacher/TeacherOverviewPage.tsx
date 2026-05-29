@@ -326,7 +326,7 @@ export function TeacherOverviewPage() {
           <div className="flex min-h-0 flex-1 flex-col">
 
             {/* ── Step indicator ── */}
-            <div className="flex items-center gap-3 px-6 pt-6 pb-1">
+            <div className="flex items-center gap-3 px-6 pt-8 pr-14 pb-2">
               <div className="flex items-center gap-2">
                 <span
                   className={cn(

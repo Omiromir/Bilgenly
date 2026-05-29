@@ -28,7 +28,7 @@ import { useNotifications } from "./NotificationsProvider";
 import {
   getNotificationRecipientUserIdByEmail,
   type MockDashboardUser,
-} from "../../features/dashboard/mock/mockUsers";
+} from "../../features/dashboard/users/dashboardUser";
 import {
   archiveClass as archiveClassRequest,
   assignQuizToClass as assignQuizToClassRequest,
@@ -38,6 +38,7 @@ import {
   getTeacherClasses,
   joinClassByInviteCode as joinClassByInviteCodeRequest,
   removeClassAssignment as removeClassAssignmentRequest,
+  removeStudentFromClass as removeStudentFromClassRequest,
   updateClass as updateClassRequest,
 } from "../../features/dashboard/api/classesApi";
 import {
@@ -48,7 +49,8 @@ import {
 import { getRequestErrorMessage, isGuidString } from "../../lib/apiClient";
 import type { UserRole } from "../../features/auth/api";
 import { useAuth } from "./AuthProvider";
-import { sendClassInvitations } from "../../features/dashboard/api/classInvitationsApi";
+import { revokeClassInvitation, sendClassInvitations } from "../../features/dashboard/api/classInvitationsApi";
+import { toast } from "sonner";
 import {
   getUserScopedStorageKey,
   getUserStorageScope,
@@ -414,6 +416,11 @@ export function TeacherClassesProvider({
   const [hiddenAssignmentIdsByClass, setHiddenAssignmentIdsByClass] = useState<
     Record<string, string[]>
   >({});
+  // Bump to retrigger the classes/assignments fetch — used by the focus
+  // listener and the `bilgenly:quiz-deleted` event so a quiz removed by
+  // admin disappears from class assignment lists and overview stats
+  // without a hard reload.
+  const [refetchTick, setRefetchTick] = useState(0);
   const {
     notifications,
     removeClassInvitationNotification,
@@ -499,7 +506,31 @@ export function TeacherClassesProvider({
     };
 
     void fetchClasses();
-  }, [token, role]);
+  }, [token, role, refetchTick]);
+
+  // Refetch classes/assignments when the tab regains focus or when another
+  // part of the app broadcasts that a quiz was deleted. This is what makes
+  // an admin-deleted quiz disappear from a teacher's overview cards, class
+  // assignment lists, and student class views without a hard reload.
+  useEffect(() => {
+    function bump() {
+      setRefetchTick((tick) => tick + 1);
+    }
+    function onVisibility() {
+      if (document.visibilityState === "visible") bump();
+    }
+    window.addEventListener("focus", bump);
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("bilgenly:quiz-deleted", bump as EventListener);
+    return () => {
+      window.removeEventListener("focus", bump);
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener(
+        "bilgenly:quiz-deleted",
+        bump as EventListener,
+      );
+    };
+  }, []);
 
   useEffect(() => {
     if (
@@ -756,10 +787,81 @@ export function TeacherClassesProvider({
         });
 
         if (isGuidString(classId)) {
-          sendClassInvitations(
-            classId,
-            newStudents.map((s) => s.email),
-          ).catch(() => {});
+          // Properly handle the backend response. Previously, the result was
+          // discarded with `.catch(() => {})`, which let invitations to
+          // non-existent accounts or wrong-role accounts silently land as
+          // local-only ghost students. Now: reconcile local state with the
+          // backend's view of what actually succeeded, and surface failures.
+          const emailsToInvite = newStudents.map((s) => s.email);
+          const idsByNormalizedEmail = new Map(
+            newStudents.map((s) => [normalizeEmail(s.email), s.id]),
+          );
+
+          sendClassInvitations(classId, emailsToInvite)
+            .then((response) => {
+              const sentEmails = new Set(
+                response.sent.map((dto) => normalizeEmail(dto.recipientEmail)),
+              );
+              const failedEmails = response.failed.map(normalizeEmail);
+              const failedStudentIds = new Set(
+                failedEmails
+                  .map((email) => idsByNormalizedEmail.get(email))
+                  .filter((id): id is string => Boolean(id)),
+              );
+
+              // Strip locally-added students whose backend invite failed —
+              // e.g. emails that don't belong to a registered account, or
+              // belong to a non-student role.
+              if (failedStudentIds.size > 0) {
+                setClasses((current) =>
+                  current.map((item) => {
+                    if (item.id !== classId) return item;
+                    return updateTeacherClassStudents(item, (students) =>
+                      students.filter((student) => !failedStudentIds.has(student.id)),
+                    );
+                  }),
+                );
+
+                toast.warning(
+                  `Could not invite ${failedEmails.length} ${
+                    failedEmails.length === 1 ? "email" : "emails"
+                  }: ${failedEmails.join(", ")}.  ` +
+                    "They may not have a student account yet.",
+                );
+              }
+
+              // Also drop any locally-created student whose email the backend
+              // didn't acknowledge at all (defensive — backend should put
+              // unknown ones in `failed`, but we mirror its truth either way).
+              const acknowledgedIds = new Set(
+                Array.from(sentEmails)
+                  .map((email) => idsByNormalizedEmail.get(email))
+                  .filter((id): id is string => Boolean(id)),
+              );
+              const orphanIds = newStudents
+                .map((s) => s.id)
+                .filter(
+                  (id) => !acknowledgedIds.has(id) && !failedStudentIds.has(id),
+                );
+              if (orphanIds.length > 0) {
+                const orphanSet = new Set(orphanIds);
+                setClasses((current) =>
+                  current.map((item) => {
+                    if (item.id !== classId) return item;
+                    return updateTeacherClassStudents(item, (students) =>
+                      students.filter((student) => !orphanSet.has(student.id)),
+                    );
+                  }),
+                );
+              }
+            })
+            .catch(() => {
+              // Network error — keep local optimistic state, but flag it so
+              // the teacher knows the invitations didn't reach the server.
+              toast.error(
+                "Class invitations were saved locally but could not be sent to the server. Please retry.",
+              );
+            });
         }
 
         return newStudents;
@@ -794,6 +896,14 @@ export function TeacherClassesProvider({
             }),
           ),
         );
+
+        // Pending students have no real userId — their "id" is the invitation id.
+        // Use the correct endpoint based on whether the student has joined.
+        if (targetStudent.status === "invited") {
+          revokeClassInvitation(classId, studentId).catch(() => {});
+        } else {
+          removeStudentFromClassRequest(classId, studentId).catch(() => {});
+        }
       },
       resendStudentInvite: (classId, studentId) => {
         const targetClass = classes.find((item) => item.id === classId);

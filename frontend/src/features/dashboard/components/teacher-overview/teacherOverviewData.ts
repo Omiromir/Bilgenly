@@ -35,6 +35,8 @@ export interface RecentQuizOverviewItem {
   classLabel: string;
   subjectLabel: string;
   completionRate: number;
+  /** Average score across all completed attempts (0-100), or null when no data yet. */
+  avgGrade: number | null;
   assignedStudentsCount: number;
   completedCount: number;
   inProgressCount: number;
@@ -91,6 +93,10 @@ interface RecentQuizAccumulator {
   notStartedCount: number;
   needsReviewStudents: Set<string>;
   assignmentCount: number;
+  /** Sum of per-assignment average scores (for computing overall avg). */
+  gradeScoreSum: number;
+  /** Number of assignments that contributed a score. */
+  gradeScoreCount: number;
   latestActivityAt: number;
   latestActivityLabel: string;
   isDraft: boolean;
@@ -359,6 +365,8 @@ function buildRecentQuizzes(
       notStartedCount: 0,
       needsReviewStudents: new Set<string>(),
       assignmentCount: 0,
+      gradeScoreSum: 0,
+      gradeScoreCount: 0,
       latestActivityAt: getTimestamp(quiz.updatedAt),
       latestActivityLabel: formatActivityDate(quiz.updatedAt),
       isDraft: isDraftLikeQuizStatus(quiz.status),
@@ -382,6 +390,8 @@ function buildRecentQuizzes(
         notStartedCount: 0,
         needsReviewStudents: new Set<string>(),
         assignmentCount: 0,
+        gradeScoreSum: 0,
+        gradeScoreCount: 0,
         latestActivityAt: assignedAtTimestamp,
         latestActivityLabel: formatActivityDate(assignment.assignedAt),
         isDraft: false,
@@ -410,6 +420,10 @@ function buildRecentQuizzes(
         0,
         insight.totalStudents - insight.completedCount - insight.inProgressCount,
       );
+      if (insight.averageScore !== null) {
+        accumulator.gradeScoreSum += insight.averageScore;
+        accumulator.gradeScoreCount += 1;
+      }
     } else {
       accumulator.assignedStudentsCount += analytics.assignedStudentsCount;
       accumulator.completedCount += analytics.completedStudentsCount;
@@ -419,6 +433,15 @@ function buildRecentQuizzes(
       accumulator.notStartedCount += analytics.rows.filter(
         (row) => row.status === "not-started",
       ).length;
+      const rowScores = analytics.rows
+        .filter((row) => row.latestScore !== null)
+        .map((row) => row.latestScore as number);
+      if (rowScores.length) {
+        accumulator.gradeScoreSum += Math.round(
+          rowScores.reduce((s, v) => s + v, 0) / rowScores.length,
+        );
+        accumulator.gradeScoreCount += 1;
+      }
       analytics.rows.forEach((row) => {
         if (
           row.status !== "completed" ||
@@ -465,6 +488,9 @@ function buildRecentQuizzes(
         completionRate: quiz.assignedStudentsCount
           ? Math.round((quiz.completedCount / quiz.assignedStudentsCount) * 100)
           : 0,
+        avgGrade: quiz.gradeScoreCount
+          ? Math.round(quiz.gradeScoreSum / quiz.gradeScoreCount)
+          : null,
         assignedStudentsCount: quiz.assignedStudentsCount,
         completedCount: quiz.completedCount,
         inProgressCount: quiz.inProgressCount,

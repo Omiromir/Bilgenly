@@ -1,28 +1,34 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
+import {
+  Area,
+  AreaChart,
+  CartesianGrid,
+  Cell,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+  type TooltipProps,
+} from "recharts";
 import { DashboardPageHeader } from "../../../features/dashboard/components/DashboardPageHeader";
 import { SectionCard } from "../../../features/dashboard/components/SectionCard";
 import { useDashboardPageMeta } from "../../../features/dashboard/hooks/useDashboardPageMeta";
 import type {
-  ModeratorDashboardDto,
-  ReportDto,
-  SuspendedUserDto,
-  HiddenQuizDto,
+  AdminAnalyticsDto,
   ModerationQuizDto,
   ModerationUserDto,
 } from "../../../features/dashboard/api/moderationApi";
 import {
-  getModeratorDashboard,
-  getAllReports,
-  reviewReport,
-  getSuspendedUsers,
-  unsuspendUser,
-  getHiddenQuizzes,
-  unhideQuiz,
+  deleteQuizByModerator,
+  deleteUserByModerator,
+  getAdminAnalytics,
   getAllQuizzesForModeration,
   getAllUsersForModeration,
-  hideQuiz,
   suspendUser,
-  deleteUserByModerator,
+  unsuspendUser,
 } from "../../../features/dashboard/api/moderationApi";
 import {
   AlertDialog,
@@ -34,6 +40,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "../../../components/ui/alert-dialog";
+import {
+  BookOpen,
+  ShieldCheck,
+  TrendingUp,
+  Users,
+} from "../../../components/icons/AppIcons";
+
+type AdminTab = "overview" | "users" | "quizzes";
 
 function formatDate(iso: string | null) {
   if (!iso) return "—";
@@ -44,53 +58,81 @@ function formatDate(iso: string | null) {
   });
 }
 
-function StatusBadge({ status }: { status: string }) {
-  const styles: Record<string, string> = {
-    pending: "bg-amber-100 text-amber-700",
-    reviewed: "bg-emerald-100 text-emerald-700",
-    dismissed: "bg-slate-100 text-slate-500",
-  };
+function formatShortDate(iso: string) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+/** Distinct, calm hues for the role pie. Avoids the AI-typical violet. */
+const ROLE_COLORS = ["#2563eb", "#10b981", "#f59e0b", "#ef4444"];
+
+function ChartTooltip({ active, payload, label }: TooltipProps<number, string>) {
+  if (!active || !payload?.length) return null;
   return (
-    <span
-      className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${styles[status] ?? "bg-slate-100 text-slate-500"}`}
-    >
-      {status}
-    </span>
+    <div className="rounded-[10px] border border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-elevated)] px-3 py-2 text-xs shadow-md">
+      <p className="font-medium text-[var(--dashboard-text-strong)]">{label}</p>
+      {payload.map((entry) => (
+        <p key={String(entry.dataKey)} className="text-[var(--dashboard-text-soft)]">
+          <span
+            className="mr-1.5 inline-block h-2 w-2 rounded-full align-middle"
+            style={{ background: entry.color ?? "#888" }}
+          />
+          {entry.name}: <span className="font-semibold">{entry.value}</span>
+        </p>
+      ))}
+    </div>
   );
 }
 
-function StatCard({
-  label,
-  value,
-  accent,
-}: {
+interface AdminStatCardProps {
   label: string;
   value: number;
-  accent?: string;
-}) {
+  delta?: string;
+  icon: React.ComponentType<{ className?: string }>;
+  tone?: "default" | "success" | "warning" | "danger";
+}
+
+function AdminStatCard({ label, value, delta, icon: Icon, tone = "default" }: AdminStatCardProps) {
+  const toneStyles: Record<NonNullable<AdminStatCardProps["tone"]>, string> = {
+    default: "bg-[var(--dashboard-brand-soft-alt)] text-[var(--dashboard-brand)]",
+    success: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400",
+    warning: "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400",
+    danger: "bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-400",
+  };
+
   return (
-    <div className="flex flex-col gap-1 rounded-[14px] border border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-elevated)] p-5">
-      <span className={`text-3xl font-bold ${accent ?? "text-[var(--dashboard-text-strong)]"}`}>
-        {value}
-      </span>
-      <span className="text-sm text-[var(--dashboard-text-soft)]">{label}</span>
+    <div className="flex flex-col gap-3 rounded-[16px] border border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-elevated)] p-5">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-medium uppercase tracking-wider text-[var(--dashboard-text-soft)]">
+          {label}
+        </span>
+        <span className={`flex h-9 w-9 items-center justify-center rounded-full ${toneStyles[tone]}`}>
+          <Icon className="h-4 w-4" />
+        </span>
+      </div>
+      <div className="flex items-baseline gap-2">
+        <span className="text-3xl font-bold tabular-nums text-[var(--dashboard-text-strong)]">
+          {value.toLocaleString()}
+        </span>
+        {delta && (
+          <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">
+            {delta}
+          </span>
+        )}
+      </div>
     </div>
   );
 }
 
 export function ModeratorDashboardPage() {
   const meta = useDashboardPageMeta();
-  const [stats, setStats] = useState<ModeratorDashboardDto | null>(null);
-  const [reports, setReports] = useState<ReportDto[]>([]);
-  const [suspendedUsers, setSuspendedUsers] = useState<SuspendedUserDto[]>([]);
-  const [hiddenQuizzes, setHiddenQuizzes] = useState<HiddenQuizDto[]>([]);
+  const [analytics, setAnalytics] = useState<AdminAnalyticsDto | null>(null);
   const [allQuizzes, setAllQuizzes] = useState<ModerationQuizDto[]>([]);
   const [allUsers, setAllUsers] = useState<ModerationUserDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<
-    "reports" | "users" | "quizzes" | "all-quizzes" | "all-users"
-  >("reports");
+  const [activeTab, setActiveTab] = useState<AdminTab>("overview");
 
   const [quizSearch, setQuizSearch] = useState("");
   const [userSearch, setUserSearch] = useState("");
@@ -101,100 +143,43 @@ export function ModeratorDashboardPage() {
   }>({ userId: null, reason: "", suspendedUntil: "" });
   const [deleteUserPending, setDeleteUserPending] = useState<ModerationUserDto | null>(null);
   const [isDeletingUser, setIsDeletingUser] = useState(false);
+  const [deleteQuizPending, setDeleteQuizPending] = useState<ModerationQuizDto | null>(null);
+  const [isDeletingQuiz, setIsDeletingQuiz] = useState(false);
 
+  // Initial load: pull all three in parallel so the dashboard renders cohesively.
   useEffect(() => {
-    Promise.allSettled([
-      getModeratorDashboard(),
-      getAllReports(),
-      getSuspendedUsers(),
-      getHiddenQuizzes(),
+    void Promise.allSettled([
+      getAdminAnalytics(),
       getAllQuizzesForModeration(),
       getAllUsersForModeration(),
-    ]).then(
-      ([
-        dashboardResult,
-        reportsResult,
-        usersResult,
-        quizzesResult,
-        allQuizzesResult,
-        allUsersResult,
-      ]) => {
-        if (dashboardResult.status === "fulfilled") setStats(dashboardResult.value);
-        else setError("Unable to load dashboard data.");
-        if (reportsResult.status === "fulfilled") setReports(reportsResult.value);
-        if (usersResult.status === "fulfilled") setSuspendedUsers(usersResult.value);
-        if (quizzesResult.status === "fulfilled") setHiddenQuizzes(quizzesResult.value);
-        if (allQuizzesResult.status === "fulfilled") setAllQuizzes(allQuizzesResult.value);
-        if (allUsersResult.status === "fulfilled") setAllUsers(allUsersResult.value);
-        setLoading(false);
-      }
-    );
+    ]).then(([analyticsResult, quizzesResult, usersResult]) => {
+      if (analyticsResult.status === "fulfilled") setAnalytics(analyticsResult.value);
+      else setError("Unable to load admin analytics.");
+      if (quizzesResult.status === "fulfilled") setAllQuizzes(quizzesResult.value);
+      if (usersResult.status === "fulfilled") setAllUsers(usersResult.value);
+      setLoading(false);
+    });
   }, []);
 
-  async function handleReviewReport(reportId: string, status: "reviewed" | "dismissed") {
+  async function refreshAnalytics() {
     try {
-      const updated = await reviewReport(reportId, { status });
-      setReports((prev) => prev.map((r) => (r.id === reportId ? updated : r)));
-      if (stats) {
-        setStats({
-          ...stats,
-          pendingReportsCount: Math.max(0, stats.pendingReportsCount - 1),
-          recentReports: stats.recentReports.filter((r) => r.id !== reportId),
-        });
-      }
+      const fresh = await getAdminAnalytics();
+      setAnalytics(fresh);
     } catch {
-      // error handled silently
+      // analytics refresh is best-effort; the underlying mutation already showed a toast
     }
   }
 
   async function handleUnsuspendUser(userId: string) {
     try {
       await unsuspendUser(userId);
-      setSuspendedUsers((prev) => prev.filter((u) => u.id !== userId));
       setAllUsers((prev) =>
         prev.map((u) => (u.id === userId ? { ...u, isSuspended: false } : u))
       );
-      if (stats) {
-        setStats({ ...stats, activeSuspensionsCount: Math.max(0, stats.activeSuspensionsCount - 1) });
-      }
-    } catch {
-      // error handled silently
-    }
-  }
-
-  async function handleUnhideQuiz(quizId: string) {
-    try {
-      await unhideQuiz(quizId);
-      setHiddenQuizzes((prev) => prev.filter((q) => q.id !== quizId));
-      setAllQuizzes((prev) =>
-        prev.map((q) => (q.id === quizId ? { ...q, isHidden: false } : q))
-      );
-      if (stats) {
-        setStats({ ...stats, hiddenQuizzesCount: Math.max(0, stats.hiddenQuizzesCount - 1) });
-      }
-    } catch {
-      // error handled silently
-    }
-  }
-
-  async function handleHideQuiz(quizId: string) {
-    try {
-      const quiz = allQuizzes.find((q) => q.id === quizId);
-      if (quiz) {
-        await hideQuiz(quizId, { moderationNote: "" });
-        setAllQuizzes((prev) =>
-          prev.map((q) =>
-            q.id === quizId
-              ? { ...q, isHidden: true, hiddenAt: new Date().toISOString() }
-              : q
-          )
-        );
-        if (stats) {
-          setStats({ ...stats, hiddenQuizzesCount: stats.hiddenQuizzesCount + 1 });
-        }
-      }
-    } catch {
-      // error handled silently
+      toast.success("User restored.");
+      void refreshAnalytics();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Unable to restore user.");
     }
   }
 
@@ -203,38 +188,38 @@ export function ModeratorDashboardPage() {
     reason: string,
     suspendedUntil?: string
   ) {
+    const user = allUsers.find((u) => u.id === userId);
+    if (!user) return;
+    if (user.role === "Moderator") {
+      // Defense in depth — the UI already hides the button.
+      setSuspendModal({ userId: null, reason: "", suspendedUntil: "" });
+      return;
+    }
     try {
-      const user = allUsers.find((u) => u.id === userId);
-      if (user) {
-        await suspendUser(userId, {
-          reason,
-          suspendedUntil: suspendedUntil ? new Date(suspendedUntil).toISOString() : undefined,
-        });
-        setAllUsers((prev) =>
-          prev.map((u) =>
-            u.id === userId
-              ? {
-                  ...u,
-                  isSuspended: true,
-                  suspendedAt: new Date().toISOString(),
-                  suspensionReason: reason,
-                  suspendedUntil: suspendedUntil
-                    ? new Date(suspendedUntil).toISOString()
-                    : null,
-                }
-              : u
-          )
-        );
-        if (stats) {
-          setStats({
-            ...stats,
-            activeSuspensionsCount: stats.activeSuspensionsCount + 1,
-          });
-        }
-        setSuspendModal({ userId: null, reason: "", suspendedUntil: "" });
-      }
-    } catch {
-      // error handled silently
+      await suspendUser(userId, {
+        reason,
+        suspendedUntil: suspendedUntil ? new Date(suspendedUntil).toISOString() : undefined,
+      });
+      setAllUsers((prev) =>
+        prev.map((u) =>
+          u.id === userId
+            ? {
+                ...u,
+                isSuspended: true,
+                suspendedAt: new Date().toISOString(),
+                suspensionReason: reason,
+                suspendedUntil: suspendedUntil
+                  ? new Date(suspendedUntil).toISOString()
+                  : null,
+              }
+            : u
+        )
+      );
+      toast.success(`${user.username} has been suspended.`);
+      setSuspendModal({ userId: null, reason: "", suspendedUntil: "" });
+      void refreshAnalytics();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Unable to suspend user.");
     }
   }
 
@@ -243,53 +228,106 @@ export function ModeratorDashboardPage() {
     setIsDeletingUser(true);
     try {
       await deleteUserByModerator(deleteUserPending.id);
+      const username = deleteUserPending.username;
       setAllUsers((prev) => prev.filter((u) => u.id !== deleteUserPending.id));
-      setSuspendedUsers((prev) => prev.filter((u) => u.id !== deleteUserPending.id));
       setDeleteUserPending(null);
-    } catch {
-      // error handled silently
+      toast.success(`Deleted ${username}.`);
+      void refreshAnalytics();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Unable to delete user.");
     } finally {
       setIsDeletingUser(false);
     }
   }
 
-  const filteredAllQuizzes = allQuizzes.filter(
-    (q) =>
-      q.title.toLowerCase().includes(quizSearch.toLowerCase()) ||
-      q.creatorName.toLowerCase().includes(quizSearch.toLowerCase())
+  async function handleDeleteQuiz() {
+    if (!deleteQuizPending) return;
+    setIsDeletingQuiz(true);
+    const deletedId = deleteQuizPending.id;
+    const title = deleteQuizPending.title;
+    try {
+      await deleteQuizByModerator(deletedId);
+      // Pinpoint live removal: drop the exact quiz row from local state so the
+      // list updates instantly without a refetch.
+      setAllQuizzes((prev) => prev.filter((q) => q.id !== deletedId));
+      setDeleteQuizPending(null);
+      toast.success(`Quiz "${title}" was deleted.`);
+      // Broadcast so any open Quiz Library tabs in the same browser session
+      // know to re-fetch and drop the deleted quiz from their cached state.
+      // Without this, the user could see the quiz disappear from the admin
+      // panel but linger in the regular library until a hard refresh.
+      window.dispatchEvent(
+        new CustomEvent("bilgenly:quiz-deleted", { detail: { quizId: deletedId } }),
+      );
+      void refreshAnalytics();
+      // Defense in depth: also refetch the admin quiz list from backend so
+      // the table reflects the actual server state, not just the optimistic
+      // filter. If the optimistic update raced with a concurrent change, the
+      // refetch reconciles it.
+      try {
+        const fresh = await getAllQuizzesForModeration();
+        setAllQuizzes(fresh);
+      } catch {
+        // refetch is best-effort — the optimistic filter already updated the UI
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Unable to delete quiz.");
+    } finally {
+      setIsDeletingQuiz(false);
+    }
+  }
+
+  const filteredAllQuizzes = useMemo(
+    () =>
+      allQuizzes.filter(
+        (q) =>
+          q.title.toLowerCase().includes(quizSearch.toLowerCase()) ||
+          q.creatorName.toLowerCase().includes(quizSearch.toLowerCase())
+      ),
+    [allQuizzes, quizSearch]
   );
 
-  const filteredAllUsers = allUsers.filter(
-    (u) =>
-      u.username.toLowerCase().includes(userSearch.toLowerCase()) ||
-      u.email.toLowerCase().includes(userSearch.toLowerCase())
+  const filteredAllUsers = useMemo(
+    () =>
+      allUsers.filter(
+        (u) =>
+          u.username.toLowerCase().includes(userSearch.toLowerCase()) ||
+          u.email.toLowerCase().includes(userSearch.toLowerCase())
+      ),
+    [allUsers, userSearch]
   );
 
-  const tabs = [
-    {
-      key: "reports" as const,
-      label: "Reports",
-      count: reports.filter((r) => r.status === "pending").length,
-    },
-    {
-      key: "users" as const,
-      label: "Suspended Users",
-      count: suspendedUsers.length,
-    },
-    {
-      key: "quizzes" as const,
-      label: "Hidden Quizzes",
-      count: hiddenQuizzes.length,
-    },
-    { key: "all-quizzes" as const, label: "All Quizzes", count: 0 },
-    { key: "all-users" as const, label: "All Users", count: 0 },
+  /** Build the combined users/quizzes growth series for the area chart. */
+  const combinedSeries = useMemo(() => {
+    if (!analytics) return [];
+    return analytics.usersOverTime.map((point, index) => ({
+      date: formatShortDate(point.date),
+      users: point.value,
+      quizzes: analytics.quizzesOverTime[index]?.value ?? 0,
+    }));
+  }, [analytics]);
+
+  const pieData = useMemo(
+    () =>
+      analytics?.roleBreakdown.map((slice, idx) => ({
+        name: slice.role,
+        value: slice.count,
+        color: ROLE_COLORS[idx % ROLE_COLORS.length],
+      })) ?? [],
+    [analytics]
+  );
+
+  const tabs: { key: AdminTab; label: string; count?: number }[] = [
+    { key: "overview", label: "Overview" },
+    { key: "users", label: "Users", count: allUsers.length },
+    { key: "quizzes", label: "Quizzes", count: allQuizzes.length },
   ];
 
   return (
     <div className="space-y-8">
       <DashboardPageHeader
-        title={meta?.title ?? "Moderator Dashboard"}
-        subtitle={meta?.subtitle ?? "Review reports, manage suspensions, and moderate content."}
+        title={meta?.title ?? "Admin Dashboard"}
+        subtitle={meta?.subtitle ?? "Manage users, quizzes, and platform analytics from one place."}
         badge={meta?.badge}
       />
 
@@ -300,23 +338,16 @@ export function ModeratorDashboardPage() {
       )}
 
       {loading ? (
-        <div className="text-sm text-[var(--dashboard-text-soft)]">Loading dashboard…</div>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div
+              key={i}
+              className="h-[120px] animate-pulse rounded-[16px] border border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-muted)]"
+            />
+          ))}
+        </div>
       ) : (
         <>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <StatCard
-              label="Pending Reports"
-              value={stats?.pendingReportsCount ?? 0}
-              accent={stats && stats.pendingReportsCount > 0 ? "text-amber-600" : undefined}
-            />
-            <StatCard
-              label="Active Suspensions"
-              value={stats?.activeSuspensionsCount ?? 0}
-              accent={stats && stats.activeSuspensionsCount > 0 ? "text-red-500" : undefined}
-            />
-            <StatCard label="Hidden Quizzes" value={stats?.hiddenQuizzesCount ?? 0} />
-          </div>
-
           <div className="flex gap-2 border-b border-[var(--dashboard-border-soft)] overflow-x-auto">
             {tabs.map((tab) => (
               <button
@@ -329,8 +360,8 @@ export function ModeratorDashboardPage() {
                 }`}
               >
                 {tab.label}
-                {tab.count > 0 && (
-                  <span className="rounded-full bg-[var(--dashboard-accent)] px-1.5 py-0.5 text-[10px] font-bold text-white">
+                {typeof tab.count === "number" && tab.count > 0 && (
+                  <span className="rounded-full bg-[var(--dashboard-surface-muted)] px-1.5 py-0.5 text-[10px] font-bold text-[var(--dashboard-text-soft)]">
                     {tab.count}
                   </span>
                 )}
@@ -338,203 +369,166 @@ export function ModeratorDashboardPage() {
             ))}
           </div>
 
-          {activeTab === "reports" && (
-            <SectionCard title="Reports" description="User-submitted content and conduct reports.">
-              {reports.length === 0 ? (
-                <p className="py-6 text-center text-sm text-[var(--dashboard-text-soft)]">
-                  No reports yet.
-                </p>
-              ) : (
-                <div className="divide-y divide-[var(--dashboard-border-soft)]">
-                  {reports.map((report) => (
-                    <div
-                      key={report.id}
-                      className="flex flex-col gap-2 py-4 sm:flex-row sm:items-start sm:justify-between"
-                    >
-                      <div className="space-y-0.5">
-                        <div className="flex items-center gap-2">
-                          <StatusBadge status={report.status} />
-                          <span className="text-xs text-[var(--dashboard-text-faint)]">
-                            {report.category}
-                          </span>
-                          <span className="text-xs text-[var(--dashboard-text-faint)]">
-                            {formatDate(report.createdAt)}
-                          </span>
+          {activeTab === "overview" && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <AdminStatCard
+                  label="Total Users"
+                  value={analytics?.totalUsers ?? 0}
+                  delta={
+                    analytics?.newUsersLast7Days
+                      ? `+${analytics.newUsersLast7Days} this week`
+                      : undefined
+                  }
+                  icon={Users}
+                />
+                <AdminStatCard
+                  label="Total Quizzes"
+                  value={analytics?.totalQuizzes ?? 0}
+                  delta={
+                    analytics?.newQuizzesLast7Days
+                      ? `+${analytics.newQuizzesLast7Days} this week`
+                      : undefined
+                  }
+                  icon={BookOpen}
+                  tone="success"
+                />
+                <AdminStatCard
+                  label="Suspended"
+                  value={analytics?.suspendedUsers ?? 0}
+                  icon={ShieldCheck}
+                  tone={(analytics?.suspendedUsers ?? 0) > 0 ? "danger" : "default"}
+                />
+                <AdminStatCard
+                  label="Teachers"
+                  value={analytics?.totalTeachers ?? 0}
+                  icon={TrendingUp}
+                  tone="warning"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+                <SectionCard
+                  title="Growth — last 30 days"
+                  description="Daily new users and quizzes joining the platform."
+                  className="lg:col-span-2"
+                >
+                  <div className="h-[300px] w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart
+                        data={combinedSeries}
+                        margin={{ top: 8, right: 12, left: 0, bottom: 8 }}
+                      >
+                        <defs>
+                          <linearGradient id="usersGradient" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#2563eb" stopOpacity={0.35} />
+                            <stop offset="100%" stopColor="#2563eb" stopOpacity={0} />
+                          </linearGradient>
+                          <linearGradient id="quizzesGradient" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#10b981" stopOpacity={0.35} />
+                            <stop offset="100%" stopColor="#10b981" stopOpacity={0} />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid
+                          strokeDasharray="3 3"
+                          stroke="var(--dashboard-border-soft)"
+                          vertical={false}
+                        />
+                        <XAxis
+                          dataKey="date"
+                          tick={{ fontSize: 11, fill: "var(--dashboard-text-soft)" }}
+                          axisLine={false}
+                          tickLine={false}
+                          interval="preserveStartEnd"
+                        />
+                        <YAxis
+                          tick={{ fontSize: 11, fill: "var(--dashboard-text-soft)" }}
+                          axisLine={false}
+                          tickLine={false}
+                          allowDecimals={false}
+                        />
+                        <Tooltip content={<ChartTooltip />} />
+                        <Area
+                          type="monotone"
+                          dataKey="users"
+                          name="New users"
+                          stroke="#2563eb"
+                          strokeWidth={2}
+                          fill="url(#usersGradient)"
+                        />
+                        <Area
+                          type="monotone"
+                          dataKey="quizzes"
+                          name="New quizzes"
+                          stroke="#10b981"
+                          strokeWidth={2}
+                          fill="url(#quizzesGradient)"
+                        />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+                </SectionCard>
+
+                <SectionCard
+                  title="User roles"
+                  description="Distribution of accounts on the platform."
+                >
+                  <div className="flex h-[300px] w-full flex-col items-center justify-center">
+                    {pieData.length === 0 ? (
+                      <p className="text-sm text-[var(--dashboard-text-soft)]">
+                        No users yet.
+                      </p>
+                    ) : (
+                      <>
+                        <ResponsiveContainer width="100%" height="70%">
+                          <PieChart>
+                            <Pie
+                              data={pieData}
+                              dataKey="value"
+                              nameKey="name"
+                              innerRadius={45}
+                              outerRadius={80}
+                              paddingAngle={3}
+                              stroke="var(--dashboard-surface-elevated)"
+                              strokeWidth={2}
+                            >
+                              {pieData.map((entry) => (
+                                <Cell key={entry.name} fill={entry.color} />
+                              ))}
+                            </Pie>
+                            <Tooltip content={<ChartTooltip />} />
+                          </PieChart>
+                        </ResponsiveContainer>
+                        <div className="mt-3 flex flex-wrap justify-center gap-3">
+                          {pieData.map((entry) => (
+                            <div
+                              key={entry.name}
+                              className="flex items-center gap-1.5 text-xs text-[var(--dashboard-text-soft)]"
+                            >
+                              <span
+                                className="h-2.5 w-2.5 rounded-full"
+                                style={{ background: entry.color }}
+                              />
+                              <span className="font-medium text-[var(--dashboard-text-strong)]">
+                                {entry.name}
+                              </span>
+                              <span>· {entry.value}</span>
+                            </div>
+                          ))}
                         </div>
-                        <p className="text-sm font-medium text-[var(--dashboard-text-strong)]">
-                          {report.reportedQuizTitle
-                            ? `Quiz: "${report.reportedQuizTitle}"`
-                            : report.reportedUserName
-                              ? `User: ${report.reportedUserName}`
-                              : "Unknown target"}
-                        </p>
-                        <p className="text-sm text-[var(--dashboard-text-soft)]">{report.reason}</p>
-                        <p className="text-xs text-[var(--dashboard-text-faint)]">
-                          By: {report.reporterName}
-                        </p>
-                      </div>
-                      {report.status === "pending" && (
-                        <div className="flex shrink-0 gap-2">
-                          <button
-                            onClick={() => handleReviewReport(report.id, "reviewed")}
-                            className="rounded-[8px] bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700"
-                          >
-                            Mark Reviewed
-                          </button>
-                          <button
-                            onClick={() => handleReviewReport(report.id, "dismissed")}
-                            className="rounded-[8px] border border-[var(--dashboard-border-soft)] px-3 py-1.5 text-xs font-medium text-[var(--dashboard-text-soft)] hover:text-[var(--dashboard-text-main)]"
-                          >
-                            Dismiss
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </SectionCard>
+                      </>
+                    )}
+                  </div>
+                </SectionCard>
+              </div>
+            </div>
           )}
 
           {activeTab === "users" && (
-            <SectionCard title="Suspended Users" description="Currently suspended accounts.">
-              {suspendedUsers.length === 0 ? (
-                <p className="py-6 text-center text-sm text-[var(--dashboard-text-soft)]">
-                  No suspended users.
-                </p>
-              ) : (
-                <div className="divide-y divide-[var(--dashboard-border-soft)]">
-                  {suspendedUsers.map((user) => (
-                    <div key={user.id} className="flex items-center justify-between py-4">
-                      <div className="space-y-0.5">
-                        <p className="text-sm font-medium text-[var(--dashboard-text-strong)]">
-                          {user.username}
-                        </p>
-                        <p className="text-xs text-[var(--dashboard-text-soft)]">{user.email}</p>
-                        {user.suspensionReason && (
-                          <p className="text-xs text-[var(--dashboard-text-faint)]">
-                            Reason: {user.suspensionReason}
-                          </p>
-                        )}
-                        {user.suspendedUntil && (
-                          <p className="text-xs text-[var(--dashboard-text-faint)]">
-                            Until: {formatDate(user.suspendedUntil)}
-                          </p>
-                        )}
-                      </div>
-                      <button
-                        onClick={() => handleUnsuspendUser(user.id)}
-                        className="rounded-[8px] border border-[var(--dashboard-border-soft)] px-3 py-1.5 text-xs font-medium text-[var(--dashboard-text-soft)] hover:text-[var(--dashboard-text-main)]"
-                      >
-                        Unsuspend
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </SectionCard>
-          )}
-
-          {activeTab === "quizzes" && (
-            <SectionCard title="Hidden Quizzes" description="Quizzes hidden from the public library.">
-              {hiddenQuizzes.length === 0 ? (
-                <p className="py-6 text-center text-sm text-[var(--dashboard-text-soft)]">
-                  No hidden quizzes.
-                </p>
-              ) : (
-                <div className="divide-y divide-[var(--dashboard-border-soft)]">
-                  {hiddenQuizzes.map((quiz) => (
-                    <div key={quiz.id} className="flex items-center justify-between py-4">
-                      <div className="space-y-0.5">
-                        <p className="text-sm font-medium text-[var(--dashboard-text-strong)]">
-                          {quiz.title}
-                        </p>
-                        <p className="text-xs text-[var(--dashboard-text-soft)]">
-                          By: {quiz.authorName} · {formatDate(quiz.createdAt)}
-                        </p>
-                        {quiz.moderationNote && (
-                          <p className="text-xs text-[var(--dashboard-text-faint)]">
-                            Note: {quiz.moderationNote}
-                          </p>
-                        )}
-                      </div>
-                      <button
-                        onClick={() => handleUnhideQuiz(quiz.id)}
-                        className="rounded-[8px] border border-[var(--dashboard-border-soft)] px-3 py-1.5 text-xs font-medium text-[var(--dashboard-text-soft)] hover:text-[var(--dashboard-text-main)]"
-                      >
-                        Unhide
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </SectionCard>
-          )}
-
-          {activeTab === "all-quizzes" && (
-            <SectionCard title="All Quizzes" description="View and manage all quizzes in the system.">
-              <div className="space-y-4">
-                <input
-                  type="text"
-                  placeholder="Search by title or creator name…"
-                  value={quizSearch}
-                  onChange={(e) => setQuizSearch(e.target.value)}
-                  className="w-full rounded-[8px] border border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface)] px-3 py-2 text-sm text-[var(--dashboard-text-strong)] placeholder-[var(--dashboard-text-faint)] focus:outline-none focus:ring-2 focus:ring-[var(--dashboard-accent)]"
-                />
-              </div>
-              {filteredAllQuizzes.length === 0 ? (
-                <p className="py-6 text-center text-sm text-[var(--dashboard-text-soft)]">
-                  {quizSearch ? "No quizzes match your search." : "No quizzes found."}
-                </p>
-              ) : (
-                <div className="divide-y divide-[var(--dashboard-border-soft)]">
-                  {filteredAllQuizzes.map((quiz) => (
-                    <div key={quiz.id} className="flex items-center justify-between py-4">
-                      <div className="flex-1 space-y-0.5">
-                        <div className="flex items-center gap-2">
-                          <p className="text-sm font-medium text-[var(--dashboard-text-strong)]">
-                            {quiz.title}
-                          </p>
-                          {quiz.isHidden && (
-                            <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-bold text-red-700">
-                              HIDDEN
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-xs text-[var(--dashboard-text-soft)]">
-                          By: {quiz.creatorName} ({quiz.creatorEmail}) · {quiz.questionsCount}{" "}
-                          questions · {formatDate(quiz.createdAt)}
-                        </p>
-                        <p className="text-xs text-[var(--dashboard-text-faint)]">
-                          Status: {quiz.status} · {quiz.isPublic ? "Public" : "Private"}
-                        </p>
-                      </div>
-                      <div className="ml-4 flex shrink-0 gap-2">
-                        {quiz.isHidden ? (
-                          <button
-                            onClick={() => handleUnhideQuiz(quiz.id)}
-                            className="rounded-[8px] border border-[var(--dashboard-border-soft)] px-3 py-1.5 text-xs font-medium text-[var(--dashboard-text-soft)] hover:text-[var(--dashboard-text-main)]"
-                          >
-                            Unhide
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => handleHideQuiz(quiz.id)}
-                            className="rounded-[8px] bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700"
-                          >
-                            Hide
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </SectionCard>
-          )}
-
-          {activeTab === "all-users" && (
-            <SectionCard title="All Users" description="View and manage all users in the system.">
+            <SectionCard
+              title="Users"
+              description="Search, suspend, or remove user accounts."
+            >
               <div className="space-y-4">
                 <input
                   type="text"
@@ -551,13 +545,16 @@ export function ModeratorDashboardPage() {
               ) : (
                 <div className="divide-y divide-[var(--dashboard-border-soft)]">
                   {filteredAllUsers.map((user) => (
-                    <div key={user.id} className="flex flex-col gap-2 py-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div
+                      key={user.id}
+                      className="flex flex-col gap-2 py-4 sm:flex-row sm:items-center sm:justify-between"
+                    >
                       <div className="flex-1 space-y-0.5">
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
                           <p className="text-sm font-medium text-[var(--dashboard-text-strong)]">
                             {user.username}
                           </p>
-                          <span className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-700">
+                          <span className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-700 dark:bg-slate-800 dark:text-slate-300">
                             {user.role}
                           </span>
                           {user.isSuspended && (
@@ -566,7 +563,9 @@ export function ModeratorDashboardPage() {
                             </span>
                           )}
                         </div>
-                        <p className="text-xs text-[var(--dashboard-text-soft)]">{user.email}</p>
+                        <p className="text-xs text-[var(--dashboard-text-soft)]">
+                          {user.email} · Joined {formatDate(user.createdAt)}
+                        </p>
                         {user.isSuspended && user.suspensionReason && (
                           <p className="text-xs text-[var(--dashboard-text-faint)]">
                             Reason: {user.suspensionReason}
@@ -574,76 +573,146 @@ export function ModeratorDashboardPage() {
                         )}
                       </div>
 
-                      {suspendModal.userId === user.id ? (
-                        <div className="mt-4 w-full space-y-3 rounded-[8px] border border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-elevated)] p-3 sm:mt-0 sm:w-auto">
-                          <input
-                            type="text"
-                            placeholder="Suspension reason"
-                            value={suspendModal.reason}
-                            onChange={(e) =>
-                              setSuspendModal({ ...suspendModal, reason: e.target.value })
-                            }
-                            className="w-full rounded-[6px] border border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface)] px-2 py-1 text-xs text-[var(--dashboard-text-strong)] placeholder-[var(--dashboard-text-faint)] focus:outline-none focus:ring-1 focus:ring-[var(--dashboard-accent)]"
-                          />
-                          <input
-                            type="date"
-                            value={suspendModal.suspendedUntil}
-                            onChange={(e) =>
-                              setSuspendModal({ ...suspendModal, suspendedUntil: e.target.value })
-                            }
-                            className="w-full rounded-[6px] border border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface)] px-2 py-1 text-xs text-[var(--dashboard-text-strong)] focus:outline-none focus:ring-1 focus:ring-[var(--dashboard-accent)]"
-                          />
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() =>
-                                handleSuspendUser(
-                                  user.id,
-                                  suspendModal.reason,
-                                  suspendModal.suspendedUntil
-                                )
+                      <div className="flex flex-wrap gap-2">
+                        {suspendModal.userId === user.id ? (
+                          <div className="w-full space-y-3 rounded-[8px] border border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-elevated)] p-3 sm:w-auto">
+                            <input
+                              type="text"
+                              placeholder="Suspension reason"
+                              value={suspendModal.reason}
+                              onChange={(e) =>
+                                setSuspendModal({ ...suspendModal, reason: e.target.value })
                               }
-                              disabled={!suspendModal.reason}
-                              className="flex-1 rounded-[6px] bg-red-600 px-2 py-1 text-xs font-medium text-white hover:bg-red-700 disabled:bg-slate-300"
-                            >
-                              Confirm
-                            </button>
-                            <button
-                              onClick={() =>
-                                setSuspendModal({ userId: null, reason: "", suspendedUntil: "" })
+                              className="w-full rounded-[6px] border border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface)] px-2 py-1 text-xs text-[var(--dashboard-text-strong)] placeholder-[var(--dashboard-text-faint)] focus:outline-none focus:ring-1 focus:ring-[var(--dashboard-accent)]"
+                            />
+                            <input
+                              type="date"
+                              value={suspendModal.suspendedUntil}
+                              onChange={(e) =>
+                                setSuspendModal({
+                                  ...suspendModal,
+                                  suspendedUntil: e.target.value,
+                                })
                               }
-                              className="flex-1 rounded-[6px] border border-[var(--dashboard-border-soft)] px-2 py-1 text-xs font-medium text-[var(--dashboard-text-soft)] hover:text-[var(--dashboard-text-main)]"
-                            >
-                              Cancel
-                            </button>
+                              className="w-full rounded-[6px] border border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface)] px-2 py-1 text-xs text-[var(--dashboard-text-strong)] focus:outline-none focus:ring-1 focus:ring-[var(--dashboard-accent)]"
+                            />
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() =>
+                                  handleSuspendUser(
+                                    user.id,
+                                    suspendModal.reason,
+                                    suspendModal.suspendedUntil
+                                  )
+                                }
+                                disabled={!suspendModal.reason}
+                                className="flex-1 rounded-[6px] bg-red-600 px-2 py-1 text-xs font-medium text-white hover:bg-red-700 disabled:bg-slate-300"
+                              >
+                                Confirm
+                              </button>
+                              <button
+                                onClick={() =>
+                                  setSuspendModal({
+                                    userId: null,
+                                    reason: "",
+                                    suspendedUntil: "",
+                                  })
+                                }
+                                className="flex-1 rounded-[6px] border border-[var(--dashboard-border-soft)] px-2 py-1 text-xs font-medium text-[var(--dashboard-text-soft)] hover:text-[var(--dashboard-text-main)]"
+                              >
+                                Cancel
+                              </button>
+                            </div>
                           </div>
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => setSuspendModal({ userId: user.id, reason: "", suspendedUntil: "" })}
-                          disabled={user.isSuspended}
-                          className="rounded-[8px] bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700 disabled:bg-slate-300"
-                        >
-                          Suspend
-                        </button>
-                      )}
+                        ) : (
+                          <>
+                            {user.role !== "Moderator" && !user.isSuspended && (
+                              <button
+                                onClick={() =>
+                                  setSuspendModal({
+                                    userId: user.id,
+                                    reason: "",
+                                    suspendedUntil: "",
+                                  })
+                                }
+                                className="rounded-[8px] bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700"
+                              >
+                                Suspend
+                              </button>
+                            )}
 
-                      {user.isSuspended && (
-                        <button
-                          onClick={() => handleUnsuspendUser(user.id)}
-                          className="rounded-[8px] border border-[var(--dashboard-border-soft)] px-3 py-1.5 text-xs font-medium text-[var(--dashboard-text-soft)] hover:text-[var(--dashboard-text-main)]"
-                        >
-                          Unsuspend
-                        </button>
-                      )}
+                            {user.isSuspended && (
+                              <button
+                                onClick={() => handleUnsuspendUser(user.id)}
+                                className="rounded-[8px] border border-[var(--dashboard-border-soft)] px-3 py-1.5 text-xs font-medium text-[var(--dashboard-text-soft)] hover:text-[var(--dashboard-text-main)]"
+                              >
+                                Unsuspend
+                              </button>
+                            )}
 
-                      {user.role !== "Moderator" && (
+                            {user.role !== "Moderator" && (
+                              <button
+                                onClick={() => setDeleteUserPending(user)}
+                                className="rounded-[8px] border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-100 dark:border-red-900/40 dark:bg-red-950/30"
+                              >
+                                Delete
+                              </button>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </SectionCard>
+          )}
+
+          {activeTab === "quizzes" && (
+            <SectionCard
+              title="Quizzes"
+              description="View every quiz on the platform and remove problematic content."
+            >
+              <div className="space-y-4">
+                <input
+                  type="text"
+                  placeholder="Search by title or creator name…"
+                  value={quizSearch}
+                  onChange={(e) => setQuizSearch(e.target.value)}
+                  className="w-full rounded-[8px] border border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface)] px-3 py-2 text-sm text-[var(--dashboard-text-strong)] placeholder-[var(--dashboard-text-faint)] focus:outline-none focus:ring-2 focus:ring-[var(--dashboard-accent)]"
+                />
+              </div>
+              {filteredAllQuizzes.length === 0 ? (
+                <p className="py-6 text-center text-sm text-[var(--dashboard-text-soft)]">
+                  {quizSearch ? "No quizzes match your search." : "No quizzes found."}
+                </p>
+              ) : (
+                <div className="divide-y divide-[var(--dashboard-border-soft)]">
+                  {filteredAllQuizzes.map((quiz) => (
+                    <div
+                      key={quiz.id}
+                      className="flex flex-col gap-2 py-4 sm:flex-row sm:items-center sm:justify-between"
+                    >
+                      <div className="flex-1 space-y-0.5">
+                        <p className="text-sm font-medium text-[var(--dashboard-text-strong)]">
+                          {quiz.title}
+                        </p>
+                        <p className="text-xs text-[var(--dashboard-text-soft)]">
+                          By {quiz.creatorName} ({quiz.creatorEmail}) · {quiz.questionsCount}{" "}
+                          questions · {formatDate(quiz.createdAt)}
+                        </p>
+                        <p className="text-xs text-[var(--dashboard-text-faint)]">
+                          Status: {quiz.status}
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 gap-2">
                         <button
-                          onClick={() => setDeleteUserPending(user)}
-                          className="rounded-[8px] border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-100"
+                          onClick={() => setDeleteQuizPending(quiz)}
+                          className="rounded-[8px] border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-100 dark:border-red-900/40 dark:bg-red-950/30"
                         >
                           Delete
                         </button>
-                      )}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -655,7 +724,9 @@ export function ModeratorDashboardPage() {
 
       <AlertDialog
         open={Boolean(deleteUserPending)}
-        onOpenChange={(open) => { if (!open) setDeleteUserPending(null); }}
+        onOpenChange={(open) => {
+          if (!open) setDeleteUserPending(null);
+        }}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -677,6 +748,37 @@ export function ModeratorDashboardPage() {
               }}
             >
               {isDeletingUser ? "Deleting…" : "Delete user"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={Boolean(deleteQuizPending)}
+        onOpenChange={(open) => {
+          if (!open) setDeleteQuizPending(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this quiz?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteQuizPending
+                ? `This will permanently delete "${deleteQuizPending.title}" by ${deleteQuizPending.creatorName}, including all its questions and attempt history. This cannot be undone.`
+                : "This will permanently delete the quiz."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeletingQuiz}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={isDeletingQuiz}
+              className="bg-red-600 text-white hover:bg-red-700"
+              onClick={(e) => {
+                e.preventDefault();
+                void handleDeleteQuiz();
+              }}
+            >
+              {isDeletingQuiz ? "Deleting…" : "Delete quiz"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -200,10 +200,14 @@ export function AttemptProgressIndicator({
   isLoading = false,
   className,
 }: AttemptProgressIndicatorProps) {
-  const width =
-    maxAttempts === null || maxAttempts <= 0
-      ? Math.min(attemptsUsed * 20, 100)
-      : Math.min(Math.round((attemptsUsed / maxAttempts) * 100), 100);
+  const isUnlimited = maxAttempts === null || maxAttempts <= 0;
+  // For bounded assignments, use a real progress fraction. For UNLIMITED
+  // assignments, never compute a width that approaches 100% — the previous
+  // `attemptsUsed * 20` capped the bar at 5 attempts, falsely suggesting
+  // attempts were exhausted.
+  const width = isUnlimited
+    ? 0
+    : Math.min(Math.round((attemptsUsed / maxAttempts) * 100), 100);
 
   return (
     <div className={cn("space-y-2", className)}>
@@ -215,22 +219,32 @@ export function AttemptProgressIndicator({
         <span className="text-[var(--dashboard-text-soft)]">
           {isLoading
             ? "Checking attempts..."
-            : maxAttempts === null
+            : isUnlimited
               ? `${attemptsUsed} used • unlimited`
               : `${attemptsUsed} of ${maxAttempts}`}
         </span>
       </div>
-      <div className="h-2 overflow-hidden rounded-full bg-[var(--dashboard-surface-muted)]">
+      {/* For unlimited assignments, show a striped track instead of a
+          filling bar — the bar communicated "approaching limit" which is
+          meaningless when there is no limit. */}
+      {isUnlimited ? (
         <div
-          className={cn(
-            "h-full rounded-full transition-[width] duration-300",
-            status === "attempts_exhausted"
-              ? "bg-[var(--dashboard-danger)]"
-              : "bg-[var(--dashboard-brand)]",
-          )}
-          style={{ width: `${Math.max(width, attemptsUsed > 0 ? 8 : 0)}%` }}
+          className="h-2 rounded-full bg-[length:14px_14px] bg-[linear-gradient(45deg,var(--dashboard-surface-muted)_25%,transparent_25%,transparent_50%,var(--dashboard-surface-muted)_50%,var(--dashboard-surface-muted)_75%,transparent_75%,transparent)]"
+          aria-hidden="true"
         />
-      </div>
+      ) : (
+        <div className="h-2 overflow-hidden rounded-full bg-[var(--dashboard-surface-muted)]">
+          <div
+            className={cn(
+              "h-full rounded-full transition-[width] duration-300",
+              status === "attempts_exhausted"
+                ? "bg-[var(--dashboard-danger)]"
+                : "bg-[var(--dashboard-brand)]",
+            )}
+            style={{ width: `${Math.max(width, attemptsUsed > 0 ? 8 : 0)}%` }}
+          />
+        </div>
+      )}
     </div>
   );
 }

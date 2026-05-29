@@ -65,10 +65,15 @@ function matchesAssignmentAttempt(
     return false;
   }
 
-  if (assignmentId && attempt.assignmentId) {
+  // When we know which assignment we're checking, match strictly by assignmentId.
+  // Attempts that have no assignmentId (created before the AssignmentId field was
+  // introduced, or from a previous reassignment) must NOT count against the current
+  // assignment's cap — that is the exact bug this scoping fix addresses.
+  if (assignmentId) {
     return attempt.assignmentId === assignmentId;
   }
 
+  // No assignment context (e.g. public quiz library view) — match on quizId alone.
   return true;
 }
 

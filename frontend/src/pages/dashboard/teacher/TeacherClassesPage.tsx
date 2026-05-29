@@ -41,6 +41,7 @@ import type {
   TeacherClassFormValues,
   TeacherClassRecord,
   TeacherClassStatus,
+  TeacherClassStudent,
 } from "../../../features/dashboard/components/classes/teacherClassesTypes";
 import { isDraftQuiz } from "../../../features/dashboard/components/quiz-library/quizLibraryUtils";
 import { matchesTeacherClassSearch } from "../../../features/dashboard/components/classes/teacherClassesUtils";
@@ -59,6 +60,8 @@ export function TeacherClassesPage() {
     updateClass,
     setClassStatus,
     addStudentsToClass,
+    removeStudentFromClass,
+    resendStudentInvite,
     assignQuizToClasses,
     removeQuizFromClass,
     deleteClass,
@@ -210,6 +213,18 @@ export function TeacherClassesPage() {
           : "Unable to remove assigned quiz.",
       );
     }
+  };
+
+  const handleRemoveStudentFromClass = (student: TeacherClassStudent) => {
+    if (!selectedClass || selectedClass.status !== "active") return;
+    removeStudentFromClass(selectedClass.id, student.id);
+    setMembershipFeedback(`${student.fullName} was removed from ${selectedClass.name}.`);
+  };
+
+  const handleResendStudentInvite = (student: TeacherClassStudent) => {
+    if (!selectedClass || selectedClass.status !== "active") return;
+    resendStudentInvite(selectedClass.id, student.id);
+    setMembershipFeedback(`Class invite refreshed for ${student.fullName}.`);
   };
 
   const selectedClass =
@@ -411,6 +426,8 @@ export function TeacherClassesPage() {
             isSelectedClassActive ? () => setIsAssignQuizDialogOpen(true) : undefined
           }
           onRemoveAssignedQuiz={isSelectedClassActive ? handleRemoveAssignedQuiz : undefined}
+          onRemoveStudent={isSelectedClassActive ? handleRemoveStudentFromClass : undefined}
+          onResendStudentInvite={isSelectedClassActive ? handleResendStudentInvite : undefined}
         />
       </div>
 

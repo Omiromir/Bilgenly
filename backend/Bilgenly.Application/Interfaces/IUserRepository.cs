@@ -10,5 +10,6 @@ public interface IUserRepository
     Task<User?> GetByIdAsync(Guid id);
     Task<IEnumerable<User>> GetSuspendedUsersAsync();
     Task<IEnumerable<User>> GetAllAsync();
+    Task<IEnumerable<User>> SearchStudentsAsync(string query, Guid excludeUserId);
     Task DeleteAsync(User user);
 }

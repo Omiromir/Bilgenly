@@ -6,6 +6,7 @@ import { useQuizSessions } from "../../../app/providers/QuizSessionProvider";
 import { useSettings } from "../../../app/providers/SettingsProvider";
 import { useTeacherClasses } from "../../../app/providers/TeacherClassesProvider";
 import { updateProfile as updateProfileRequest } from "../../profile/api";
+import { useAchievementsQuery } from "../../gamification/api";
 import { isStaticAvatarId } from "../../profile/avatars";
 import { getProfileInitials } from "../settings/userSettings";
 import type {
@@ -36,6 +37,7 @@ interface ProfileActivityEvent {
 
 interface UseProfileResult {
   profile: ProfileSummary | null;
+  isStatsLoading: boolean;
   formValues: ProfileFormValues;
   formErrors: ProfileFormErrors;
   isEditing: boolean;
@@ -166,13 +168,13 @@ function buildStudentStats(
 ): ProfileStat[] {
   return [
     { label: "Quizzes Completed", value: String(completedQuizCount), icon: "book" },
-    { label: "Classes Joined", value: String(joinedClassCount), icon: "badge" },
+    { label: "Classes Joined", value: String(joinedClassCount), icon: "users" },
     {
       label: "Average Score",
       value: averageScore === null ? "--" : formatQuizScore(averageScore),
       icon: "trend",
     },
-    { label: "Badges Earned", value: String(badgesEarned), icon: "clock" },
+    { label: "Badges Earned", value: String(badgesEarned), icon: "badge" },
   ];
 }
 
@@ -277,7 +279,7 @@ function buildStudentActivity(
 }
 
 export function useProfile(): UseProfileResult {
-  const { role } = useAuth();
+  const { role, updateCurrentUserProfile } = useAuth();
   const dashboardViewer = useDashboardViewer();
   const {
     settings,
@@ -285,12 +287,18 @@ export function useProfile(): UseProfileResult {
     saveProfileSettings,
     formatDateTime,
   } = useSettings();
-  const { classes } = useTeacherClasses();
-  const { quizzes } = useQuizLibrary();
+  const { classes, refreshClasses, isLoading: classesLoading } = useTeacherClasses();
+  const { quizzes, isLoading: quizzesLoading } = useQuizLibrary();
   const { getCompletedSessionsForRole } = useQuizSessions();
   const analyticsState = useMyAnalytics(role === "student");
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+
+  // Reuse the same React Query cache that StudentBadgesPage populates, so
+  // visiting Achievements before Profile means badge count is instant here.
+  const achievementsQuery = useAchievementsQuery();
+  const studentBadgesEarned = achievementsQuery.data?.badgesEarned ?? 0;
+  const isBadgesLoading = role === "student" && achievementsQuery.isLoading;
 
   const joinedTeacherClasses = useMemo(
     () =>
@@ -309,18 +317,41 @@ export function useProfile(): UseProfileResult {
     [classes, role],
   );
   const teacherOwnedQuizzes = useMemo(() => {
-    if (role !== "teacher" || !dashboardViewer?.fullName) {
+    if (role !== "teacher" || !dashboardViewer) {
       return [];
     }
 
-    return quizzes.filter(
-      (quiz) =>
-        quiz.ownerRole === "teacher" &&
-        quiz.ownerName.trim().toLowerCase() ===
-          dashboardViewer.fullName.trim().toLowerCase(),
-    );
-  }, [dashboardViewer?.fullName, quizzes, role]);
+    const viewerId = dashboardViewer.id;
+    const viewerName = dashboardViewer.fullName.trim().toLowerCase();
+
+    return quizzes.filter((quiz) => {
+      if (quiz.ownerRole !== "teacher") {
+        return false;
+      }
+      // Prefer ID-based match (immune to name changes).
+      // Fall back to name match only for legacy local-only quizzes that
+      // pre-date the ownerUserId field being populated.
+      if (quiz.ownerUserId) {
+        return quiz.ownerUserId === viewerId;
+      }
+      return quiz.ownerName.trim().toLowerCase() === viewerName;
+    });
+  }, [dashboardViewer, quizzes, role]);
   const completedSessions = getCompletedSessionsForRole(role === "teacher" ? "teacher" : "student");
+
+  // Build the same session-percentage map that StudentResultsPage uses so the
+  // "Average Score" on the profile matches the value shown on My Results.
+  // Session-based percentages use earnedPoints/totalPoints (points-accurate),
+  // while the raw backend averageScore uses correctAnswers/totalQuestions.
+  const sessionPercentageByAttemptId = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const session of completedSessions) {
+      if (session.backendAttemptId) {
+        map.set(session.backendAttemptId, getQuizSessionResultSummary(session).percentage);
+      }
+    }
+    return map;
+  }, [completedSessions]);
 
   const persistedProfile = useMemo<ProfileSummary | null>(() => {
     if (!dashboardViewer) {
@@ -329,11 +360,14 @@ export function useProfile(): UseProfileResult {
 
     // Prefer backend-synced viewer data so the displayed profile survives a
     // page refresh on a different device / cleared localStorage.
+    // Exception: bio uses settings.profile.bio first so edits are reflected
+    // immediately after save (saveProfileSettings updates settings synchronously,
+    // while dashboardViewer.bio is a stale snapshot from the last login fetch).
     const joinedLabel = dashboardViewer.joinedLabel || "Member";
     const location = settings.profile.country;
     const fullName = dashboardViewer.fullName || settings.profile.fullName;
     const email = dashboardViewer.email || settings.profile.email;
-    const bio = (dashboardViewer.bio ?? settings.profile.bio).trim();
+    const bio = (settings.profile.bio || dashboardViewer.bio || "").trim();
     const avatarUrl = dashboardViewer.avatarUrl ?? settings.profile.avatarUrl;
     const personalInfo: ProfileField[] = [
       { label: "Full Name", value: formatProfileValue(fullName) },
@@ -393,16 +427,25 @@ export function useProfile(): UseProfileResult {
 
     const analyticsAttempts = analyticsState.data?.attempts ?? [];
     const completedQuizCount = analyticsAttempts.length || completedSessions.length;
-    const averageScore =
-      analyticsAttempts.length > 0
-        ? Math.round(analyticsState.data?.averageScore ?? 0)
-        : completedSessions.length
-          ? Math.round(
-              completedSessions.reduce((total, session) => {
-                return total + getQuizSessionResultSummary(session).percentage;
-              }, 0) / completedSessions.length,
-            )
-          : null;
+    // Compute average score the same way StudentResultsPage does: prefer the
+    // session-based percentage (earnedPoints/totalPoints, points-accurate) over
+    // the raw backend score (correctAnswers/totalQuestions) so both pages agree.
+    const averageScore = (() => {
+      if (analyticsAttempts.length > 0) {
+        const percentages = analyticsAttempts.map((attempt) =>
+          sessionPercentageByAttemptId.get(attempt.attemptId) ?? attempt.score,
+        );
+        return Math.round(percentages.reduce((sum, p) => sum + p, 0) / percentages.length);
+      }
+      if (completedSessions.length > 0) {
+        return Math.round(
+          completedSessions.reduce((total, session) => {
+            return total + getQuizSessionResultSummary(session).percentage;
+          }, 0) / completedSessions.length,
+        );
+      }
+      return null;
+    })();
     const joinedClassCount = joinedStudentClasses.length;
     const studentActivityAttempts =
       analyticsAttempts.length > 0
@@ -432,7 +475,7 @@ export function useProfile(): UseProfileResult {
         completedQuizCount,
         joinedClassCount,
         averageScore,
-        0,
+        studentBadgesEarned,
       ),
       activity: buildStudentActivity(
         studentActivityAttempts,
@@ -453,13 +496,13 @@ export function useProfile(): UseProfileResult {
     };
   }, [
     analyticsState.data?.attempts,
-    analyticsState.data?.averageScore,
     completedSessions,
     dashboardViewer,
     formatDateTime,
     joinedStudentClasses,
     joinedTeacherClasses,
     role,
+    sessionPercentageByAttemptId,
     settings.profile.avatarUrl,
     settings.profile.bio,
     settings.profile.country,
@@ -469,6 +512,7 @@ export function useProfile(): UseProfileResult {
     settings.profile.language,
     settings.profile.phoneNumber,
     settings.profile.timeZone,
+    studentBadgesEarned,
     teacherOwnedQuizzes,
   ]);
 
@@ -523,16 +567,29 @@ export function useProfile(): UseProfileResult {
         avatarUrl: isStaticAvatarId(avatarUrl) ? avatarUrl : null,
       });
 
+      const resolvedAvatarUrl = response.avatarUrl ?? avatarUrl;
       saveProfileSettings({
         ...settings.profile,
         fullName: response.username || trimmedFullName,
         email: settings.profile.email,
         bio: response.bio ?? trimmedBio,
         country: formValues.location.trim(),
-        avatarUrl: response.avatarUrl ?? avatarUrl,
+        avatarUrl: resolvedAvatarUrl,
+      });
+      // Sync the avatarUrl (and name) into the AuthProvider's currentUser so
+      // the header avatar updates immediately without a page reload.
+      updateCurrentUserProfile({
+        username: response.username || trimmedFullName,
+        avatarUrl: resolvedAvatarUrl,
+        bio: response.bio ?? trimmedBio,
       });
       setIsEditing(false);
       toast.success("Profile updated.");
+
+      // Refresh class records so the updated name is reflected everywhere
+      // (e.g. student-visible "Teacher: <name>" in class detail panels).
+      // Fire-and-forget — the UI is already updated optimistically via settings.
+      void refreshClasses();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Unable to update profile.");
     } finally {
@@ -542,6 +599,10 @@ export function useProfile(): UseProfileResult {
 
   return {
     profile: persistedProfile,
+    isStatsLoading:
+      role === "teacher"
+        ? classesLoading || quizzesLoading
+        : analyticsState.isLoading || isBadgesLoading,
     formValues,
     formErrors,
     isEditing,

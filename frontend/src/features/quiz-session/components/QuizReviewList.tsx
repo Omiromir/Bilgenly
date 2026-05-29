@@ -67,13 +67,13 @@ export function QuizReviewList({ session }: QuizReviewListProps) {
                 </h3>
               </div>
 
-              <DashboardBadge tone={isCorrect ? "success" : "warning"} size="md">
+              <DashboardBadge tone={isCorrect ? "success" : "danger"} size="md">
                 {isCorrect ? (
                   <CheckCircle2 className="h-4 w-4" />
                 ) : (
                   <XCircle className="h-4 w-4" />
                 )}
-                {isCorrect ? "Correct" : "Needs review"}
+                {isCorrect ? "Correct" : "Incorrect"}
               </DashboardBadge>
             </div>
 

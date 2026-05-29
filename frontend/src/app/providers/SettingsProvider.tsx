@@ -25,12 +25,16 @@ import {
   formatCurrentDate,
   formatCurrentDateTime,
   formatCurrentShortDate,
+  getDefaultTimeZone,
   resolveDocumentLanguage,
   resolveLocale,
   syncFormattingPreferences,
 } from "../../features/dashboard/settings/settingsPreferences";
 import { changePassword, revokeSessionById } from "../../features/auth/api";
-import { getMyPreferences, saveMyPreferences } from "../../features/dashboard/api/preferencesApi";
+import {
+  getMyPreferences,
+  saveMyPreferences,
+} from "../../features/dashboard/api/preferencesApi";
 import type { UserPreferencesDto } from "../../features/dashboard/api/preferencesApi";
 import {
   SETTINGS_DATE_FORMAT_OPTIONS,
@@ -49,6 +53,14 @@ function safeFromOptions<T extends AnySettingsArray>(
     : fallback;
 }
 
+// These are the factory-default timezone values (frontend + backend).
+// If the account still carries one of these, the user never explicitly picked
+// a timezone, so we fall back to the browser-detected zone instead.
+const FACTORY_DEFAULT_TIMEZONES = new Set([
+  "Pacific Time (PT)",  // frontend default
+  "Eastern Time (ET)",  // backend default
+]);
+
 function applyBackendPreferences(
   settings: UserSettings,
   prefs: UserPreferencesDto,
@@ -57,6 +69,13 @@ function applyBackendPreferences(
     prefs.themeMode === "light" || prefs.themeMode === "dark" || prefs.themeMode === "system"
       ? prefs.themeMode
       : settings.appearance.themeMode;
+
+  // If the stored timezone is still one of the factory defaults, prefer the
+  // browser-detected timezone so the user always sees their local time even
+  // if they never visited the Settings page.
+  const resolvedTimeZone = FACTORY_DEFAULT_TIMEZONES.has(prefs.timeZone)
+    ? getDefaultTimeZone()
+    : safeFromOptions(SETTINGS_TIME_ZONE_OPTIONS, prefs.timeZone, settings.profile.timeZone);
 
   return {
     ...settings,
@@ -68,7 +87,7 @@ function applyBackendPreferences(
       ...settings.profile,
       language: safeFromOptions(SETTINGS_LANGUAGE_OPTIONS, prefs.language, settings.profile.language),
       dateFormat: safeFromOptions(SETTINGS_DATE_FORMAT_OPTIONS, prefs.dateFormat, settings.profile.dateFormat),
-      timeZone: safeFromOptions(SETTINGS_TIME_ZONE_OPTIONS, prefs.timeZone, settings.profile.timeZone),
+      timeZone: resolvedTimeZone,
     },
     notifications: {
       email: {
@@ -100,6 +119,8 @@ interface SettingsContextValue {
   settings: UserSettings;
   isHydrated: boolean;
   resolvedTheme: "light" | "dark";
+  studyReminderTime: string | null;
+  saveStudyReminderTime: (time: string | null) => Promise<void>;
   saveProfileSettings: (profile: UserSettingsProfile) => void;
   updateThemeMode: (themeMode: ThemeMode) => void;
   updateNotificationPreference: (
@@ -139,6 +160,7 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
   } = useAuth();
   const [isHydrated, setIsHydrated] = useState(false);
   const [systemTheme, setSystemTheme] = useState<"light" | "dark">("light");
+  const [studyReminderTime, setStudyReminderTime] = useState<string | null>(null);
   const hydratedStorageScopeRef = useRef<string | null>(null);
 
   const userId = authCurrentUser?.id ?? null;
@@ -201,6 +223,24 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
           const merged = applyBackendPreferences(localSettings, prefs);
           writeUserSettings(storageScope, merged);
           setLoadedState({ scope: storageScope, settings: merged });
+          setStudyReminderTime(prefs.studyReminderTime ?? null);
+
+          // If the stored timezone was a factory default we auto-corrected it
+          // to the browser zone — persist it so subsequent logins are also right.
+          if (FACTORY_DEFAULT_TIMEZONES.has(prefs.timeZone)) {
+            saveMyPreferences({
+              themeMode: merged.appearance.themeMode,
+              language: merged.profile.language,
+              dateFormat: merged.profile.dateFormat,
+              timeZone: merged.profile.timeZone,
+              notifyEmailQuizAssignments: merged.notifications.email.quizAssignments,
+              notifyEmailGradingUpdates: merged.notifications.email.gradingUpdates,
+              notifyEmailAchievementAlerts: merged.notifications.email.achievementAlerts,
+              notifyEmailDeadlineReminders: merged.notifications.email.deadlineReminders,
+              notifyPushRealTimeUpdates: merged.notifications.push.realTimeUpdates,
+              notifyPushWeeklySummaries: merged.notifications.push.weeklySummaries,
+            }).catch(() => {});
+          }
         })
         .catch(() => {
           setLoadedState({ scope: storageScope, settings: localSettings });
@@ -377,11 +417,32 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
     return result;
   };
 
+  const saveStudyReminderTime = async (time: string | null) => {
+    setStudyReminderTime(time);
+    if (localStorage.getItem(AUTH_TOKEN_KEY_SETTINGS)) {
+      await saveMyPreferences({
+        themeMode: settings.appearance.themeMode,
+        language: settings.profile.language,
+        dateFormat: settings.profile.dateFormat,
+        timeZone: settings.profile.timeZone,
+        notifyEmailQuizAssignments: settings.notifications.email.quizAssignments,
+        notifyEmailGradingUpdates: settings.notifications.email.gradingUpdates,
+        notifyEmailAchievementAlerts: settings.notifications.email.achievementAlerts,
+        notifyEmailDeadlineReminders: settings.notifications.email.deadlineReminders,
+        notifyPushRealTimeUpdates: settings.notifications.push.realTimeUpdates,
+        notifyPushWeeklySummaries: settings.notifications.push.weeklySummaries,
+        studyReminderTime: time,
+      });
+    }
+  };
+
   const value = useMemo(
     () => ({
       settings,
       isHydrated,
       resolvedTheme,
+      studyReminderTime,
+      saveStudyReminderTime,
       saveProfileSettings,
       updateThemeMode,
       updateNotificationPreference,
@@ -393,7 +454,8 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
       revokeSession,
       updatePassword,
     }),
-    [isHydrated, locale, resolvedTheme, settings],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [isHydrated, locale, resolvedTheme, settings, studyReminderTime],
   );
 
   return (

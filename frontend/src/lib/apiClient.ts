@@ -160,6 +160,23 @@ export async function apiRequest<T>(
   const payload = await parseResponseBody(response);
 
   if (!response.ok) {
+    // 401 on an authenticated request means the token is no longer valid:
+    // user was suspended, deleted, or the token expired. Broadcast a single
+    // event so the AuthProvider can boot them out of the live session
+    // without each call site having to know about auth.
+    if (response.status === 401 && token) {
+      const suspendedFlag =
+        payload &&
+        typeof payload === "object" &&
+        "suspended" in payload &&
+        Boolean((payload as { suspended?: unknown }).suspended);
+      const message = extractErrorMessage(payload, "Your session has ended.");
+      dispatchAuthRevoked({
+        reason: suspendedFlag ? "suspended" : "expired",
+        message,
+      });
+    }
+
     throw new ApiError(
       extractErrorMessage(payload, fallbackErrorMessage),
       response.status,
@@ -168,6 +185,32 @@ export async function apiRequest<T>(
   }
 
   return payload as T;
+}
+
+/**
+ * Dispatched whenever an authenticated API call comes back 401. The
+ * AuthProvider subscribes to this event and runs `signOut()` so a user who
+ * gets suspended/deleted on the backend is booted out without needing a page
+ * refresh.
+ */
+export interface AuthRevokedDetail {
+  reason: "suspended" | "expired";
+  message: string;
+}
+
+export const AUTH_REVOKED_EVENT = "bilgenly:auth-revoked" as const;
+
+let lastDispatchAt = 0;
+function dispatchAuthRevoked(detail: AuthRevokedDetail) {
+  // Bursting through 401s on parallel requests would otherwise fire the
+  // event dozens of times and stack toasts. Throttle to one per 2s.
+  const now = Date.now();
+  if (now - lastDispatchAt < 2000) return;
+  lastDispatchAt = now;
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(
+    new CustomEvent<AuthRevokedDetail>(AUTH_REVOKED_EVENT, { detail }),
+  );
 }
 
 export function getApiBaseUrl() {

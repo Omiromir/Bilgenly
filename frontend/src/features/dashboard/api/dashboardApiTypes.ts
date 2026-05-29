@@ -21,6 +21,12 @@ export interface ClassQuizDto {
   status: string;
 }
 
+export interface PendingInvitationDto {
+  id: string;
+  recipientEmail: string;
+  createdAt: string;
+}
+
 export interface ClassDto {
   id: string;
   name: string;
@@ -35,6 +41,7 @@ export interface ClassDto {
   updatedAt: string;
   students: ClassStudentDto[];
   quizzes: ClassQuizDto[];
+  pendingInvitations: PendingInvitationDto[];
 }
 
 export interface CreateClassRequest {

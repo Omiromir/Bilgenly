@@ -147,5 +147,6 @@ export interface QuizCardAction {
   variant?: "primary" | "secondary" | "soft" | "ghost";
   iconDisplay?: "both" | "icon-only" | "label-only";
   disabled?: boolean;
+  title?: string;
   onClick?: () => void;
 }

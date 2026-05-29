@@ -1,4 +1,4 @@
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { Link } from "react-router";
 import {
@@ -58,7 +58,6 @@ import {
   dashboardTextareaVariants,
 } from "../DashboardPrimitives";
 import type {
-  AddStudentsFormValues,
   TeacherClassAssignedQuiz,
   TeacherClassFormValues,
   TeacherClassRecord,
@@ -69,9 +68,9 @@ import type {
 import {
   formatTeacherClassDate,
   getTeacherClassStudentActivityDate,
-  parseTeacherStudentEmails,
 } from "./teacherClassesUtils";
-import { normalizeEmail, validateEmail } from "../../../auth/validation";
+import { normalizeEmail } from "../../../auth/validation";
+import { searchStudents, type StudentSearchResult } from "../../api/classesApi";
 import type { QuizLibraryItem } from "../quiz-library/quizLibraryTypes";
 import {
   buildQuizJoinCode,
@@ -88,10 +87,6 @@ const emptyTeacherClassFormValues: TeacherClassFormValues = {
   name: "",
   description: "",
   subject: "",
-};
-
-const emptyAddStudentsFormValues: AddStudentsFormValues = {
-  emails: "",
 };
 
 function getTeacherStudentInitials(fullName: string) {
@@ -599,176 +594,219 @@ export function AddStudentsDialog({
   onOpenChange,
   onSubmit,
 }: AddStudentsDialogProps) {
-  const { currentUser } = useAuth();
-  const [values, setValues] = useState<AddStudentsFormValues>(
-    emptyAddStudentsFormValues,
-  );
-  const [errorMessages, setErrorMessages] = useState<string[]>([]);
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<StudentSearchResult[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [selected, setSelected] = useState<StudentSearchResult[]>([]);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Existing student emails in the class (to prevent re-inviting)
+  const existingEmails = useMemo(
+    () =>
+      new Set(
+        (teacherClass?.students ?? [])
+          .filter((s) => s.status !== "removed")
+          .map((s) => normalizeEmail(s.email)),
+      ),
+    [teacherClass?.students],
+  );
+
+  // Reset on open/class change
   useEffect(() => {
-    if (!open) {
+    if (!open) return;
+    setQuery("");
+    setResults([]);
+    setSelected([]);
+    setErrorMessage(null);
+    setIsSearching(false);
+  }, [open, teacherClass?.id]);
+
+  // Debounced search
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (query.trim().length < 2) {
+      setResults([]);
+      setIsSearching(false);
       return;
     }
+    setIsSearching(true);
+    debounceRef.current = setTimeout(async () => {
+      try {
+        const data = await searchStudents(query.trim());
+        // Filter out already-selected and already-in-class students
+        const selectedIds = new Set(selected.map((s) => s.id));
+        setResults(
+          data.filter(
+            (u) => !selectedIds.has(u.id) && !existingEmails.has(normalizeEmail(u.email)),
+          ),
+        );
+      } catch {
+        setResults([]);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 350);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [query, selected, existingEmails]);
 
-    setValues(emptyAddStudentsFormValues);
-    setErrorMessages([]);
-  }, [open, teacherClass?.id]);
+  const handleSelect = (student: StudentSearchResult) => {
+    setSelected((prev) => [...prev, student]);
+    setResults((prev) => prev.filter((r) => r.id !== student.id));
+    setQuery("");
+    setErrorMessage(null);
+  };
+
+  const handleRemove = (id: string) => {
+    setSelected((prev) => prev.filter((s) => s.id !== id));
+  };
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-
-    const parsedEmails = parseTeacherStudentEmails(values.emails);
-    const existingEmails = new Set(
-      (teacherClass?.students ?? [])
-        .filter((student) => student.status !== "removed")
-        .map((student) => normalizeEmail(student.email)),
-    );
-    const seenEmails = new Set<string>();
-    const invalidEmails: string[] = [];
-    const duplicateEmails: string[] = [];
-    const alreadyAddedEmails: string[] = [];
-    const selfInviteEmails: string[] = [];
-    const validEmails: string[] = [];
-    const currentUserEmail = currentUser?.email ? normalizeEmail(currentUser.email) : "";
-
-    parsedEmails.forEach((email) => {
-      if (validateEmail(email)) {
-        invalidEmails.push(email);
-        return;
-      }
-
-      if (seenEmails.has(email)) {
-        duplicateEmails.push(email);
-        return;
-      }
-
-      seenEmails.add(email);
-
-      if (existingEmails.has(email)) {
-        alreadyAddedEmails.push(email);
-        return;
-      }
-
-      if (currentUserEmail && email === currentUserEmail) {
-        selfInviteEmails.push(email);
-        return;
-      }
-
-      validEmails.push(email);
-    });
-
-    const nextErrors: string[] = [];
-
-    if (!parsedEmails.length) {
-      nextErrors.push("Add at least one student email to continue.");
-    }
-    if (invalidEmails.length) {
-      nextErrors.push(`Invalid email: ${invalidEmails.join(", ")}.`);
-    }
-    if (duplicateEmails.length) {
-      nextErrors.push(
-        `Duplicate emails in this submission: ${Array.from(new Set(duplicateEmails)).join(", ")}.`,
-      );
-    }
-    if (alreadyAddedEmails.length) {
-      nextErrors.push(
-        `Already in this class: ${alreadyAddedEmails.join(", ")}.`,
-      );
-    }
-    if (selfInviteEmails.length) {
-      nextErrors.push("You cannot invite your own account to this class.");
-    }
-
-    if (nextErrors.length) {
-      setErrorMessages(nextErrors);
+    if (selected.length === 0) {
+      setErrorMessage("Select at least one student to invite.");
       return;
     }
-
-    onSubmit(validEmails);
+    onSubmit(selected.map((s) => s.email));
     onOpenChange(false);
   };
 
-  const parsedCount = parseTeacherStudentEmails(values.emails).length;
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DashboardModalContent className="max-w-[720px]">
+      <DashboardModalContent className="max-w-[820px]">
         <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
           <DashboardModalHeader
             title="Add students"
             description={
               <>
-                Create one or more in-app class invites for {teacherClass?.name ?? "this class"}.
-                {" "}Paste emails separated by commas, spaces, or new lines.
-                {" "}Email delivery is not connected yet, so invites only appear in the in-app inbox of matching accounts.
+                Search registered student accounts to invite to{" "}
+                <strong>{teacherClass?.name ?? "this class"}</strong>. Only students with a Bilgenly account will appear.
               </>
             }
           />
 
-          <DashboardModalBody className="space-y-5">
+          <DashboardModalBody className="space-y-4 min-h-[420px]">
             {availableClasses && availableClasses.length > 1 && onSelectedClassChange ? (
               <label className="block space-y-2">
-                <span className="text-sm font-medium text-[var(--dashboard-text-strong)]">
-                  Class
-                </span>
+                <span className="text-sm font-medium text-[var(--dashboard-text-strong)]">Class</span>
                 <select
                   value={teacherClass?.id ?? ""}
-                  onChange={(event) => onSelectedClassChange(event.target.value)}
+                  onChange={(e) => onSelectedClassChange(e.target.value)}
                   className={cn(
                     dashboardSelectVariants({ size: "md" }),
                     "w-full border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-muted)]",
                   )}
                 >
-                  {availableClasses.map((option) => (
-                    <option key={option.id} value={option.id}>
-                      {option.name}
-                    </option>
+                  {availableClasses.map((opt) => (
+                    <option key={opt.id} value={opt.id}>{opt.name}</option>
                   ))}
                 </select>
               </label>
             ) : null}
 
-            <label className="block space-y-2">
+            {/* Search input */}
+            <div className="space-y-2">
               <span className="text-sm font-medium text-[var(--dashboard-text-strong)]">
-                Student emails
+                Search by name or email
               </span>
-              <textarea
-                value={values.emails}
-                onChange={(event) => {
-                  setValues({ emails: event.target.value });
-                  if (errorMessages.length) {
-                    setErrorMessages([]);
-                  }
-                }}
-                className={cn(
-                  dashboardTextareaVariants({ size: "md" }),
-                  "min-h-[198px] rounded-[22px] border-[var(--dashboard-border)] bg-[var(--dashboard-surface-elevated)] px-5 py-5 text-base leading-8",
+              <div className="relative">
+                <input
+                  type="text"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Type a name or email..."
+                  className={cn(
+                    dashboardInputVariants({ size: "md" }),
+                    "w-full rounded-[14px] border-[var(--dashboard-border)] bg-[var(--dashboard-surface-elevated)] px-4",
+                  )}
+                  autoComplete="off"
+                />
+                {/* Results dropdown */}
+                {query.trim().length >= 2 && (
+                  <div className="no-scrollbar absolute left-0 right-0 top-full z-50 mt-1 overflow-hidden overflow-y-auto rounded-[14px] border border-[var(--dashboard-border)] bg-[var(--dashboard-surface-elevated)] shadow-lg max-h-[280px]">
+                    {isSearching ? (
+                      <div className="px-4 py-3 text-sm text-[var(--dashboard-text-muted)]">
+                        Searching…
+                      </div>
+                    ) : results.length === 0 ? (
+                      <div className="px-4 py-3 text-sm text-[var(--dashboard-text-muted)]">
+                        No students found.
+                      </div>
+                    ) : (
+                      results.map((student) => (
+                        <button
+                          key={student.id}
+                          type="button"
+                          onClick={() => handleSelect(student)}
+                          className="flex w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-[var(--dashboard-surface-muted)] transition-colors"
+                        >
+                          <Avatar className="size-8 shrink-0">
+                            <AvatarFallback className="text-xs">
+                              {getTeacherStudentInitials(student.username)}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-medium text-[var(--dashboard-text-strong)]">
+                              {student.username}
+                            </p>
+                            <p className="truncate text-xs text-[var(--dashboard-text-muted)]">
+                              {student.email}
+                            </p>
+                          </div>
+                        </button>
+                      ))
+                    )}
+                  </div>
                 )}
-                placeholder={"student.one@example.com\nstudent.two@example.com"}
-              />
-            </label>
-
-            <div className="flex flex-wrap items-center gap-2">
-              <DashboardBadge
-                tone="info"
-                size="md"
-                className="rounded-full px-4 py-2 font-semibold"
-              >
-                {parsedCount} {parsedCount === 1 ? "email" : "emails"} detected
-              </DashboardBadge>
-            </div>
-            {errorMessages.length ? (
-              <div className="rounded-[18px] border border-[var(--dashboard-danger-soft)] bg-[var(--dashboard-danger-soft)]/40 px-4 py-3">
-                {errorMessages.map((message) => (
-                  <p
-                    key={message}
-                    className="text-sm leading-6 text-[var(--dashboard-danger)]"
-                  >
-                    {message}
-                  </p>
-                ))}
               </div>
-            ) : null}
+            </div>
+
+            {/* Selected students chips */}
+            {selected.length > 0 && (
+              <div className="space-y-2">
+                <span className="text-sm font-medium text-[var(--dashboard-text-strong)]">
+                  Selected ({selected.length})
+                </span>
+                <div className="flex flex-col gap-2 rounded-[14px] border border-[var(--dashboard-border)] bg-[var(--dashboard-surface-muted)] px-3 py-3">
+                  {selected.map((student) => (
+                    <div
+                      key={student.id}
+                      className="flex items-center gap-3"
+                    >
+                      <Avatar className="size-8 shrink-0">
+                        <AvatarFallback className="text-xs">
+                          {getTeacherStudentInitials(student.username)}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-[var(--dashboard-text-strong)]">
+                          {student.username}
+                        </p>
+                        <p className="truncate text-xs text-[var(--dashboard-text-muted)]">
+                          {student.email}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleRemove(student.id)}
+                        className="shrink-0 text-[var(--dashboard-text-muted)] hover:text-[var(--dashboard-danger)] transition-colors text-lg leading-none"
+                        aria-label={`Remove ${student.username}`}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {errorMessage && (
+              <div className="rounded-[14px] border border-[var(--dashboard-danger-soft)] bg-[var(--dashboard-danger-soft)]/40 px-4 py-3">
+                <p className="text-sm text-[var(--dashboard-danger)]">{errorMessage}</p>
+              </div>
+            )}
           </DashboardModalBody>
 
           <DashboardModalFooter>
@@ -780,8 +818,8 @@ export function AddStudentsDialog({
             >
               Cancel
             </DashboardButton>
-            <DashboardButton type="submit" size="lg">
-              Add students
+            <DashboardButton type="submit" size="lg" disabled={selected.length === 0}>
+              Invite {selected.length > 0 ? `${selected.length} student${selected.length > 1 ? "s" : ""}` : "students"}
             </DashboardButton>
           </DashboardModalFooter>
         </form>
@@ -856,6 +894,8 @@ interface TeacherClassDetailsPanelProps {
   onOpenAddStudents?: () => void;
   onOpenAssignQuiz?: () => void;
   onRemoveAssignedQuiz?: (quiz: TeacherClassAssignedQuiz) => void;
+  onRemoveStudent?: (student: TeacherClassStudent) => void;
+  onResendStudentInvite?: (student: TeacherClassStudent) => void;
 }
 
 export function TeacherClassDetailsPanel({
@@ -866,6 +906,8 @@ export function TeacherClassDetailsPanel({
   onOpenAddStudents,
   onOpenAssignQuiz,
   onRemoveAssignedQuiz,
+  onRemoveStudent,
+  onResendStudentInvite,
 }: TeacherClassDetailsPanelProps) {
   if (!teacherClass) {
     return hasClasses ? (
@@ -1012,12 +1054,19 @@ export function TeacherClassDetailsPanel({
                     </p>
                   </div>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
                   <TeacherStudentStatusBadge status={student.status} />
                   <InvitationStatusBadge status={student.invitationStatus} />
-                  <p className="text-sm text-[var(--dashboard-text-soft)]">
+                  <p className="hidden text-sm text-[var(--dashboard-text-soft)] sm:block">
                     {formatTeacherClassDate(getTeacherClassStudentActivityDate(student))}
                   </p>
+                  {(onRemoveStudent ?? onResendStudentInvite) ? (
+                    <TeacherClassStudentActionsMenu
+                      student={student}
+                      onRemove={() => onRemoveStudent?.(student)}
+                      onResendInvite={() => onResendStudentInvite?.(student)}
+                    />
+                  ) : null}
                 </div>
               </div>
             ))}
@@ -1134,9 +1183,12 @@ export function TeacherClassDetailsPanel({
                   <DashboardBadge tone="info">
                     {assignmentInsights[quiz.assignmentId]?.missedDeadlineCount ?? 0} missed deadline
                   </DashboardBadge>
-                  <DashboardBadge tone="warning">
-                    {assignmentInsights[quiz.assignmentId]?.exhaustedStudentsCount ?? 0} used all attempts
-                  </DashboardBadge>
+                  {/* Hide "used all attempts" when attempts are unlimited (maxAttempts === null) */}
+                  {quiz.maxAttempts != null && (
+                    <DashboardBadge tone="warning">
+                      {assignmentInsights[quiz.assignmentId]?.exhaustedStudentsCount ?? 0} used all attempts
+                    </DashboardBadge>
+                  )}
                 </div>
               </div>
             ))}
@@ -1249,7 +1301,7 @@ export function AssignQuizDialog({
         <div className="flex min-h-0 flex-1 flex-col">
 
           {/* ── Step indicator ── */}
-          <div className="flex items-center gap-3 px-6 pt-6 pb-1">
+          <div className="flex items-center gap-3 px-6 pt-8 pr-14 pb-2">
             <div className="flex items-center gap-2">
               <span
                 className={cn(
@@ -1324,7 +1376,7 @@ export function AssignQuizDialog({
                     className="border-dashed"
                   />
                 ) : filteredQuizzes.length ? (
-                  <div className="max-h-[380px] space-y-2 overflow-y-auto pr-1">
+                  <div className="no-scrollbar max-h-[380px] space-y-2 overflow-y-auto">
                     {filteredQuizzes.map((quiz) => {
                       const isAlreadyAssigned = assignedQuizIds.has(quiz.id);
                       const isSelected = selectedQuizId === quiz.id;

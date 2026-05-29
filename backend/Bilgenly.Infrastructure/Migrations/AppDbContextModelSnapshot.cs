@@ -173,6 +173,10 @@ namespace Bilgenly.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<string>("Icon")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.Property<int>("RequiredValue")
                         .HasColumnType("integer");
 
@@ -462,6 +466,9 @@ namespace Bilgenly.Infrastructure.Migrations
                     b.Property<string>("ModerationNote")
                         .HasColumnType("text");
 
+                    b.Property<string>("SourceText")
+                        .HasColumnType("text");
+
                     b.Property<string>("SourceType")
                         .IsRequired()
                         .HasColumnType("text");
@@ -657,6 +664,9 @@ namespace Bilgenly.Infrastructure.Migrations
 
                     b.Property<bool>("NotifyPushWeeklySummaries")
                         .HasColumnType("boolean");
+
+                    b.Property<string>("StudyReminderTime")
+                        .HasColumnType("text");
 
                     b.Property<string>("ThemeMode")
                         .IsRequired()

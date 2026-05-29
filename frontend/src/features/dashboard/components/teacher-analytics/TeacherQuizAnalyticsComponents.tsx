@@ -133,7 +133,7 @@ function getStudentStatusLabel(status: TeacherStudentQuizResultRowData["status"]
     case "expired":
       return "Expired";
     case "attempts_exhausted":
-      return "Attempts exhausted";
+      return "No attempts left";
     case "active":
     default:
       return "Available";
@@ -237,7 +237,7 @@ export function ActionMenu({
         </DropdownMenuItem>
         <DropdownMenuItem onClick={onReassignQuiz}>
           <RefreshCw className="h-4 w-4" />
-          Ask for another attempt
+          Grant extra attempt
         </DropdownMenuItem>
         <DropdownMenuItem onClick={onScheduleFollowUp}>
           <Send className="h-4 w-4" />
@@ -292,17 +292,13 @@ export function StudentQuizResultRow({
           <DashboardBadge tone={getStudentStatusTone(row.status)}>
             {getStudentStatusLabel(row.status)}
           </DashboardBadge>
-          {row.missedDeadline ? (
+          {/* Only show "Missed deadline" when the status isn't already "Expired" — otherwise it's redundant */}
+          {row.missedDeadline && row.status !== "expired" ? (
             <DashboardBadge tone="danger">Missed deadline</DashboardBadge>
           ) : null}
-          {row.exhaustedAttempts ? (
-            <DashboardBadge tone="neutral">Attempts used up</DashboardBadge>
-          ) : null}
-          {row.flags.map((flag) => (
-            <DashboardBadge
-              key={`${row.rowId}-${flag}`}
-              tone={flag === "At Risk" ? "danger" : "warning"}
-            >
+          {/* Show only "At Risk" — skip "Needs Review" (not implemented) */}
+          {row.flags.filter((f) => f === "At Risk").map((flag) => (
+            <DashboardBadge key={`${row.rowId}-${flag}`} tone="danger">
               {flag}
             </DashboardBadge>
           ))}
@@ -357,24 +353,30 @@ export function QuizSummaryPanel({
   analytics,
   onExportCsv,
 }: QuizSummaryPanelProps) {
-  const mostMissed = analytics.questionAnalytics.slice(0, 3);
+  // Only show questions that students actually got wrong, ranked worst-first.
+  // The previous slice(0, 3) took the first 3 by question-number order, so
+  // questions with 0% miss rate appeared in the "most frequently missed" list.
+  const mostMissed = [...analytics.questionAnalytics]
+    .filter((q) => q.missRate > 0)
+    .sort((a, b) => b.missRate - a.missRate)
+    .slice(0, 3);
   const summaryChartData = [
     {
       label: "Completion",
       value: analytics.completionRate,
-      fill: "#16B59D",
+      fill: "var(--dashboard-success)",
       helper: `${analytics.completedStudentsCount}/${analytics.assignedStudentsCount}`,
     },
     {
       label: "Average score",
       value: analytics.averageScore ?? 0,
-      fill: "#2B7AF3",
+      fill: "var(--dashboard-brand)",
       helper: analytics.averageScore === null ? "--" : `${analytics.averageScore}%`,
     },
     {
       label: "Expired",
       value: analytics.expirationRate,
-      fill: "#F97316",
+      fill: "var(--dashboard-warning)",
       helper: `${analytics.missedDeadlineStudentsCount} students`,
     },
   ];
@@ -410,9 +412,9 @@ export function QuizSummaryPanel({
           </p>
         </div>
         <div className={dashboardInsetBlockClassName}>
-          <p className={dashboardMetaTextClassName}>Avg. time / question</p>
+          <p className={dashboardMetaTextClassName}>Students attempted</p>
           <p className="mt-1 font-semibold text-[var(--dashboard-text-strong)]">
-            {formatDuration(analytics.averageTimePerQuestionSeconds)}
+            {analytics.studentsWithAttemptsCount} of {analytics.assignedStudentsCount}
           </p>
         </div>
         <div className={dashboardInsetBlockClassName}>
@@ -455,6 +457,8 @@ export function QuizSummaryPanel({
                   background: "var(--dashboard-tooltip-bg)",
                   color: "var(--dashboard-text)",
                 }}
+                labelStyle={{ color: "var(--dashboard-text-strong)", fontWeight: 600 }}
+                itemStyle={{ color: "var(--dashboard-text)" }}
               />
               <Bar dataKey="value" radius={[10, 10, 0, 0]}>
                 {summaryChartData.map((entry) => (
@@ -523,12 +527,23 @@ export function QuestionAnalyticsPanel({ questions }: QuestionAnalyticsPanelProp
     );
   }
 
-  const chartData = questions.slice(0, 8).map((question) => ({
+  // Chart: keep original question-number order so the X-axis reads Q1, Q2, Q3…
+  // and teachers can spot which part of the quiz caused trouble.
+  const chartData = questions.map((question) => ({
     label: `Q${question.questionNumber}`,
     missRate: question.missRate,
     prompt: question.prompt,
     missed: question.missCount,
   }));
+
+  // Cards: sort worst-first so the highest-miss questions are immediately visible.
+  // Filter out questions with 0 attempts AND 0 misses — there's nothing to surface.
+  const topMissed = [...questions]
+    .filter((q) => q.attemptCount > 0)
+    .sort((a, b) => b.missRate - a.missRate)
+    .slice(0, 5);
+
+  const hasMisses = topMissed.some((q) => q.missRate > 0);
 
   return (
     <div className="space-y-4">
@@ -536,7 +551,7 @@ export function QuestionAnalyticsPanel({ questions }: QuestionAnalyticsPanelProp
         <div className="mb-3 flex items-center gap-2">
           <AlertCircle className="h-4 w-4 text-[var(--dashboard-warning)]" />
           <p className="font-semibold text-[var(--dashboard-text-strong)]">
-            Highest miss rate
+            Miss rate by question
           </p>
         </div>
         <div className="h-[280px]">
@@ -567,45 +582,62 @@ export function QuestionAnalyticsPanel({ questions }: QuestionAnalyticsPanelProp
                   background: "var(--dashboard-tooltip-bg)",
                   color: "var(--dashboard-text)",
                 }}
+                labelStyle={{ color: "var(--dashboard-text-strong)", fontWeight: 600 }}
+                itemStyle={{ color: "var(--dashboard-text)" }}
               />
-              <Bar dataKey="missRate" fill="#F97316" radius={[10, 10, 0, 0]} />
+              <Bar dataKey="missRate" fill="var(--dashboard-warning)" radius={[10, 10, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
       </div>
 
       <div className="space-y-3">
-        {questions.slice(0, 4).map((question) => (
-          <div
-            key={question.questionId}
-            className="rounded-[18px] border border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-elevated)] px-4 py-4"
-          >
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div className="space-y-2">
-                <div className="flex flex-wrap items-center gap-2">
-                  <DashboardBadge tone="info">Question {question.questionNumber}</DashboardBadge>
-                  {question.tags.map((tag) => (
-                    <DashboardBadge key={`${question.questionId}-${tag}`} tone="neutral">
-                      {tag}
-                    </DashboardBadge>
-                  ))}
+        <div className="flex items-center gap-2">
+          <AlertCircle className="h-4 w-4 text-[var(--dashboard-warning)]" />
+          <p className="font-semibold text-[var(--dashboard-text-strong)]">
+            {hasMisses ? "Most frequently missed" : "Question breakdown"}
+          </p>
+        </div>
+        {topMissed.length ? (
+          topMissed.map((question) => (
+            <div
+              key={question.questionId}
+              className="rounded-[18px] border border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-elevated)] px-4 py-4"
+            >
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="space-y-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <DashboardBadge tone="info">Question {question.questionNumber}</DashboardBadge>
+                    {question.tags.map((tag) => (
+                      <DashboardBadge key={`${question.questionId}-${tag}`} tone="neutral">
+                        {tag}
+                      </DashboardBadge>
+                    ))}
+                  </div>
+                  <p className="text-sm leading-6 text-[var(--dashboard-text-strong)]">
+                    {question.prompt}
+                  </p>
                 </div>
-                <p className="text-sm leading-6 text-[var(--dashboard-text-strong)]">
-                  {question.prompt}
-                </p>
-              </div>
 
-              <div className="text-right">
-                <p className="text-lg font-semibold text-[var(--dashboard-text-strong)]">
-                  {question.missRate}% missed
-                </p>
-                <p className="text-sm text-[var(--dashboard-text-soft)]">
-                  {question.missCount}/{question.attemptCount} attempts
-                </p>
+                <div className="text-right">
+                  <p className={`text-lg font-semibold ${question.missRate > 0 ? "text-[var(--dashboard-warning)]" : "text-[var(--dashboard-success)]"}`}>
+                    {question.missRate}% missed
+                  </p>
+                  <p className="text-sm text-[var(--dashboard-text-soft)]">
+                    {question.missCount}/{question.attemptCount} attempts
+                  </p>
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          ))
+        ) : (
+          <EmptyStateBlock
+            title="No attempt data yet"
+            description="Question-level breakdowns appear once students start submitting answers."
+            icon={BookOpen}
+            className="border-dashed"
+          />
+        )}
       </div>
     </div>
   );
@@ -691,17 +723,13 @@ export function StudentQuizInsightsPanel({
               <DashboardBadge tone={getStudentStatusTone(row.status)}>
                 {getStudentStatusLabel(row.status)}
               </DashboardBadge>
-              {row.missedDeadline ? (
+              {/* Only show "Missed deadline" when the status isn't already "Expired" */}
+              {row.missedDeadline && row.status !== "expired" ? (
                 <DashboardBadge tone="danger">Missed deadline</DashboardBadge>
               ) : null}
-              {row.exhaustedAttempts ? (
-                <DashboardBadge tone="neutral">Attempts used up</DashboardBadge>
-              ) : null}
-              {row.flags.map((flag) => (
-                <DashboardBadge
-                  key={`${row.rowId}-${flag}`}
-                  tone={flag === "At Risk" ? "danger" : "warning"}
-                >
+              {/* Show only "At Risk" — skip "Needs Review" (not implemented) */}
+              {row.flags.filter((f) => f === "At Risk").map((flag) => (
+                <DashboardBadge key={`${row.rowId}-${flag}`} tone="danger">
                   {flag}
                 </DashboardBadge>
               ))}
@@ -737,24 +765,29 @@ export function StudentQuizInsightsPanel({
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        <DashboardButton type="button" size="sm" onClick={onNotifyStudent}>
-          <Mail className="h-4 w-4" />
-          Review Request
-        </DashboardButton>
-        <DashboardButton type="button" size="sm" variant="secondary" onClick={onReassignQuiz}>
-          <RefreshCw className="h-4 w-4" />
-          Another Attempt Requested
-        </DashboardButton>
-        <DashboardButton
-          type="button"
-          size="sm"
-          variant="secondary"
-          onClick={onScheduleFollowUp}
-        >
-          <ArrowRight className="h-4 w-4" />
-          Practice Follow-up
-        </DashboardButton>
+      <div className="space-y-2">
+        <p className="text-xs uppercase tracking-[0.14em] text-[var(--dashboard-text-faint)]">
+          Send a nudge to this student
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <DashboardButton type="button" size="sm" onClick={onNotifyStudent}>
+            <Mail className="h-4 w-4" />
+            Request review
+          </DashboardButton>
+          <DashboardButton type="button" size="sm" variant="secondary" onClick={onReassignQuiz}>
+            <RefreshCw className="h-4 w-4" />
+            Grant extra attempt
+          </DashboardButton>
+          <DashboardButton
+            type="button"
+            size="sm"
+            variant="secondary"
+            onClick={onScheduleFollowUp}
+          >
+            <ArrowRight className="h-4 w-4" />
+            Suggest practice
+          </DashboardButton>
+        </div>
       </div>
 
       <Tabs
@@ -1037,8 +1070,10 @@ export function ScoreDistributionPanel({ analytics }: ScoreDistributionPanelProp
                 background: "var(--dashboard-tooltip-bg)",
                 color: "var(--dashboard-text)",
               }}
+              labelStyle={{ color: "var(--dashboard-text-strong)", fontWeight: 600 }}
+              itemStyle={{ color: "var(--dashboard-text)" }}
             />
-            <Bar dataKey="students" fill="#2B7AF3" radius={[10, 10, 0, 0]} />
+            <Bar dataKey="students" fill="var(--dashboard-brand)" radius={[10, 10, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </div>
@@ -1069,27 +1104,27 @@ export function InterventionPanel({ analytics }: InterventionPanelProps) {
     {
       label: "In progress",
       count: analytics.rows.filter((student) => student.status === "in_progress").length,
-      fill: "#F59E0B",
+      fill: "var(--dashboard-warning)",
     },
     {
       label: "Expired",
       count: analytics.rows.filter((student) => student.status === "expired").length,
-      fill: "#DC2626",
+      fill: "var(--dashboard-danger)",
     },
     {
       label: "Exhausted",
       count: analytics.rows.filter((student) => student.status === "attempts_exhausted").length,
-      fill: "#64748B",
+      fill: "var(--dashboard-text-soft)",
     },
     {
       label: "Needs review",
       count: analytics.rows.filter((student) => student.flags.includes("Needs Review")).length,
-      fill: "#F97316",
+      fill: "var(--dashboard-warning)",
     },
     {
       label: "At risk",
       count: analytics.rows.filter((student) => student.flags.includes("At Risk")).length,
-      fill: "#DC2626",
+      fill: "var(--dashboard-danger)",
     },
   ];
 
@@ -1126,6 +1161,8 @@ export function InterventionPanel({ analytics }: InterventionPanelProps) {
                 background: "var(--dashboard-tooltip-bg)",
                 color: "var(--dashboard-text)",
               }}
+              labelStyle={{ color: "var(--dashboard-text-strong)", fontWeight: 600 }}
+              itemStyle={{ color: "var(--dashboard-text)" }}
             />
             <Bar dataKey="count" radius={[10, 10, 0, 0]}>
               {chartData.map((entry) => (

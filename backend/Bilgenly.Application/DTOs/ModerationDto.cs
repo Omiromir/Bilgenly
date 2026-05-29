@@ -97,3 +97,30 @@ public class ModerationUserDto
     public string? SuspensionReason { get; set; }
     public DateTime CreatedAt { get; set; }
 }
+
+public class AdminAnalyticsTimeSeriesPointDto
+{
+    public string Date { get; set; } = string.Empty;
+    public int Value { get; set; }
+}
+
+public class AdminAnalyticsRoleBreakdownDto
+{
+    public string Role { get; set; } = string.Empty;
+    public int Count { get; set; }
+}
+
+public class AdminAnalyticsDto
+{
+    public int TotalUsers { get; set; }
+    public int TotalQuizzes { get; set; }
+    public int TotalStudents { get; set; }
+    public int TotalTeachers { get; set; }
+    public int TotalModerators { get; set; }
+    public int SuspendedUsers { get; set; }
+    public int NewUsersLast7Days { get; set; }
+    public int NewQuizzesLast7Days { get; set; }
+    public IList<AdminAnalyticsRoleBreakdownDto> RoleBreakdown { get; set; } = new List<AdminAnalyticsRoleBreakdownDto>();
+    public IList<AdminAnalyticsTimeSeriesPointDto> UsersOverTime { get; set; } = new List<AdminAnalyticsTimeSeriesPointDto>();
+    public IList<AdminAnalyticsTimeSeriesPointDto> QuizzesOverTime { get; set; } = new List<AdminAnalyticsTimeSeriesPointDto>();
+}

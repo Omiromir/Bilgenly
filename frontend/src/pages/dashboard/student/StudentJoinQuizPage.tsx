@@ -158,33 +158,30 @@ export function StudentJoinQuizPage() {
   const handleJoinSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    if (!joinableAssignments.length) {
-      setJoinError("Join a class first to unlock quiz codes.");
-      return;
-    }
-
     if (normalizedJoinCode.length !== QUIZ_JOIN_CODE_LENGTH) {
       setJoinError(`Enter the full ${QUIZ_JOIN_CODE_LENGTH}-character code.`);
       return;
     }
 
-    if (!matchedJoinTarget) {
-      setJoinError("That code does not match any quiz from your joined classes.");
+    if (matchedJoinTarget) {
+      if (
+        matchedJoinTarget.assignment.assignmentState.isLoading ||
+        (!matchedJoinTarget.assignment.assignmentState.canStart &&
+          !matchedJoinTarget.assignment.assignmentState.canResume &&
+          !matchedJoinTarget.assignment.assignmentState.canReview)
+      ) {
+        setJoinError("Attempt status is still loading for this assigned quiz.");
+        return;
+      }
+
+      setJoinError("");
+      launchAssignment(matchedJoinTarget);
       return;
     }
 
-    if (
-      matchedJoinTarget.assignment.assignmentState.isLoading ||
-      (!matchedJoinTarget.assignment.assignmentState.canStart &&
-        !matchedJoinTarget.assignment.assignmentState.canResume &&
-        !matchedJoinTarget.assignment.assignmentState.canReview)
-    ) {
-      setJoinError("Attempt status is still loading for this assigned quiz.");
-      return;
-    }
-
-    setJoinError("");
-    launchAssignment(matchedJoinTarget);
+    setJoinError(
+      "That code doesn't match a class assignment you can join. Check the code with your teacher and try again.",
+    );
   };
 
   const getAssignedEmptyState = () => {
@@ -200,7 +197,7 @@ export function StudentJoinQuizPage() {
       return {
         title: "No joined classes yet",
         description:
-          "Quiz codes only resolve after you join a class and the teacher assigns work to it.",
+          "Class assignment codes become available after you accept an invite and join a class.",
       };
     }
 
@@ -219,7 +216,7 @@ export function StudentJoinQuizPage() {
         title={meta?.title ?? "Join a Quiz"}
         subtitle={
           meta?.subtitle ??
-          "Enter the quiz code your teacher shared or pick from one of your joined class assigned quizzes."
+          "Enter the code your teacher shared to open the matching class assignment."
         }
         actions={
           <DashboardButton asChild type="button" variant="secondary" size="lg">
@@ -243,7 +240,7 @@ export function StudentJoinQuizPage() {
             Enter Quiz Code
           </h2>
           <p className="mt-2 text-[1rem] text-[var(--dashboard-text-soft)]">
-            Use the 6-character code from your teacher to open the right assigned quiz.
+            Enter the 6-character code your teacher shared to open the matching class assignment.
           </p>
 
           <form className="mt-7 space-y-4" onSubmit={handleJoinSubmit}>
@@ -281,7 +278,7 @@ export function StudentJoinQuizPage() {
                 ? joinError
                 : matchedJoinTarget
                   ? `${formatQuizJoinCode(matchedJoinTarget.joinCode)} matches ${matchedJoinTarget.assignment.title}.`
-                  : "Codes work with assigned quizzes from classes you have already joined."}
+                  : "Works with codes for any class assignment you've been invited to."}
             </p>
 
             <div className="flex flex-wrap justify-center gap-3">
@@ -289,18 +286,17 @@ export function StudentJoinQuizPage() {
                 type="submit"
                 size="lg"
                 disabled={
-                  !joinableAssignments.length ||
-                  (matchedJoinTarget
+                  matchedJoinTarget
                     ? matchedJoinTarget.assignment.assignmentState.isLoading ||
                       (!matchedJoinTarget.assignment.assignmentState.canStart &&
                         !matchedJoinTarget.assignment.assignmentState.canResume &&
                         !matchedJoinTarget.assignment.assignmentState.canReview)
-                    : false)
+                    : false
                 }
               >
                 {matchedJoinTarget
                   ? matchedJoinTarget.assignment.assignmentState.primaryActionLabel
-                  : "Open Assigned Quiz"}
+                  : "Open Quiz"}
               </DashboardButton>
 
               {normalizedJoinCode ? (

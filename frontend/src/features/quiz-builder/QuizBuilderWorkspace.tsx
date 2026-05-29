@@ -7,9 +7,24 @@ import {
   useState,
 } from "react";
 import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DragStartEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  arrayMove,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import {
   AlertCircle,
-  ArrowDown,
-  ArrowUp,
   Camera,
   CheckCircle2,
   ChevronRight,
@@ -17,6 +32,9 @@ import {
   Clock3,
   Download,
   GripVerticalIcon,
+  Info,
+  Layers3,
+  Lock,
   MoreHorizontal,
   PlayCircle,
   Plus,
@@ -28,6 +46,7 @@ import {
 import { AnimatePresence, motion } from "motion/react";
 import { useLocation, useNavigate } from "react-router";
 import { useQuizLibrary } from "../../app/providers/QuizLibraryProvider";
+import { useTeacherClasses } from "../../app/providers/TeacherClassesProvider";
 import { useQuizLauncher } from "../quiz-session/useQuizLauncher";
 import {
   generateQuizFromPdf,
@@ -81,9 +100,15 @@ import {
 } from "./quizBuilderUtils";
 import type {
   QuizLibraryStatus,
-  QuizLibraryVisibility,
   QuizQuestionRecord,
 } from "../dashboard/components/quiz-library/quizLibraryTypes";
+import {
+  clearQuizBuilderDraft,
+  loadQuizBuilderDraft,
+  saveQuizBuilderDraft,
+} from "./quizBuilderDraft";
+import { useAuth } from "../../app/providers/AuthProvider";
+import { getUserStorageScope } from "../../app/providers/userScopedStorage";
 
 function escapeXml(value: string | number | undefined) {
   return String(value ?? "")
@@ -274,6 +299,179 @@ function mapGeneratedQuestionToQuizQuestionRecord(
   };
 }
 
+// ─── Question list sortable card (@dnd-kit) ──────────────────────────────────
+
+interface QuestionListCardProps {
+  question: GeneratedQuestion;
+  index: number;
+  isSelected: boolean;
+  /** When true the card renders as a static ghost (used inside DragOverlay) */
+  isOverlay?: boolean;
+  onSelect: () => void;
+  onDuplicate: () => void;
+  onDelete: () => void;
+}
+
+/** Pure visual card — used both as a live sortable item and as the drag overlay. */
+function QuestionCardBody({
+  question,
+  index,
+  isSelected,
+  isOverlay = false,
+  onSelect,
+  onDuplicate,
+  onDelete,
+  dragHandleProps,
+}: QuestionListCardProps & {
+  dragHandleProps?: React.HTMLAttributes<HTMLDivElement>;
+}) {
+  const questionTypeLabel =
+    question.questionType === "True/False" ? "True / False" : "Multiple choice";
+
+  // Custom inline menu — avoids Radix portal positioning bugs inside
+  // overflow-y:auto scroll containers (floating-ui calculates wrong position).
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // Close on outside click
+  useEffect(() => {
+    if (!menuOpen) return;
+    function handleOutside(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleOutside);
+    return () => document.removeEventListener("mousedown", handleOutside);
+  }, [menuOpen]);
+
+  return (
+    <div
+      className={cn(
+        "group flex w-full items-stretch rounded-[18px] border transition-colors duration-150",
+        isOverlay
+          ? "border-[var(--dashboard-brand)]/40 bg-[var(--dashboard-surface-elevated)] shadow-xl ring-2 ring-[var(--dashboard-brand)]/25 opacity-95"
+          : isSelected
+            ? "border-[var(--dashboard-brand)]/35 bg-[var(--dashboard-surface-elevated)] shadow-[var(--dashboard-shadow-card)]"
+            : "border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface)] hover:border-[var(--dashboard-border)]",
+      )}
+    >
+      {/* Drag handle strip — never inside a <button> */}
+      <div
+        {...dragHandleProps}
+        className={cn(
+          "flex shrink-0 cursor-grab items-center rounded-l-[18px] px-2 touch-none",
+          "text-[var(--dashboard-text-faint)] opacity-0 transition-opacity",
+          "group-hover:opacity-100 active:cursor-grabbing",
+          isOverlay && "opacity-100",
+        )}
+        title="Drag to reorder"
+      >
+        <GripVerticalIcon className="h-4 w-4" />
+      </div>
+
+      {/* Question body — the only <button> in this card */}
+      <button
+        type="button"
+        className="min-w-0 flex-1 py-4 pr-2 text-left"
+        onClick={onSelect}
+      >
+        <div className="flex items-center gap-2">
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--dashboard-surface-muted)] text-xs font-semibold text-[var(--dashboard-text-soft)]">
+            {index + 1}
+          </span>
+          <span className="whitespace-nowrap rounded-full border border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-muted)] px-2 py-1 text-[11px] font-medium text-[var(--dashboard-text-soft)]">
+            {questionTypeLabel}
+          </span>
+        </div>
+        <h3 className="mt-3 line-clamp-2 text-sm font-semibold leading-6 text-[var(--dashboard-text-strong)]">
+          {question.text}
+        </h3>
+        <p className="mt-2 text-xs text-[var(--dashboard-text-soft)]">
+          {question.options.length} choices |{" "}
+          {Math.max(1, Math.round(question.points))} pts
+        </p>
+      </button>
+
+      {/* Three-dot menu — inline absolute dropdown, no Radix portal */}
+      <div ref={menuRef} className="relative flex shrink-0 items-start p-2 pt-3">
+        <DashboardButton
+          type="button"
+          variant="ghost"
+          size="iconSm"
+          data-slot="dropdown-menu-trigger"
+          aria-haspopup="menu"
+          aria-expanded={menuOpen}
+          onClick={(e) => {
+            e.stopPropagation();
+            setMenuOpen((v) => !v);
+          }}
+        >
+          <MoreHorizontal className="h-4 w-4" />
+        </DashboardButton>
+
+        {menuOpen && (
+          <div
+            role="menu"
+            className="absolute right-0 top-full z-50 mt-1 w-40 overflow-hidden rounded-md border border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-elevated)] py-1 shadow-lg"
+          >
+            <button
+              role="menuitem"
+              type="button"
+              className="w-full px-3 py-2 text-left text-sm text-[var(--dashboard-text)] hover:bg-[var(--dashboard-surface-muted)] focus:outline-none"
+              onClick={(e) => {
+                e.stopPropagation();
+                setMenuOpen(false);
+                onDuplicate();
+              }}
+            >
+              Duplicate
+            </button>
+            <button
+              role="menuitem"
+              type="button"
+              className="w-full px-3 py-2 text-left text-sm text-[var(--dashboard-danger)] hover:bg-[var(--dashboard-surface-muted)] focus:outline-none"
+              onClick={(e) => {
+                e.stopPropagation();
+                setMenuOpen(false);
+                onDelete();
+              }}
+            >
+              Delete
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** Sortable wrapper — connects QuestionCardBody to @dnd-kit/sortable. */
+function QuestionListCard(props: QuestionListCardProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: props.question.id });
+
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.35 : 1,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style}>
+      <QuestionCardBody {...props} dragHandleProps={{ ...attributes, ...listeners }} />
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 export function QuizBuilderWorkspace({
   mode,
   title,
@@ -281,11 +479,27 @@ export function QuizBuilderWorkspace({
 }: QuizBuilderWorkspaceProps) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { getQuizById, saveGeneratedQuiz } = useQuizLibrary();
+  const { getQuizById, saveGeneratedQuiz, duplicateQuizToLibrary } = useQuizLibrary();
+  const { classes } = useTeacherClasses();
   const { openQuiz } = useQuizLauncher();
+  const { currentUser, role, token } = useAuth();
   const copy = workspaceCopy[mode];
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const questionImageInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Draft persistence scope — per-user (so multiple users on one device
+  // don't see each other's in-progress quizzes) and per-mode (teacher vs
+  // student drafts are kept separate even for the same person).
+  const draftStorageScope = useMemo(
+    () =>
+      getUserStorageScope({
+        userId: currentUser?.id ?? null,
+        email: currentUser?.email ?? null,
+        role,
+        token,
+      }),
+    [currentUser?.email, currentUser?.id, role, token],
+  );
 
   const [activeInput, setActiveInput] = useState<InputMethod>("upload");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -325,23 +539,36 @@ export function QuizBuilderWorkspace({
   >(null);
   const [quizDescription, setQuizDescription] = useState<string>("");
   const [reviewSearch, setReviewSearch] = useState("");
-  const [publishVisibility, setPublishVisibility] =
-    useState<QuizLibraryVisibility>("private");
   const [imageUploadQuestionId, setImageUploadQuestionId] = useState<
     string | null
   >(null);
-  const [openQuestionMenuId, setOpenQuestionMenuId] = useState<string | null>(
-    null,
-  );
   const [draggingOptionIndex, setDraggingOptionIndex] = useState<number | null>(
     null,
   );
   const [dragOverOptionIndex, setDragOverOptionIndex] = useState<number | null>(
     null,
   );
+  const [activeDragId, setActiveDragId] = useState<string | null>(null);
+  const [editorMenuOpen, setEditorMenuOpen] = useState(false);
+  const editorMenuRef = useRef<HTMLDivElement>(null);
+
+  const dndSensors = useSensors(
+    useSensor(PointerSensor, {
+      // Require a small movement before drag starts so normal clicks still fire.
+      activationConstraint: { distance: 6 },
+    }),
+  );
   const editingQuizId = location.state?.editQuizId as string | undefined;
   const editingQuiz = editingQuizId ? getQuizById(editingQuizId) : undefined;
   const resolvedLanguage = editingQuiz?.language ?? "English";
+
+  // True when the quiz being edited is currently assigned to at least one class.
+  // Structural edits (questions/answers) on assigned quizzes corrupt existing
+  // student attempts and analytics, so we block saving and show a warning.
+  const isAssignedQuiz =
+    mode === "teacher" &&
+    !!editingQuizId &&
+    classes.some((c) => c.assignedQuizzes.some((a) => a.quizId === editingQuizId));
 
   const canParse =
     (activeInput === "upload" && selectedFile !== null) ||
@@ -398,6 +625,18 @@ export function QuizBuilderWorkspace({
     review: 3,
   }[workspaceStage];
 
+  // Close the editor panel three-dot menu on outside click
+  useEffect(() => {
+    if (!editorMenuOpen) return;
+    function handleOutside(e: MouseEvent) {
+      if (editorMenuRef.current && !editorMenuRef.current.contains(e.target as Node)) {
+        setEditorMenuOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleOutside);
+    return () => document.removeEventListener("mousedown", handleOutside);
+  }, [editorMenuOpen]);
+
   useEffect(() => {
     if (editingQuiz) {
       return;
@@ -425,7 +664,6 @@ export function QuizBuilderWorkspace({
     setQuizDescription(editingQuiz.description ?? "");
     setQuestionCount(editingQuiz.questionCount);
     setFocus(editingQuiz.topic);
-    setPublishVisibility(editingQuiz.visibility);
     setQuestions(
       editingQuiz.questions.map((question) => ({
         ...question,
@@ -471,6 +709,115 @@ export function QuizBuilderWorkspace({
         : null,
     );
   }, [editingQuiz, mode]);
+
+  // ─── Draft persistence ───────────────────────────────────────────────
+  //
+  // Restore an in-progress quiz draft (if any) when the workspace mounts.
+  // Skip restoration when the user navigated here to edit an EXISTING
+  // saved quiz — in that case the saved data is the source of truth and a
+  // stale draft would silently overwrite it.
+  const hasHydratedDraftRef = useRef(false);
+  useEffect(() => {
+    if (hasHydratedDraftRef.current) return;
+    if (editingQuizId) {
+      // Editing a saved quiz: don't restore the unrelated draft.
+      hasHydratedDraftRef.current = true;
+      return;
+    }
+    // Wait until we know who the user is — otherwise we'd read the
+    // anonymous scope and miss the real user's draft, or vice versa.
+    if (!currentUser?.id && !currentUser?.email) return;
+
+    const draft = loadQuizBuilderDraft(draftStorageScope, mode);
+    hasHydratedDraftRef.current = true;
+    if (!draft) return;
+
+    // If presets came in via navigation state, those take precedence
+    // (they reflect a fresh "Create from X" intent, not a saved draft).
+    if (presetTitle || presetFocus || presetContext) return;
+
+    setActiveInput(draft.activeInput);
+    setPastedText(draft.pastedText);
+    setParseStatus(draft.parseStatus);
+    setParsedSource(draft.parsedSource);
+    setQuizTitle(draft.quizTitle);
+    setQuizDescription(draft.quizDescription);
+    setQuestionCount(draft.questionCount);
+    setFocus(draft.focus);
+    setContextValue(draft.contextValue);
+    setQuestionTypes(draft.questionTypes);
+    setInstructions(draft.instructions);
+    setQuestions(draft.questions);
+    setSelectedQuestionId(draft.selectedQuestionId);
+    setHasEnteredReview(draft.hasEnteredReview);
+    setGeneratedBackendQuizId(draft.generatedBackendQuizId);
+    // generationState intentionally NOT restored: a draft that was
+    // mid-generation when the user navigated away has no live API
+    // request anymore — pretend it finished or stayed idle.
+    if (draft.questions.length > 0) {
+      setGenerationState("success");
+    }
+  }, [
+    currentUser?.email,
+    currentUser?.id,
+    draftStorageScope,
+    editingQuizId,
+    mode,
+    presetContext,
+    presetFocus,
+    presetTitle,
+  ]);
+
+  // Persist the current draft on meaningful state changes. Debounced via
+  // a short timeout so we don't write on every keystroke. Skipped while
+  // editing an existing quiz (no draft notion there) and before hydration
+  // has settled (avoids overwriting a freshly-restored draft with empty
+  // initial state).
+  useEffect(() => {
+    if (editingQuizId) return;
+    if (!hasHydratedDraftRef.current) return;
+
+    const timeoutId = window.setTimeout(() => {
+      saveQuizBuilderDraft(draftStorageScope, mode, {
+        activeInput,
+        pastedText,
+        parseStatus,
+        parsedSource,
+        quizTitle,
+        quizDescription,
+        questionCount,
+        focus,
+        contextValue,
+        questionTypes,
+        instructions,
+        questions,
+        selectedQuestionId,
+        hasEnteredReview,
+        generatedBackendQuizId,
+      });
+    }, 400);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [
+    activeInput,
+    contextValue,
+    draftStorageScope,
+    editingQuizId,
+    focus,
+    generatedBackendQuizId,
+    hasEnteredReview,
+    instructions,
+    mode,
+    parseStatus,
+    parsedSource,
+    pastedText,
+    questionCount,
+    questionTypes,
+    questions,
+    quizDescription,
+    quizTitle,
+    selectedQuestionId,
+  ]);
 
   useEffect(() => {
     if (parseStatus !== "processing") {
@@ -911,8 +1258,7 @@ export function QuizBuilderWorkspace({
     questionId: string,
     action: "up" | "down" | "duplicate" | "delete" | "regenerate",
   ) {
-    setOpenQuestionMenuId(null);
-
+    // Menu is closed by the caller before invoking this handler.
     if (action === "up" || action === "down") {
       handleMoveQuestion(questionId, action);
       return;
@@ -952,7 +1298,6 @@ export function QuizBuilderWorkspace({
           : [
               `Title: ${payload.title}`,
               `Topic: ${payload.topic}`,
-              `Visibility: ${payload.visibility}`,
               "",
               ...payload.questions.flatMap((question, index) => [
                 `Q${index + 1}. ${question.text}`,
@@ -1012,6 +1357,29 @@ export function QuizBuilderWorkspace({
       reordered.splice(nextIndex, 0, question);
       return reordered;
     });
+  }
+
+  function handleReorderQuestions(fromIndex: number, toIndex: number) {
+    setQuestions((current) => {
+      const reordered = [...current];
+      const [moved] = reordered.splice(fromIndex, 1);
+      reordered.splice(toIndex, 0, moved);
+      return reordered;
+    });
+  }
+
+  function handleDragStart(event: DragStartEvent) {
+    setActiveDragId(event.active.id as string);
+  }
+
+  function handleDragEnd(event: DragEndEvent) {
+    setActiveDragId(null);
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = questions.findIndex((q) => q.id === active.id);
+    const newIndex = questions.findIndex((q) => q.id === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+    setQuestions((current) => arrayMove(current, oldIndex, newIndex));
   }
 
   function handleDuplicateQuestion(questionId: string) {
@@ -1104,7 +1472,7 @@ export function QuizBuilderWorkspace({
   }
 
   function buildQuizSavePayload(targetStatus: QuizLibraryStatus) {
-    if (!parsedSource || questions.length === 0) {
+    if (questions.length === 0) {
       return null;
     }
 
@@ -1119,8 +1487,16 @@ export function QuizBuilderWorkspace({
         0,
       ),
     );
-    const visibility =
-      targetStatus === "published-public" ? "public" : "private";
+    // Public visibility is intentionally not surfaced anywhere in the UI:
+    // every saved quiz is private to its owner until backend-backed public
+    // discovery exists. See the audit decision (Option B).
+    const visibility = "private" as const;
+
+    const sourceLabel = parsedSource
+      ? mode === "teacher"
+        ? `Generated from ${parsedSource.label}`
+        : `Built from ${parsedSource.label.toLowerCase()}`
+      : "Generated quiz";
 
     return {
       existingQuizId: generatedBackendQuizId ?? editingQuiz?.id,
@@ -1128,7 +1504,9 @@ export function QuizBuilderWorkspace({
       title: resolvedQuizTitle,
       description:
         quizDescription.trim() ||
-        buildQuizDescription(parsedSource.extractedText, topic),
+        (parsedSource
+          ? buildQuizDescription(parsedSource.extractedText, topic)
+          : topic),
       topic,
       difficulty: getQuizDifficulty(normalizedQuestions.length),
       language: resolvedLanguage,
@@ -1139,22 +1517,23 @@ export function QuizBuilderWorkspace({
           [
             topic,
             ...(mode === "student" ? [contextValue] : []),
-            ...questionTypes,
-          ].filter((value): value is string => value.trim().length > 0),
+            // Derive question-type tags from actual questions, not from the UI
+            // selector state (which defaults to both types even for MCQ-only quizzes).
+            ...Array.from(
+              new Set(
+                normalizedQuestions.map((q) => q.questionType ?? "Multiple choice"),
+              ),
+            ),
+          ].filter((value): value is string => Boolean(value?.trim())),
         ),
       ),
-      sourceLabel:
-        mode === "teacher"
-          ? `Generated from ${parsedSource.label}`
-          : `Built from ${parsedSource.label.toLowerCase()}`,
+      sourceLabel,
       note:
-        targetStatus === "published-public"
-          ? "Published to the public library from the generation workflow."
-          : targetStatus === "published-private"
-            ? "Saved privately and visible only in your library views."
-            : mode === "student"
-              ? "Saved to your personal quiz library for later practice."
-              : "Saved as a draft in your quiz library for later review.",
+        targetStatus === "published-private"
+          ? "Saved privately and visible only in your library views."
+          : mode === "student"
+            ? "Saved to your personal quiz library for later practice."
+            : "Saved as a draft in your quiz library for later review.",
       questionCount: normalizedQuestions.length,
       durationMinutes,
       questions: normalizedQuestions,
@@ -1181,12 +1560,17 @@ export function QuizBuilderWorkspace({
       throw new Error("Add at least one valid question before saving.");
     }
 
-    if (mode === "teacher" && generatedBackendQuizId) {
+    // Both teachers and students finalize AI-generated quizzes via the review
+    // endpoint. Without this, students calling updateStudentQuizOnBackend
+    // directly on a newly-generated quiz ID would fail — the quiz belongs to
+    // the generation service context, not the user yet.
+    if (generatedBackendQuizId) {
       const guidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
       const reviewResult = await saveGeneratedQuizReview(generatedBackendQuizId, {
         title: payload.title,
         description: payload.description,
-        isPublic: payload.visibility === "public",
+        // Public visibility is removed from the UI; always save as private.
+        isPublic: false,
         questions: payload.questions.map((question, index) => ({
           id: guidPattern.test(question.id ?? "") ? question.id : undefined,
           text: question.text,
@@ -1238,6 +1622,10 @@ export function QuizBuilderWorkspace({
         return;
       }
 
+      // Save succeeded — discard the in-progress draft so we don't
+      // re-hydrate stale fields the next time the user visits the builder.
+      clearQuizBuilderDraft(draftStorageScope, mode);
+
       const libraryTab = targetStatus === "draft" ? "drafts" : "my-quizzes";
       navigate(
         mode === "teacher"
@@ -1256,6 +1644,16 @@ export function QuizBuilderWorkspace({
     }
   }
 
+  function handleDuplicateAndEdit() {
+    if (!editingQuizId) return;
+    const duplicate = duplicateQuizToLibrary(editingQuizId, "teacher");
+    if (duplicate) {
+      navigate("/dashboard/teacher/generate-quiz", {
+        state: { editQuizId: duplicate.id },
+      });
+    }
+  }
+
   async function handleOpenQuizFlow(targetStatus: QuizLibraryStatus) {
     try {
       const savedQuiz = await saveQuizRecord(targetStatus);
@@ -1263,6 +1661,16 @@ export function QuizBuilderWorkspace({
       if (!savedQuiz) {
         return;
       }
+
+      // The quiz is now saved to the library — drop the in-progress draft.
+      clearQuizBuilderDraft(draftStorageScope, mode);
+
+      // Return to the quiz library (drafts tab) after a test run, not to the
+      // generator. Landing back on the generator after a quiz attempt is
+      // confusing — the work was saved as a draft, so the library is the
+      // natural place to continue from (review, edit, publish, or re-test).
+      const libraryTab: "drafts" | "my-quizzes" =
+        targetStatus === "draft" ? "drafts" : "my-quizzes";
 
       openQuiz({
         quizId: savedQuiz.id,
@@ -1275,12 +1683,11 @@ export function QuizBuilderWorkspace({
               : "Self-study quiz generator",
           returnToPath:
             mode === "teacher"
-              ? "/dashboard/teacher/generate-quiz"
-              : "/dashboard/student/generate-quiz",
-          returnToLabel: "Back to quiz builder",
-          returnToState: editingQuiz?.id
-            ? { editQuizId: editingQuiz.id }
-            : undefined,
+              ? "/dashboard/teacher/quiz-library"
+              : "/dashboard/student/quiz-library",
+          returnToLabel:
+            targetStatus === "draft" ? "Back to drafts" : "Back to quiz library",
+          returnToState: { libraryTab },
         },
       });
     } catch (error) {
@@ -1291,6 +1698,9 @@ export function QuizBuilderWorkspace({
   }
 
   function handleCancelCreation() {
+    // Explicit cancel = user discards their work; drop the draft so
+    // returning to the builder starts fresh.
+    clearQuizBuilderDraft(draftStorageScope, mode);
     navigate(
       mode === "teacher"
         ? "/dashboard/teacher/quiz-library"
@@ -1331,6 +1741,7 @@ export function QuizBuilderWorkspace({
               fileError={fileError}
               fileInputRef={fileInputRef}
               handleFileChange={handleFileChange}
+              handleMockGenerate={import.meta.env.DEV ? handleMockGenerate : undefined}
               handleOpenFilePicker={handleOpenFilePicker}
               handleStartParsing={handleStartParsing}
               parseStatus={parseStatus}
@@ -1372,8 +1783,10 @@ export function QuizBuilderWorkspace({
               handleCancelGeneration={handleCancelGeneration}
               handleDownloadQuizExport={handleDownloadQuizExport}
               handleGenerateQuiz={handleGenerateQuiz}
+              handleMockGenerate={import.meta.env.DEV ? handleMockGenerate : undefined}
               handleOpenQuizFlow={handleOpenQuizFlow}
               handleRetryGeneration={handleRetryGeneration}
+              handleSaveToLibrary={() => { void handleSaveQuiz("published-private"); }}
               mode={mode}
               parsedSource={parsedSource}
               questionsCount={questions.length}
@@ -1401,16 +1814,22 @@ export function QuizBuilderWorkspace({
                   <div className="border-b border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-elevated)] px-5 py-4 xl:col-span-2 xl:px-6">
                     <div className="flex flex-wrap items-center justify-between gap-4">
                       <div className="flex min-w-0 flex-1 items-start gap-3">
-                        <DashboardButton
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => {
-                            setHasEnteredReview(false);
-                          }}
-                        >
-                          <ChevronRight className="h-4.5 w-4.5 rotate-180" />
-                        </DashboardButton>
+                        {/* When editing an existing quiz from the library, going
+                            back to the generate stage would let the user re-run
+                            the generator and overwrite their content. The "Cancel
+                            Editing" button on the right already handles exit. */}
+                        {!editingQuiz ? (
+                          <DashboardButton
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => {
+                              setHasEnteredReview(false);
+                            }}
+                          >
+                            <ChevronRight className="h-4.5 w-4.5 rotate-180" />
+                          </DashboardButton>
+                        ) : null}
                         <div className="min-w-0 flex-1 space-y-2">
                           <input
                             type="text"
@@ -1465,45 +1884,72 @@ export function QuizBuilderWorkspace({
                           className="px-0 text-[var(--dashboard-text-soft)] hover:text-[var(--dashboard-text-strong)]"
                           onClick={handleCancelCreation}
                         >
-                          {editingQuiz ? "Cancel Editing" : "Cancel Creation"}
+                          {editingQuiz
+                            ? "Cancel Editing"
+                            : mode === "student"
+                              ? "Discard Quiz"
+                              : "Cancel Creation"}
                         </DashboardButton>
+                        {/* Play / self-test button — label adapts to mode */}
                         <DashboardButton
                           type="button"
                           variant="secondary"
                           size="icon"
                           className="shrink-0"
                           onClick={() => handleOpenQuizFlow("draft")}
-                          title="Preview quiz"
-                          aria-label="Preview quiz"
+                          title={mode === "student" ? copy.launchLabel : "Preview quiz"}
+                          aria-label={mode === "student" ? copy.launchLabel : "Preview quiz"}
                         >
                           <PlayCircle className="h-4.5 w-4.5" />
                         </DashboardButton>
-                        <DashboardButton
-                          type="button"
-                          variant="secondary"
-                          size="icon"
-                          className="shrink-0"
-                          onClick={() => handleSaveQuiz("draft")}
-                          title={copy.saveLabel}
-                          aria-label={copy.saveLabel}
-                        >
-                          <Save className="h-4.5 w-4.5" />
-                        </DashboardButton>
+                        {/* Save-draft icon is teacher-only; students always save
+                            directly to their personal library — no draft concept. */}
+                        {mode !== "student" ? (
+                          <DashboardButton
+                            type="button"
+                            variant="secondary"
+                            size="icon"
+                            className="shrink-0"
+                            onClick={() => handleSaveQuiz("draft")}
+                            title={isAssignedQuiz ? "Saving disabled — quiz is assigned to a class" : copy.saveLabel}
+                            aria-label={copy.saveLabel}
+                            disabled={isAssignedQuiz}
+                          >
+                            {isAssignedQuiz ? <Lock className="h-4.5 w-4.5" /> : <Save className="h-4.5 w-4.5" />}
+                          </DashboardButton>
+                        ) : null}
                         <DashboardButton
                           type="button"
                           size="lg"
-                          onClick={() =>
-                            handleSaveQuiz(
-                              publishVisibility === "public"
-                                ? "published-public"
-                                : "published-private",
-                            )
-                          }
+                          disabled={isAssignedQuiz}
+                          title={isAssignedQuiz ? "Saving disabled — quiz is assigned to a class" : undefined}
+                          onClick={() => handleSaveQuiz("published-private")}
                         >
                           {copy.publishLabel}
                         </DashboardButton>
                       </div>
                     </div>
+
+                    {/* Warning banner: shown when the quiz is currently assigned */}
+                    {isAssignedQuiz ? (
+                      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--dashboard-border-soft)] bg-[var(--dashboard-warning-surface,#2d2008)] px-5 py-3 text-sm xl:px-6">
+                        <div className="flex items-center gap-2 text-[var(--dashboard-warning,#f59e0b)]">
+                          <Lock className="h-4 w-4 shrink-0" />
+                          <span>
+                            <strong>Editing locked.</strong> This quiz is assigned to a class — saving changes would corrupt existing student attempts and analytics.
+                          </span>
+                        </div>
+                        <DashboardButton
+                          type="button"
+                          size="sm"
+                          variant="secondary"
+                          onClick={handleDuplicateAndEdit}
+                        >
+                          <Layers3 className="h-3.5 w-3.5" />
+                          Duplicate &amp; Edit
+                        </DashboardButton>
+                      </div>
+                    ) : null}
                   </div>
 
                   <aside className="border-b border-r border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-muted)] px-4 py-4 xl:border-b-0">
@@ -1534,146 +1980,55 @@ export function QuizBuilderWorkspace({
                       </div>
 
                       {filteredReviewQuestions.length ? (
-                        <div className="max-h-[640px] space-y-2 overflow-y-auto pr-1">
-                          {filteredReviewQuestions.map((question) => {
-                            const index = questions.findIndex(
-                              (candidate) => candidate.id === question.id,
-                            );
-
-                            return (
-                              <button
-                                key={question.id}
-                                type="button"
-                                onClick={() =>
-                                  setSelectedQuestionId(question.id)
-                                }
-                                className={cn(
-                                  "relative w-full rounded-[18px] border px-4 py-4 text-left transition",
-                                  selectedQuestion?.id === question.id
-                                    ? "border-[var(--dashboard-brand)]/35 bg-[var(--dashboard-surface-elevated)] shadow-[var(--dashboard-shadow-card)]"
-                                    : "border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface)] hover:border-[var(--dashboard-border)]",
-                                )}
-                              >
-                                <div className="flex items-start justify-between gap-3">
-                                  <div className="min-w-0">
-                                    <div className="flex items-center gap-2">
-                                      <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--dashboard-surface-muted)] text-xs font-semibold text-[var(--dashboard-text-soft)]">
-                                        {index + 1}
-                                      </span>
-                                      <span className="rounded-full border border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-muted)] px-2 py-1 text-[11px] font-medium text-[var(--dashboard-text-soft)]">
-                                        Multiple choice
-                                      </span>
-                                    </div>
-                                    <h3 className="mt-3 line-clamp-2 text-sm font-semibold leading-6 text-[var(--dashboard-text-strong)]">
-                                      {question.text}
-                                    </h3>
-                                    <p className="hidden mt-2 text-xs text-[var(--dashboard-text-soft)]">
-                                      {question.options.length} choices ·
-                                      correct answer {question.correctIndex + 1}
-                                    </p>
-                                    <p className="mt-2 text-xs text-[var(--dashboard-text-soft)]">
-                                      {question.options.length} choices |{" "}
-                                      {Math.max(1, Math.round(question.points))}{" "}
-                                      pts
-                                    </p>
-                                  </div>
-
-                                  <div className="relative flex gap-1">
-                                    <DashboardButton
-                                      type="button"
-                                      variant="ghost"
-                                      size="iconSm"
-                                      className="hidden"
-                                      onClick={(event) => {
-                                        event.stopPropagation();
-                                        handleMoveQuestion(question.id, "up");
-                                      }}
-                                    >
-                                      <ArrowUp className="h-4 w-4" />
-                                    </DashboardButton>
-                                    <DashboardButton
-                                      type="button"
-                                      variant="ghost"
-                                      size="iconSm"
-                                      className="hidden"
-                                      onClick={(event) => {
-                                        event.stopPropagation();
-                                        handleMoveQuestion(question.id, "down");
-                                      }}
-                                    >
-                                      <ArrowDown className="h-4 w-4" />
-                                    </DashboardButton>
-                                    <DashboardButton
-                                      type="button"
-                                      variant="ghost"
-                                      size="iconSm"
-                                      className="hidden"
-                                      onClick={(event) => {
-                                        event.stopPropagation();
-                                        handleDuplicateQuestion(question.id);
-                                      }}
-                                    >
-                                      <Plus className="h-4 w-4" />
-                                    </DashboardButton>
-                                    <DashboardButton
-                                      type="button"
-                                      variant="ghost"
-                                      size="iconSm"
-                                      onClick={(event) => {
-                                        event.stopPropagation();
-                                        setOpenQuestionMenuId((current) =>
-                                          current === `rail-${question.id}`
-                                            ? null
-                                            : `rail-${question.id}`,
-                                        );
-                                      }}
-                                    >
-                                      <MoreHorizontal className="h-4 w-4" />
-                                    </DashboardButton>
-                                    {openQuestionMenuId ===
-                                    `rail-${question.id}` ? (
-                                      <div className="absolute right-0 top-9 z-20 w-40 rounded-[16px] border border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-elevated)] p-2 shadow-[var(--dashboard-shadow-card)]">
-                                        {[
-                                          {
-                                            label: "Move up",
-                                            action: "up" as const,
-                                          },
-                                          {
-                                            label: "Move down",
-                                            action: "down" as const,
-                                          },
-                                          {
-                                            label: "Duplicate",
-                                            action: "duplicate" as const,
-                                          },
-                                          {
-                                            label: "Delete",
-                                            action: "delete" as const,
-                                          },
-                                        ].map((item) => (
-                                          <button
-                                            key={item.label}
-                                            type="button"
-                                            className="flex w-full rounded-[12px] px-3 py-2 text-left text-sm text-[var(--dashboard-text-strong)] transition hover:bg-[var(--dashboard-surface-muted)]"
-                                            onClick={(event) => {
-                                              event.stopPropagation();
-                                              handleQuestionMenuAction(
-                                                question.id,
-                                                item.action,
-                                              );
-                                            }}
-                                          >
-                                            {item.label}
-                                          </button>
-                                        ))}
-                                      </div>
-                                    ) : null}
-                                  </div>
-                                </div>
-                              </button>
-                            );
-                          })}
-                        </div>
+                        <DndContext
+                          sensors={dndSensors}
+                          collisionDetection={closestCenter}
+                          onDragStart={handleDragStart}
+                          onDragEnd={handleDragEnd}
+                        >
+                          <SortableContext
+                            items={filteredReviewQuestions.map((q) => q.id)}
+                            strategy={verticalListSortingStrategy}
+                          >
+                            <div className="max-h-[640px] space-y-2 overflow-y-auto pr-1">
+                              {filteredReviewQuestions.map((question) => {
+                                const index = questions.findIndex(
+                                  (candidate) => candidate.id === question.id,
+                                );
+                                return (
+                                  <QuestionListCard
+                                    key={question.id}
+                                    question={question}
+                                    index={index}
+                                    isSelected={selectedQuestion?.id === question.id}
+                                    onSelect={() => setSelectedQuestionId(question.id)}
+                                    onDuplicate={() => handleDuplicateQuestion(question.id)}
+                                    onDelete={() => handleDeleteQuestion(question.id)}
+                                  />
+                                );
+                              })}
+                            </div>
+                          </SortableContext>
+                          {/* DragOverlay renders a polished ghost that follows the pointer */}
+                          <DragOverlay dropAnimation={null}>
+                            {activeDragId ? (() => {
+                              const dragged = questions.find((q) => q.id === activeDragId);
+                              const dragIdx = questions.findIndex((q) => q.id === activeDragId);
+                              if (!dragged) return null;
+                              return (
+                                <QuestionCardBody
+                                  question={dragged}
+                                  index={dragIdx}
+                                  isSelected={false}
+                                  isOverlay
+                                  onSelect={() => {}}
+                                  onDuplicate={() => {}}
+                                  onDelete={() => {}}
+                                />
+                              );
+                            })() : null}
+                          </DragOverlay>
+                        </DndContext>
                       ) : (
                         <div className="rounded-[18px] border border-dashed border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-elevated)] px-4 py-6 text-sm leading-6 text-[var(--dashboard-text-soft)]">
                           No questions match the current search.
@@ -1682,12 +2037,16 @@ export function QuizBuilderWorkspace({
 
                       <div className="rounded-[18px] border border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-elevated)] px-4 py-4">
                         <p className="text-sm font-semibold text-[var(--dashboard-text-strong)]">
-                          Result screen
+                          {mode === "student" ? "Ready to practice" : "Result screen"}
                         </p>
                         <p className="mt-2 text-sm leading-6 text-[var(--dashboard-text-soft)]">
                           {validationIssues.length === 0
-                            ? "The draft is in good shape and ready for preview, saving, or publishing."
-                            : "Fix the highlighted issues before you publish the quiz."}
+                            ? mode === "student"
+                              ? "Your practice set is ready. Start a self-test or save it to your personal library."
+                              : "The draft is in good shape and ready for preview, saving, or publishing."
+                            : mode === "student"
+                              ? "Fix the highlighted issues before you start the self-test."
+                              : "Fix the highlighted issues before you publish the quiz."}
                         </p>
                       </div>
                     </div>
@@ -1738,84 +2097,57 @@ export function QuizBuilderWorkspace({
                               </span>
                             </div>
 
-                            <div className="relative flex flex-wrap items-center gap-2">
-                              <span className="text-sm font-medium text-[var(--dashboard-text-soft)]">
-                                Required
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  handleQuestionChange(
-                                    selectedQuestion.id,
-                                    (question) => ({
-                                      ...question,
-                                      required: !question.required,
-                                    }),
-                                  )
-                                }
-                                className={cn(
-                                  "flex h-7 w-12 items-center rounded-full px-1 transition",
-                                  selectedQuestion.required
-                                    ? "bg-[#19b79f]"
-                                    : "bg-[var(--dashboard-surface-muted)]",
-                                )}
-                              >
-                                <div
-                                  className={cn(
-                                    "h-5 w-5 rounded-full bg-white shadow-sm transition",
-                                    selectedQuestion.required ? "ml-auto" : "",
-                                  )}
-                                />
-                              </button>
+                            <div ref={editorMenuRef} className="relative flex flex-wrap items-center gap-2">
+                              {/* "Required" toggle removed: the backend does
+                                  not persist the `required` flag, so the
+                                  toggle would silently reset to true on every
+                                  reload. Re-enable once backend support lands. */}
                               <DashboardButton
                                 type="button"
                                 variant="ghost"
                                 size="iconSm"
                                 title="More question actions"
-                                onClick={() =>
-                                  setOpenQuestionMenuId((current) =>
-                                    current === `editor-${selectedQuestion.id}`
-                                      ? null
-                                      : `editor-${selectedQuestion.id}`,
-                                  )
-                                }
+                                aria-haspopup="menu"
+                                aria-expanded={editorMenuOpen}
+                                onClick={() => setEditorMenuOpen((v) => !v)}
                               >
                                 <MoreHorizontal className="h-4 w-4" />
                               </DashboardButton>
-                              {openQuestionMenuId ===
-                              `editor-${selectedQuestion.id}` ? (
-                                <div className="absolute right-0 top-10 z-20 w-44 rounded-[16px] border border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-elevated)] p-2 shadow-[var(--dashboard-shadow-card)]">
+
+                              {editorMenuOpen && (
+                                <div
+                                  role="menu"
+                                  className="absolute right-0 top-full z-50 mt-1 w-44 overflow-hidden rounded-md border border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-elevated)] py-1 shadow-lg"
+                                >
                                   {[
-                                    {
-                                      label: "Duplicate",
-                                      action: "duplicate" as const,
-                                    },
+                                    { label: "Duplicate", action: "duplicate" as const },
                                     { label: "Move up", action: "up" as const },
-                                    {
-                                      label: "Move down",
-                                      action: "down" as const,
-                                    },
-                                    {
-                                      label: "Delete",
-                                      action: "delete" as const,
-                                    },
+                                    { label: "Move down", action: "down" as const },
+                                    { label: "Delete", action: "delete" as const },
                                   ].map((item) => (
                                     <button
                                       key={item.label}
+                                      role="menuitem"
                                       type="button"
-                                      className="flex w-full rounded-[12px] px-3 py-2 text-left text-sm text-[var(--dashboard-text-strong)] transition hover:bg-[var(--dashboard-surface-muted)]"
-                                      onClick={() =>
+                                      className={cn(
+                                        "w-full px-3 py-2 text-left text-sm hover:bg-[var(--dashboard-surface-muted)] focus:outline-none",
+                                        item.action === "delete"
+                                          ? "text-[var(--dashboard-danger)]"
+                                          : "text-[var(--dashboard-text)]",
+                                      )}
+                                      onClick={() => {
+                                        setEditorMenuOpen(false);
                                         handleQuestionMenuAction(
                                           selectedQuestion.id,
                                           item.action,
-                                        )
-                                      }
+                                        );
+                                      }}
                                     >
                                       {item.label}
                                     </button>
                                   ))}
                                 </div>
-                              ) : null}
+                              )}
                             </div>
                           </div>
 
@@ -2428,8 +2760,11 @@ export function QuizBuilderWorkspace({
                 handleDownloadQuizExport={handleDownloadQuizExport}
                 handleGenerateQuiz={handleGenerateQuiz}
                 mode={mode}
-                publishVisibility={publishVisibility}
-                setPublishVisibility={setPublishVisibility}
+                showRegenerateButton={
+                  // Show only when there is a real backend quiz (not mock) and
+                  // we are NOT editing an already-saved library quiz.
+                  generatedBackendQuizId !== null && !editingQuizId
+                }
                 setSelectedQuestionId={setSelectedQuestionId}
                 validationIssues={validationIssues}
               />

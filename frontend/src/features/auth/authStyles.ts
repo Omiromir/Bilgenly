@@ -315,4 +315,98 @@ export const authStyles = `
       font-size: 12px;
     }
   }
+
+  /* ── Dark mode ── */
+  .dark .auth-page {
+    background: #0d1424;
+    color: #dde6f7;
+  }
+  .dark .auth-brand-name {
+    color: #f5f8ff;
+  }
+  .dark .auth-title {
+    color: #f5f8ff;
+  }
+  .dark .auth-subtitle {
+    color: #9aa8c6;
+  }
+  .dark .auth-label {
+    color: #c8d4ee;
+  }
+  .dark .auth-input {
+    background: #111b2f;
+    border-color: #2a3858;
+    color: #dde6f7;
+  }
+  .dark .auth-input::placeholder {
+    color: #4e5e7a;
+  }
+  .dark .auth-input:focus {
+    border-color: #7a72ff;
+    box-shadow: 0 0 0 3px rgba(122, 114, 255, 0.18);
+  }
+  .dark .auth-input[aria-invalid="true"] {
+    border-color: #f08aa1;
+  }
+  .dark .auth-trailing-btn {
+    color: #72809f;
+  }
+  .dark .auth-trailing-btn:hover {
+    color: #9aa8c6;
+  }
+  .dark .auth-primary {
+    background: linear-gradient(90deg, #7a72ff 0%, #6b64f5 100%);
+    box-shadow: none;
+  }
+  .dark .auth-primary:hover {
+    box-shadow: 0 12px 24px rgba(122, 114, 255, 0.28);
+  }
+  .dark .auth-secondary {
+    background: #111b2f;
+    border-color: #2a3858;
+    color: #dde6f7;
+  }
+  .dark .auth-secondary:hover {
+    border-color: #7a72ff;
+    color: #7a72ff;
+    background: rgba(122, 114, 255, 0.08);
+  }
+  .dark .auth-meta-row {
+    color: #c8d4ee;
+  }
+  .dark .auth-checkbox input {
+    accent-color: #7a72ff;
+  }
+  .dark .auth-link {
+    color: #7a72ff;
+  }
+  .dark .auth-center-row {
+    color: #9aa8c6;
+  }
+  .dark .auth-divider {
+    color: #3d4f6a;
+  }
+  .dark .auth-divider::before,
+  .dark .auth-divider::after {
+    background: #223150;
+  }
+  .dark .auth-strength-bars span {
+    background: #223150;
+  }
+  .dark .auth-strength-bars span.active {
+    background: #57c48e;
+  }
+  .dark .auth-strength-label {
+    color: #9aa8c6;
+  }
+  .dark .auth-error {
+    color: #f08aa1;
+  }
+  .dark .auth-help {
+    color: #9aa8c6;
+  }
+  .dark .auth-footer {
+    border-color: #223150;
+    color: #72809f;
+  }
 `;

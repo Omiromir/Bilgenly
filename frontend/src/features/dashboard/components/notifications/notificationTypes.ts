@@ -1,4 +1,7 @@
-export type DashboardNotificationType = "class_invitation" | "quiz_follow_up";
+export type DashboardNotificationType =
+  | "class_invitation"
+  | "quiz_follow_up"
+  | "quiz_removed_by_admin";
 export type ClassInvitationNotificationStatus =
   | "pending"
   | "accepted"
@@ -46,9 +49,18 @@ export interface QuizFollowUpNotification extends DashboardNotificationBase {
   followUpKind: QuizFollowUpKind;
 }
 
+export interface QuizRemovedByAdminNotification extends DashboardNotificationBase {
+  type: "quiz_removed_by_admin";
+  actionType: "";
+  status: "sent";
+  quizId: string;
+  quizTitle: string;
+}
+
 export type DashboardNotification =
   | ClassInvitationNotification
-  | QuizFollowUpNotification;
+  | QuizFollowUpNotification
+  | QuizRemovedByAdminNotification;
 
 export interface ClassInvitationNotificationInput {
   recipientUserId: string;

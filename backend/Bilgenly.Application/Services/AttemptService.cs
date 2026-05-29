@@ -67,6 +67,7 @@ public class AttemptService
             {
                 Id = a.Id,
                 QuizId = a.QuizId,
+                AssignmentId = a.AssignmentId,
                 QuizTitle = a.Quiz.Title,
                 Score = a.Score,
                 DateTaken = a.DateTaken,
@@ -87,50 +88,30 @@ public class AttemptService
         if (quiz.IsHidden)
             return (null, "This quiz is not available.");
 
-        // If this quiz is assigned to one of the student's classes with a
-        // max-attempts cap, enforce it server-side. The frontend already gates
-        // this, but a refresh or analytics retake can bypass the UI check.
+        // Resolve which assignment (if any) this student is starting an attempt for.
+        // If the same quiz is assigned to multiple of the student's classes we pick the
+        // most-recently created active assignment — the one the student is most likely
+        // acting on. When there is no assignment the quiz is being taken freely (public
+        // library) and no cap enforcement applies.
         var classes = await _classRepository.GetByStudentIdAsync(userId);
-        var capsForQuiz = classes
+        var targetAssignment = classes
             .SelectMany(c => c.Assignments ?? Enumerable.Empty<Assignment>())
-            .Where(a => a.QuizId == quizId && a.MaxAttempts.HasValue)
-            .Select(a => a.MaxAttempts!.Value)
-            .ToList();
+            .Where(a => a.QuizId == quizId && a.Status == "active")
+            .OrderByDescending(a => a.AssignedAt)
+            .FirstOrDefault();
 
-        if (capsForQuiz.Count > 0)
+        if (targetAssignment is not null && targetAssignment.MaxAttempts.HasValue)
         {
-            var lowestCap = capsForQuiz.Min();
+            var cap = targetAssignment.MaxAttempts.Value;
             var userAttempts = (await _attemptRepository.GetByUserIdAsync(userId)).ToList();
-            var completedForQuiz = userAttempts.Count(a => a.QuizId == quizId && a.IsCompleted);
 
-            if (completedForQuiz >= lowestCap)
+            // Only count attempts that belong to THIS assignment — not attempts from
+            // any previous assignment that was removed and recreated for the same quiz.
+            var completedForAssignment = userAttempts
+                .Count(a => a.AssignmentId == targetAssignment.Id && a.IsCompleted);
+
+            if (completedForAssignment >= cap)
                 return (null, "You have used all attempts for this assignment.");
-
-            // Prevent the "refresh and restart" exploit: if there's an unfinished
-            // attempt for this quiz, count it as used and treat the new request as
-            // an abandonment + retake. A stale in-progress attempt is auto-closed
-            // so the student can't fish for known questions across attempts.
-            var staleInProgress = userAttempts
-                .Where(a => a.QuizId == quizId && !a.IsCompleted)
-                .ToList();
-
-            if (staleInProgress.Count > 0)
-            {
-                // Auto-finalize abandoned in-progress attempts so they count.
-                foreach (var stale in staleInProgress)
-                {
-                    stale.IsCompleted = true;
-                    // Score stays 0 if no answers submitted — the assignment
-                    // attempt is consumed either way.
-                }
-
-                await _attemptRepository.SaveChangesAsync();
-
-                // Re-check cap after marking the abandoned attempt as used.
-                completedForQuiz = userAttempts.Count(a => a.QuizId == quizId && a.IsCompleted);
-                if (completedForQuiz >= lowestCap)
-                    return (null, "You have used all attempts for this assignment.");
-            }
         }
 
         var attempt = new Attempt
@@ -138,6 +119,7 @@ public class AttemptService
             Id = Guid.NewGuid(),
             UserId = userId,
             QuizId = quizId,
+            AssignmentId = targetAssignment?.Id,   // stamp so future counts are scoped
             Score = 0,
             DateTaken = DateTime.UtcNow,
             IsCompleted = false
@@ -224,15 +206,24 @@ public class AttemptService
             {
                 QuestionId = question.Id,
                 QuestionText = question.Text,
-                SelectedAnswer = selectedAnswer?.Text ?? "Не отвечено",
+                SelectedAnswer = selectedAnswer?.Text ?? "No answer submitted",
                 CorrectAnswer = correctAnswer?.Text ?? "",
                 IsCorrect = isCorrect
             });
         }
 
         int totalQuestions = quiz.Questions.Count;
-        int score = totalQuestions > 0
-            ? (int)Math.Round((double)correctCount / totalQuestions * 100)
+        // Score is points-based (mirrors frontend logic): earnedPoints / totalPoints * 100.
+        // Each question contributes Math.Max(1, q.Points) so questions with Points=0 still count as 1.
+        int totalPoints = quiz.Questions.Sum(q => Math.Max(1, q.Points));
+        int earnedPoints = quiz.Questions.Sum(q =>
+        {
+            var sa = dto.Answers.FirstOrDefault(a => a.QuestionId == q.Id);
+            var sel = q.Answers.FirstOrDefault(a => a.Id == sa?.AnswerId);
+            return (sel?.IsCorrect ?? false) ? Math.Max(1, q.Points) : 0;
+        });
+        int score = totalPoints > 0
+            ? (int)Math.Round((double)earnedPoints / totalPoints * 100)
             : 0;
 
         attempt.Score = score;

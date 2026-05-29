@@ -18,6 +18,7 @@ interface QuizRecordMetadataOverrides {
   sourceLabel?: string;
   note?: string;
   durationMinutes?: number;
+  updatedAt?: string;
 }
 
 function normalizeQuestionType(questionType: string): QuizQuestionRecord["questionType"] {
@@ -72,10 +73,11 @@ export function mapQuizDtoToQuizRecord(
     .slice()
     .sort((left, right) => left.position - right.position)
     .map(mapQuizQuestionDto);
-  const visibility = overrides.visibility ?? (quiz.isPublic ? "public" : "private");
-  const status =
-    overrides.status ??
-    (quiz.isPublic ? "published-public" : "published-private");
+  // Public discovery is removed from the UI until backend-backed discovery
+  // exists. Treat every fetched quiz as private regardless of legacy
+  // `isPublic` flags so the UI stays honest.
+  const visibility = overrides.visibility ?? "private";
+  const status = overrides.status ?? "published-private";
 
   return {
     id: quiz.id,
@@ -97,7 +99,7 @@ export function mapQuizDtoToQuizRecord(
           0,
         ),
       ),
-    updatedAt: quiz.createdAt,
+    updatedAt: overrides.updatedAt ?? quiz.createdAt,
     status,
     visibility,
     tags: overrides.tags ?? [],

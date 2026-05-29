@@ -5,11 +5,10 @@ import {
   Clock3,
   FilePenLine,
   Layers3,
+  Lock,
   Play,
   Rocket,
-  Save,
   SearchCheck,
-  Send,
   Trash2,
   Users,
 } from "../../../components/icons/AppIcons";
@@ -57,7 +56,6 @@ import type {
 import { useQuizLauncher } from "../../../features/quiz-session/useQuizLauncher";
 import {
   isDraftQuiz,
-  isPublicDiscoveryQuiz,
   matchesQuizFilters,
   matchesQuizSearch,
 } from "../../../features/dashboard/components/quiz-library/quizLibraryUtils";
@@ -65,10 +63,7 @@ import { useDashboardPageMeta } from "../../../features/dashboard/hooks/useDashb
 import { formatCurrentDate } from "../../../features/dashboard/settings/settingsPreferences";
 import { useAuth } from "../../../app/providers/AuthProvider";
 
-type TeacherLibraryTab =
-  | "my-quizzes"
-  | "drafts"
-  | "public-library";
+type TeacherLibraryTab = "my-quizzes" | "drafts";
 
 export function TeacherQuizLibraryPage() {
   const meta = useDashboardPageMeta();
@@ -81,8 +76,6 @@ export function TeacherQuizLibraryPage() {
     deleteQuiz,
     duplicateQuizToLibrary,
     ensureQuizHasBackendId,
-    publishQuiz,
-    toggleSavedQuiz,
   } = useQuizLibrary();
   const { openQuiz } = useQuizLauncher();
   const teacherQuizLibraryItems = getQuizLibraryItemsForRole(
@@ -92,10 +85,7 @@ export function TeacherQuizLibraryPage() {
   );
   const initialTab = location.state?.libraryTab as TeacherLibraryTab | undefined;
   const [activeTab, setActiveTab] = useState<TeacherLibraryTab>(
-    initialTab === "drafts" ||
-      initialTab === "public-library"
-      ? initialTab
-      : "my-quizzes",
+    initialTab === "drafts" ? initialTab : "my-quizzes",
   );
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("all");
@@ -111,6 +101,19 @@ export function TeacherQuizLibraryPage() {
   const [assignStep, setAssignStep] = useState<"select" | "configure">("select");
   const deferredSearch = useDeferredValue(search);
   const shouldShowStatusFilter = activeTab === "my-quizzes";
+
+  // Quiz IDs that are currently assigned to at least one class — editing
+  // these would corrupt existing student attempts and analytics.
+  const assignedQuizIds = useMemo(
+    () =>
+      new Set(
+        classes.flatMap((teacherClass) =>
+          teacherClass.assignedQuizzes.map((a) => a.quizId),
+        ),
+      ),
+    [classes],
+  );
+
   const activeClasses = useMemo(
     () => classes.filter((teacherClass) => teacherClass.status === "active"),
     [classes],
@@ -120,14 +123,12 @@ export function TeacherQuizLibraryPage() {
     switch (tab) {
       case "my-quizzes":
         return teacherQuizLibraryItems.filter(
-          (item) => (item.isOwner && !isDraftQuiz(item.status)) || item.isSaved,
+          (item) => item.isOwner && !isDraftQuiz(item.status),
         );
       case "drafts":
         return teacherQuizLibraryItems.filter(
           (item) => item.isOwner && isDraftQuiz(item.status),
         );
-      case "public-library":
-        return teacherQuizLibraryItems.filter((item) => isPublicDiscoveryQuiz(item));
       default:
         return teacherQuizLibraryItems;
     }
@@ -138,11 +139,7 @@ export function TeacherQuizLibraryPage() {
   const filteredItems = activeTabItems.filter(
     (item) => {
       const matchesType =
-        effectiveStatus === "all"
-          ? true
-          : effectiveStatus === "saved"
-            ? Boolean(item.isSaved)
-            : item.status === effectiveStatus;
+        effectiveStatus === "all" ? true : item.status === effectiveStatus;
 
       return (
         matchesType &&
@@ -163,31 +160,21 @@ export function TeacherQuizLibraryPage() {
       id: "my-quizzes" as const,
       label: "My Quizzes",
       description:
-        "Your published private/public quizzes plus any public quizzes you saved for later reuse, inspiration, or future assigned quiz work.",
+        "Your published quizzes — ready to assign to classes or test-run before sharing them with students.",
       count: getTeacherItemsForTab("my-quizzes").length,
       emptyTitle: "No quizzes in My Quizzes yet",
       emptyDescription:
-        "Publish a quiz or save one from the public library to build this view.",
+        "Generate a quiz and publish it to start building your library.",
     },
     {
       id: "drafts" as const,
       label: "Drafts",
       description:
-        "Generated, edited, and still-private work that needs review before it becomes a published classroom or public quiz.",
+        "Generated and edited work that still needs review before you publish it into your library.",
       count: getTeacherItemsForTab("drafts").length,
       emptyTitle: "No draft quizzes found",
       emptyDescription:
-        "Drafts stay separate from public discovery so unfinished work never pollutes the shared library.",
-    },
-    {
-      id: "public-library" as const,
-      label: "Public Library",
-      description:
-        "Discover publicly shared quizzes from other creators, then preview, duplicate, save, or practice them.",
-      count: getTeacherItemsForTab("public-library").length,
-      emptyTitle: "No public library quizzes found",
-      emptyDescription:
-        "Only published public quizzes belong in shared discovery. Adjust filters to widen the discovery scope.",
+        "Drafts stay separate from your published quizzes so unfinished work doesn't end up in front of students.",
     },
   ];
 
@@ -209,9 +196,8 @@ export function TeacherQuizLibraryPage() {
       onChange: setStatus,
       options: [
         { label: "All progress", value: "all" },
-        { label: "Published private", value: "published-private" },
-        { label: "Published public", value: "published-public" },
-        { label: "Saved", value: "saved" },
+        { label: "Published", value: "published-private" },
+        { label: "Archived", value: "archived" },
       ],
     },
   ];
@@ -301,44 +287,48 @@ export function TeacherQuizLibraryPage() {
     }
   };
 
-  const getTeacherMetadata = (item: QuizLibraryItem): QuizCardMetadataItem[] => [
-    {
-      icon: BookOpen,
-      label: `${item.questionCount} questions`,
-    },
-    {
-      icon: Clock3,
-      label: `${item.durationMinutes} min`,
-    },
-    {
-      icon: Users,
-      label: item.isOwner
-        ? `${item.learnerCount ?? 0} learners`
-        : `${item.saveCount ?? 0} saves`,
-    },
-    {
-      icon: SearchCheck,
-      label: item.averageScore
-        ? `Avg score ${item.averageScore}`
-        : `Updated ${formatCurrentDate(item.updatedAt)}`,
-    },
-  ];
+  const getTeacherMetadata = (item: QuizLibraryItem): QuizCardMetadataItem[] => {
+    const base: QuizCardMetadataItem[] = [
+      {
+        icon: BookOpen,
+        label: `${item.questionCount} questions`,
+      },
+      {
+        icon: Clock3,
+        label: `${item.durationMinutes} min`,
+      },
+      {
+        icon: Users,
+        label: item.isOwner
+          ? `${item.learnerCount ?? 0} learners`
+          : `${item.saveCount ?? 0} saves`,
+      },
+      // Updated date is now shown ALWAYS — previously it was hidden whenever
+      // an average score existed, which made it impossible to tell when a
+      // quiz had been edited last.
+      {
+        icon: Clock3,
+        label: `Updated ${formatCurrentDate(item.updatedAt)}`,
+      },
+    ];
+
+    if (item.averageScore) {
+      base.push({
+        icon: SearchCheck,
+        label: `Avg score ${item.averageScore}`,
+      });
+    }
+
+    return base;
+  };
 
   const getTeacherBadge = (item: QuizLibraryItem) => {
     if (item.isOwner && isDraftQuiz(item.status)) {
       return "Mine";
     }
 
-    if (item.isOwner && item.visibility === "public") {
-      return "Shared by you";
-    }
-
     if (item.isOwner) {
       return "Class-only";
-    }
-
-    if (item.isSaved) {
-      return "Saved";
     }
 
     return undefined;
@@ -349,28 +339,26 @@ export function TeacherQuizLibraryPage() {
       return "Continue Test Run";
     }
 
+    // Teachers can test-run their quiz unlimited times. After a completed
+    // run, the label invites another attempt rather than forcing review.
     if (item.practiceState === "completed") {
-      return "Review Test Run";
+      return "Test Run Again";
     }
 
-    return item.isOwner ? "Test Run" : "Practice";
+    return "Test Run";
   };
 
   const openTeacherQuiz = (item: QuizLibraryItem) => {
     openQuiz({
       quizId: item.id,
       viewerRole: "teacher",
+      // Don't auto-open a completed session for teachers — they need to be
+      // able to start a fresh test run. Only resume in-progress sessions.
       preferredSession:
-        item.practiceState === "completed"
-          ? "completed"
-          : item.practiceState === "in-progress"
-            ? "in-progress"
-            : undefined,
+        item.practiceState === "in-progress" ? "in-progress" : undefined,
       navigationState: {
-        launchSourceType: item.isOwner ? "quiz-library" : "discover",
-        launchSourceLabel: item.isOwner
-          ? "Teacher quiz library"
-          : "Public quiz discovery",
+        launchSourceType: "quiz-library",
+        launchSourceLabel: "Teacher quiz library",
         returnToPath: "/dashboard/teacher/quiz-library",
         returnToLabel: "Back to quiz library",
       },
@@ -388,40 +376,6 @@ export function TeacherQuizLibraryPage() {
   };
 
   const getTeacherActions = (item: QuizLibraryItem): QuizCardAction[] => {
-    if (!item.isOwner) {
-      return [
-        {
-          label: item.isSaved ? "Saved Copy" : "Save Copy",
-          icon: Save,
-          variant: "soft",
-          iconDisplay: "icon-only",
-          onClick: () => toggleSavedQuiz(item.id, "teacher"),
-        },
-        {
-          label: "Duplicate",
-          icon: Layers3,
-          variant: "ghost",
-          iconDisplay: "icon-only",
-          onClick: () => {
-            const duplicate = duplicateQuizToLibrary(item.id, "teacher");
-
-            if (duplicate) {
-              navigate("/dashboard/teacher/generate-quiz", {
-                state: { editQuizId: duplicate.id },
-              });
-            }
-          },
-        },
-        {
-          label: getTeacherPracticeLabel(item),
-          icon: Play,
-          variant: "ghost",
-          iconDisplay: "label-only",
-          onClick: () => openTeacherQuiz(item),
-        },
-      ];
-    }
-
     if (item.status === "archived") {
       return [
         {
@@ -457,13 +411,6 @@ export function TeacherQuizLibraryPage() {
             }),
         },
         {
-          label: "Publish",
-          icon: Send,
-          variant: "secondary",
-          iconDisplay: "label-only",
-          onClick: () => publishQuiz(item.id, "teacher", item.visibility),
-        },
-        {
           label: "Delete",
           icon: Trash2,
           variant: "ghost",
@@ -472,6 +419,56 @@ export function TeacherQuizLibraryPage() {
         },
       ];
     }
+
+      // Assigned quizzes must not be structurally edited — doing so corrupts
+      // existing student attempts and analytics. Offer Duplicate & Edit instead.
+      if (assignedQuizIds.has(item.id)) {
+        return [
+          {
+            label: "Assign quiz",
+            icon: Rocket,
+            iconDisplay: "label-only",
+            onClick: () => setQuizPendingAssignment(item),
+          },
+          {
+            label: getTeacherPracticeLabel(item),
+            icon: Play,
+            variant: "soft",
+            iconDisplay: "icon-only",
+            onClick: () => openTeacherQuiz(item),
+          },
+          {
+            label: "Duplicate & Edit",
+            icon: Layers3,
+            variant: "secondary",
+            iconDisplay: "icon-only",
+            title: "Quiz is assigned — duplicate it to edit safely",
+            onClick: () => {
+              const duplicate = duplicateQuizToLibrary(item.id, "teacher");
+              if (duplicate) {
+                navigate("/dashboard/teacher/generate-quiz", {
+                  state: { editQuizId: duplicate.id },
+                });
+              }
+            },
+          },
+          {
+            label: "Edit (locked)",
+            icon: Lock,
+            variant: "ghost",
+            iconDisplay: "icon-only",
+            disabled: true,
+            title: "Editing is disabled while the quiz is assigned to a class. Use \"Duplicate & Edit\" to make changes safely.",
+          },
+          {
+            label: "Delete",
+            icon: Trash2,
+            variant: "ghost",
+            iconDisplay: "icon-only",
+            onClick: () => void handleDeleteQuiz(item.id),
+          },
+        ];
+      }
 
       return [
         {
@@ -511,7 +508,7 @@ export function TeacherQuizLibraryPage() {
     <div className={dashboardPageClassName}>
       <DashboardPageHeader
         title={meta?.title ?? "Quiz Library"}
-        subtitle="Manage your own drafts and published quizzes while discovering reusable public content in the same library system."
+        subtitle="Manage your drafts and published quizzes from one place — keep unfinished work separate from what students see."
         actions={
           <DashboardButton type="button" size="lg">
             <Link to="/dashboard/teacher/generate-quiz">
@@ -583,7 +580,7 @@ export function TeacherQuizLibraryPage() {
           <div className="flex min-h-0 flex-1 flex-col">
 
             {/* ── Step indicator ── */}
-            <div className="flex items-center gap-3 px-6 pt-6 pb-1">
+            <div className="flex items-center gap-3 px-6 pt-8 pr-14 pb-2">
               <div className="flex items-center gap-2">
                 <span
                   className={cn(

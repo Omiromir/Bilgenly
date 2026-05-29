@@ -3,8 +3,6 @@ import {
   BookOpen,
   CalendarDays,
   Eye,
-  Globe2,
-  Lock,
   RotateCcw,
   SearchX,
   UserRound,
@@ -45,10 +43,7 @@ import type {
   QuizLibraryTab,
 } from "./quizLibraryTypes";
 import type { StudentAssignedQuizLibraryItem } from "./studentQuizLibrarySources";
-import {
-  getStatusLabel,
-  getVisibilityLabel,
-} from "./quizLibraryUtils";
+import { getStatusLabel } from "./quizLibraryUtils";
 import { formatTeacherClassDate } from "../classes/teacherClassesUtils";
 import { formatCurrentDate } from "../../settings/settingsPreferences";
 
@@ -220,21 +215,6 @@ export function StatusBadge({ status }: StatusBadgeProps) {
   );
 }
 
-interface VisibilityBadgeProps {
-  visibility: QuizLibraryItem["visibility"];
-}
-
-export function VisibilityBadge({ visibility }: VisibilityBadgeProps) {
-  const Icon = visibility === "public" ? Globe2 : Lock;
-
-  return (
-    <DashboardBadge tone={visibility === "public" ? "info" : "neutral"}>
-      <Icon className="h-3.5 w-3.5" />
-      {getVisibilityLabel(visibility)}
-    </DashboardBadge>
-  );
-}
-
 interface QuizSourceBadgeProps {
   label: string;
 }
@@ -326,7 +306,7 @@ function QuizCardActionButton({
       onClick={action.onClick}
       disabled={action.disabled}
       aria-label={isIconOnly ? action.label : undefined}
-      title={isIconOnly ? action.label : undefined}
+      title={action.title ?? (isIconOnly ? action.label : undefined)}
     >
       {!isLabelOnly ? <Icon className="h-4 w-4" /> : null}
       {!isIconOnly ? action.label : null}
@@ -346,7 +326,6 @@ export function QuizCard({
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex flex-wrap gap-2">
             <StatusBadge status={item.status} />
-            <VisibilityBadge visibility={item.visibility} />
             {badgeLabel ? (
               <DashboardBadge tone="brand">
                 {badgeLabel}
@@ -425,7 +404,6 @@ export function AssignedQuizCard({
               status={item.assignmentState.status}
               label={item.assignmentState.displayStatusLabel}
             />
-            <VisibilityBadge visibility={item.visibility} />
             {badgeLabel ? (
               <DashboardBadge tone="info">
                 {badgeLabel}
@@ -587,12 +565,8 @@ export function QuizPreviewDialog({
               <DialogHeader className="gap-3 text-left">
                 <div className="flex flex-wrap gap-2">
                   <StatusBadge status={item.status} />
-                  <VisibilityBadge visibility={item.visibility} />
                   {item.isRecommended ? (
                     <DashboardBadge tone="brand">Recommended</DashboardBadge>
-                  ) : null}
-                  {item.isSaved ? (
-                    <DashboardBadge tone="info">Saved</DashboardBadge>
                   ) : null}
                 </div>
                 <DialogTitle className="text-[1.65rem] font-semibold tracking-[-0.03em] text-[var(--dashboard-text-strong)]">

@@ -14,4 +14,11 @@ public interface IQuizRepository
     Task<IEnumerable<Quiz>> GetHiddenQuizzesAsync();
     Task<IEnumerable<Quiz>> GetAllForModerationAsync();
     Task DeleteQuizQuestionsAsync(Guid quizId);
+    /// <summary>
+    /// Hard-deletes a quiz and every row that references it (attempts,
+    /// attempt-answers, assignments, questions, answers) in a single
+    /// transaction. Reports that reference the quiz have SetNull cascade
+    /// already, so they survive with a null target.
+    /// </summary>
+    Task<bool> DeleteQuizCascadeAsync(Guid quizId);
 }

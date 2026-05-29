@@ -352,6 +352,33 @@ function buildQuestionAnalytics(latestCompletedRows: TeacherStudentQuizResultRow
     }
   >();
 
+  // Seed buckets from the quiz definition (any attempt suffices — all
+  // attempts of one assignment share the same quiz). Without this seed,
+  // questions that nobody answered would be missing from analytics, so a
+  // 10-question quiz would appear as 8 questions if 2 went unanswered.
+  const seedQuiz = latestCompletedRows.find(
+    (row) => row.latestCompletedAttempt?.session.quiz.questions.length,
+  )?.latestCompletedAttempt?.session.quiz;
+
+  seedQuiz?.questions.forEach((question, index) => {
+    buckets.set(question.id, {
+      item: {
+        questionId: question.id,
+        questionNumber: index + 1,
+        prompt: question.text,
+        explanation: question.explanation,
+        correctRate: 0,
+        missRate: 0,
+        correctCount: 0,
+        missCount: 0,
+        attemptCount: 0,
+        studentNamesMissed: [],
+        tags: getQuestionInsightTags(question),
+      },
+      missedStudents: new Set<string>(),
+    });
+  });
+
   latestCompletedRows.forEach((row) => {
     const attempt = row.latestCompletedAttempt;
 
@@ -589,11 +616,16 @@ export function buildTeacherAssignedQuizAnalytics(
   const exhaustedAttemptsStudentsCount = rows.filter(
     (row) => row.exhaustedAttempts,
   ).length;
-  const averageAttemptsUsed = assignedStudentsCount
+  // Average attempts is divided by the number of students who actually
+  // ENGAGED with the quiz (made an attempt or are in-progress).  Dividing
+  // by the full assigned class made the metric meaningless — a class of 30
+  // with only 10 active students would show "0.3 avg attempts" instead of
+  // the real "1.0 per active student".
+  const averageAttemptsUsed = studentsWithAttemptsCount
     ? Number(
         (
           rows.reduce((total, row) => total + row.attemptsUsed, 0) /
-          assignedStudentsCount
+          studentsWithAttemptsCount
         ).toFixed(1),
       )
     : 0;

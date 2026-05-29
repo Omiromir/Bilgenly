@@ -29,10 +29,14 @@ import type {
 } from "../../features/auth/types";
 import { getDashboardPathByRole } from "../../lib/auth";
 import { getRequestErrorMessage } from "../../lib/apiClient";
+import type { MockDashboardUser } from "../../features/dashboard/users/dashboardUser";
 import {
-  type MockDashboardUser,
-} from "../../features/dashboard/mock/mockUsers";
-import { ApiError } from "../../lib/apiClient";
+  ApiError,
+  AUTH_REVOKED_EVENT,
+  type AuthRevokedDetail,
+} from "../../lib/apiClient";
+import { toast } from "sonner";
+import { clearAllUserStorage } from "./userScopedStorage";
 
 interface AuthContextValue {
   role: UserRole | null;
@@ -53,6 +57,8 @@ interface AuthContextValue {
   updateCurrentUserProfile: (updates: {
     username?: string;
     email?: string;
+    avatarUrl?: string | null;
+    bio?: string | null;
   }) => void;
   signOut: () => void;
 }
@@ -302,14 +308,20 @@ export function AuthProvider({ children }: AuthProviderProps) {
           "We could not restore your account state from the server.",
         );
 
+        // Expired / invalid token — treat as a full sign-out so stale data
+        // doesn't bleed into the next session on this device.
+        clearAllUserStorage({
+          userId: authUser?.id,
+          email: authUser?.email,
+        });
+        localStorage.removeItem(AUTH_ROLE_KEY);
+        localStorage.removeItem(AUTH_TOKEN_KEY);
+        localStorage.removeItem(AUTH_USER_KEY);
         setAuthUser(null);
         setRoleState(null);
         setTokenState(null);
         setAuthError(message);
         setIsLoading(false);
-        localStorage.removeItem(AUTH_ROLE_KEY);
-        localStorage.removeItem(AUTH_TOKEN_KEY);
-        localStorage.removeItem(AUTH_USER_KEY);
       }
     };
 
@@ -321,6 +333,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, [token]);
 
   const signOut = () => {
+    // Clear all user-specific localStorage data before resetting auth state
+    // so providers that subscribe to auth can't write stale data after this.
+    clearAllUserStorage({
+      userId: authUser?.id,
+      email: authUser?.email,
+    });
+    localStorage.removeItem(AUTH_ROLE_KEY);
+    localStorage.removeItem(AUTH_TOKEN_KEY);
+    localStorage.removeItem(AUTH_USER_KEY);
     setRoleState(null);
     setTokenState(null);
     setAuthUser(null);
@@ -328,17 +349,63 @@ export function AuthProvider({ children }: AuthProviderProps) {
     setIsLoading(false);
     clearRegistrationDraft();
     clearOnboardingDraft();
-    localStorage.removeItem(AUTH_ROLE_KEY);
-    localStorage.removeItem(AUTH_TOKEN_KEY);
-    localStorage.removeItem(AUTH_USER_KEY);
   };
+
+  // Listen for cross-cutting 401 broadcasts from apiClient. If an authenticated
+  // request anywhere in the app gets a 401 the user has been suspended/deleted
+  // or their token expired — we boot them out and surface a clear toast so the
+  // navigation back to the sign-in screen feels deliberate.
+  useEffect(() => {
+    function onRevoked(event: Event) {
+      const detail = (event as CustomEvent<AuthRevokedDetail>).detail;
+      if (!token) return; // already signed out — ignore stale events
+      if (detail?.reason === "suspended") {
+        toast.error(detail.message || "Your account has been suspended.");
+      } else if (detail?.message) {
+        toast.error(detail.message);
+      }
+      signOut();
+    }
+
+    window.addEventListener(AUTH_REVOKED_EVENT, onRevoked);
+    return () => window.removeEventListener(AUTH_REVOKED_EVENT, onRevoked);
+  }, [token]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Liveness poll: every 30s while the tab is visible, hit /api/auth/me.
+  // The backend now returns 401 for suspended/deleted users, which our 401
+  // handler converts to a signOut. This catches admin actions that happen
+  // while the user is sitting idle on a page without making any other request.
+  useEffect(() => {
+    if (!token) return;
+
+    let cancelled = false;
+    async function poll() {
+      if (cancelled || document.visibilityState !== "visible") return;
+      try {
+        await getMe();
+      } catch {
+        // 401 is handled globally by the auth-revoked listener; other errors
+        // are transient (offline, server hiccup) and intentionally ignored.
+      }
+    }
+
+    const intervalId = window.setInterval(poll, 30000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [token]);
 
   const updateCurrentUserProfile = ({
     username,
     email,
+    avatarUrl,
+    bio,
   }: {
     username?: string;
     email?: string;
+    avatarUrl?: string | null;
+    bio?: string | null;
   }) => {
     setAuthUser((current) => {
       if (!current) {
@@ -350,6 +417,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
         email: typeof email === "string" ? email.trim() || current.email : current.email,
         username:
           typeof username === "string" ? username.trim() || current.username : current.username,
+        avatarUrl: avatarUrl !== undefined ? avatarUrl : current.avatarUrl,
+        bio: bio !== undefined ? bio : current.bio,
       });
 
       localStorage.setItem(AUTH_USER_KEY, JSON.stringify(nextUser));

@@ -7,7 +7,6 @@ import {
   XCircle,
 } from "../../../components/icons/AppIcons";
 import { cn } from "../../../components/ui/utils";
-import type { QuizLibraryVisibility } from "../../dashboard/components/quiz-library/quizLibraryTypes";
 import {
   DashboardBadge,
   DashboardButton,
@@ -25,8 +24,10 @@ interface QuizBuilderReviewChecksProps {
   handleDownloadQuizExport: (format: QuizExportFormat) => void;
   handleGenerateQuiz: () => void;
   mode: "teacher" | "student";
-  publishVisibility: QuizLibraryVisibility;
-  setPublishVisibility: (value: QuizLibraryVisibility) => void;
+  /** Show the Regenerate button only when there is a real AI-generated backend
+   *  quiz that hasn't been saved to the library yet. Hide it when editing an
+   *  existing library quiz or when the source was mock-generated. */
+  showRegenerateButton: boolean;
   setSelectedQuestionId: (questionId: string) => void;
   validationIssues: ValidationIssue[];
 }
@@ -36,12 +37,15 @@ export function QuizBuilderReviewChecks({
   handleDownloadQuizExport,
   handleGenerateQuiz,
   mode,
-  publishVisibility,
-  setPublishVisibility,
+  showRegenerateButton,
   setSelectedQuestionId,
   validationIssues,
 }: QuizBuilderReviewChecksProps) {
   const [exportFormat, setExportFormat] = useState<QuizExportFormat>("json");
+  // After removing the visibility selector, the side rail only appears when
+  // either Export (teacher-only) or Regenerate is visible. Collapse to a
+  // single column otherwise so the panel doesn't leave dead whitespace.
+  const hasSideRail = mode !== "student" || showRegenerateButton;
 
   return (
     <DashboardSurface asChild radius="xl" padding="lg">
@@ -53,8 +57,8 @@ export function QuizBuilderReviewChecks({
             </h2>
             <p className="mt-1.5 max-w-3xl text-sm leading-6 text-[var(--dashboard-text-soft)]">
               {mode === "student"
-                ? "Use this panel to catch gaps, adjust visibility, and regenerate the draft when you want a cleaner practice set."
-                : "Use this panel for visibility, exports, and a final quality check while the main actions stay in the top editor bar."}
+                ? "Use this panel to catch gaps and regenerate the draft when you want a cleaner practice set."
+                : "Use this panel for exports and a final quality check while the main actions stay in the top editor bar."}
             </p>
           </div>
           <DashboardBadge
@@ -67,7 +71,12 @@ export function QuizBuilderReviewChecks({
           </DashboardBadge>
         </div>
 
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_280px]">
+        <div
+          className={cn(
+            "grid gap-4",
+            hasSideRail && "xl:grid-cols-[minmax(0,1fr)_280px]",
+          )}
+        >
           <div className="space-y-3">
             {validationIssues.length === 0 ? (
               <div className="rounded-[18px] border border-[var(--dashboard-success)] bg-[var(--dashboard-success-soft)]/55 px-4 py-4">
@@ -114,75 +123,58 @@ export function QuizBuilderReviewChecks({
             )}
           </div>
 
+          {hasSideRail ? (
           <div className="space-y-3">
-            <label className="block space-y-2 rounded-[18px] border border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-muted)] px-4 py-3.5">
-              <span className="text-sm font-semibold text-[var(--dashboard-text-strong)]">
-                {mode === "teacher" ? "Save Quiz visibility" : "Practice set visibility"}
-              </span>
-              <select
-                value={publishVisibility}
-                onChange={(event) =>
-                  setPublishVisibility(event.target.value as QuizLibraryVisibility)
-                }
-                className={cn(
-                  dashboardSelectVariants({ size: "md" }),
-                  "w-full border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-elevated)]",
-                )}
-              >
-                <option value="private">Private</option>
-                <option value="public">Public Library</option>
-              </select>
-              <p className="text-xs leading-5 text-[var(--dashboard-text-soft)]">
-                {mode === "teacher"
-                  ? "Private quizzes stay in your owner views. Public quizzes also appear in the shared library."
-                  : "Private practice sets stay in your personal library. Public ones also appear in shared discovery."}
-              </p>
-            </label>
-
-            <div className="space-y-2 rounded-[18px] border border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-muted)] px-4 py-3.5">
-              <span className="block text-sm font-semibold text-[var(--dashboard-text-strong)]">
-                Export quiz
-              </span>
-              <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] xl:grid-cols-1">
-                <select
-                  value={exportFormat}
-                  onChange={(event) =>
-                    setExportFormat(event.target.value as QuizExportFormat)
-                  }
-                  className={cn(
-                    dashboardSelectVariants({ size: "md" }),
-                    "w-full border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-elevated)]",
-                  )}
-                  aria-label="Export quiz format"
-                >
-                  <option value="json">JSON backup</option>
-                  <option value="txt">Readable text</option>
-                  <option value="xml">Moodle XML</option>
-                </select>
-                <DashboardButton
-                  type="button"
-                  variant="secondary"
-                  size="lg"
-                  className="w-full sm:w-auto xl:w-full"
-                  onClick={() => handleDownloadQuizExport(exportFormat)}
-                >
-                  <Download className="h-4.5 w-4.5" />
-                  Export
-                </DashboardButton>
+            {/* Export is teacher-only: students don't need LMS/Moodle exports in the review stage */}
+            {mode !== "student" ? (
+              <div className="space-y-2 rounded-[18px] border border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-muted)] px-4 py-3.5">
+                <span className="block text-sm font-semibold text-[var(--dashboard-text-strong)]">
+                  Export quiz
+                </span>
+                <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] xl:grid-cols-1">
+                  <select
+                    value={exportFormat}
+                    onChange={(event) =>
+                      setExportFormat(event.target.value as QuizExportFormat)
+                    }
+                    className={cn(
+                      dashboardSelectVariants({ size: "md" }),
+                      "w-full border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-elevated)]",
+                    )}
+                    aria-label="Export quiz format"
+                  >
+                    <option value="json">JSON backup</option>
+                    <option value="txt">Readable text</option>
+                    <option value="xml">Moodle XML</option>
+                  </select>
+                  <DashboardButton
+                    type="button"
+                    variant="secondary"
+                    size="lg"
+                    className="w-full sm:w-auto xl:w-full"
+                    onClick={() => handleDownloadQuizExport(exportFormat)}
+                  >
+                    <Download className="h-4.5 w-4.5" />
+                    Export
+                  </DashboardButton>
+                </div>
               </div>
-            </div>
+            ) : null}
 
-            <DashboardButton
-              type="button"
-              variant="secondary"
-              size="lg"
-              className="w-full"
-              onClick={handleGenerateQuiz}
-            >
-              <RefreshCw className="h-4.5 w-4.5" />
-              Regenerate
-            </DashboardButton>
+            {showRegenerateButton ? (
+              <DashboardButton
+                type="button"
+                variant="secondary"
+                size="lg"
+                className="w-full"
+                onClick={handleGenerateQuiz}
+              >
+                <RefreshCw className="h-4.5 w-4.5" />
+                Regenerate
+              </DashboardButton>
+            ) : null}
           </div>
+          ) : null}
         </div>
       </section>
     </DashboardSurface>

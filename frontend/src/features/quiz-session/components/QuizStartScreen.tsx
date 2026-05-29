@@ -2,6 +2,7 @@ import { Link } from "react-router";
 import {
   BookOpen,
   Clock3,
+  LoaderCircle,
   Play,
   UserRound,
 } from "../../../components/icons/AppIcons";
@@ -38,6 +39,8 @@ interface QuizStartScreenProps {
   assignmentConstraints?: AssignedQuizAvailability | null;
   latestInProgressSession?: QuizSessionRecord;
   latestCompletedSession?: QuizSessionRecord;
+  isStarting?: boolean;
+  isResuming?: boolean;
   onStart?: () => void;
   onResume?: () => void;
   onReviewLatest?: () => void;
@@ -54,6 +57,8 @@ export function QuizStartScreen({
   assignmentConstraints,
   latestInProgressSession,
   latestCompletedSession,
+  isStarting = false,
+  isResuming = false,
   onStart,
   onResume,
   onReviewLatest,
@@ -222,8 +227,18 @@ export function QuizStartScreen({
 
         <div className="flex flex-wrap gap-3">
           {latestInProgressSession && onResume && assignmentConstraints?.canResume ? (
-            <DashboardButton type="button" size="lg" onClick={onResume}>
-              Resume Attempt {latestInProgressSession.attemptNumber}
+            <DashboardButton
+              type="button"
+              size="lg"
+              onClick={onResume}
+              disabled={isResuming}
+            >
+              {isResuming ? (
+                <LoaderCircle className="h-4.5 w-4.5 animate-spin" />
+              ) : null}
+              {isResuming
+                ? "Resuming..."
+                : `Resume Attempt ${latestInProgressSession.attemptNumber}`}
             </DashboardButton>
           ) : null}
 
@@ -232,14 +247,20 @@ export function QuizStartScreen({
               type="button"
               size="lg"
               onClick={onStart}
-              disabled={assignmentConstraints?.isLoading}
+              disabled={assignmentConstraints?.isLoading || isStarting}
             >
-              <Play className="h-4.5 w-4.5" />
-              {assignmentConstraints?.isLoading
-                ? "Checking attempts..."
-                : assignmentConstraints
-                  ? startLabel
-                  : "Start Quiz"}
+              {isStarting ? (
+                <LoaderCircle className="h-4.5 w-4.5 animate-spin" />
+              ) : (
+                <Play className="h-4.5 w-4.5" />
+              )}
+              {isStarting
+                ? "Starting..."
+                : assignmentConstraints?.isLoading
+                  ? "Checking attempts..."
+                  : assignmentConstraints
+                    ? startLabel
+                    : "Start Quiz"}
             </DashboardButton>
           ) : null}
 

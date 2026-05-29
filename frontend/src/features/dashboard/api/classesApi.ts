@@ -87,6 +87,16 @@ export function removeStudentFromClass(classId: string, studentId: string) {
   );
 }
 
+export function grantExtraAttempt(classId: string, assignmentId: string) {
+  return apiRequest<{ message: string; maxAttempts: number | null; unlimited: boolean }>(
+    `/api/classes/${classId}/assignments/${assignmentId}/grant-attempt`,
+    {
+      method: "PATCH",
+      fallbackErrorMessage: "Unable to grant extra attempt.",
+    },
+  );
+}
+
 export function joinClassByInviteCode(payload: JoinClassRequest | string) {
   const request = typeof payload === "string" ? { inviteCode: payload } : payload;
 
@@ -95,4 +105,18 @@ export function joinClassByInviteCode(payload: JoinClassRequest | string) {
     body: request,
     fallbackErrorMessage: "Unable to join class.",
   });
+}
+
+export interface StudentSearchResult {
+  id: string;
+  username: string;
+  email: string;
+  avatarUrl: string | null;
+}
+
+export function searchStudents(query: string) {
+  return apiRequest<StudentSearchResult[]>(
+    `/api/classes/student-search?q=${encodeURIComponent(query)}`,
+    { fallbackErrorMessage: "Unable to search students." },
+  );
 }

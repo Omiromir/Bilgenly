@@ -1,7 +1,6 @@
 import type {
   QuizLibraryItem,
   QuizLibraryStatus,
-  QuizLibraryVisibility,
 } from "./quizLibraryTypes";
 
 export interface QuizLibraryFilters {
@@ -10,11 +9,13 @@ export interface QuizLibraryFilters {
   language: string;
   creator: string;
   status?: string;
-  visibility?: string;
   practiceState?: string;
 }
 
 const draftStatuses = new Set<QuizLibraryStatus>(["draft", "generated", "edited"]);
+// "published-public" remains in the QuizLibraryStatus union for forward-compat
+// with backend-stored quizzes that pre-date the public-discovery removal, but
+// the UI normalizes such quizzes back to "published-private" before render.
 const publishedStatuses = new Set<QuizLibraryStatus>([
   "published-private",
   "published-public",
@@ -26,10 +27,6 @@ export function isDraftQuiz(status: QuizLibraryStatus) {
 
 export function isPublishedQuiz(status: QuizLibraryStatus) {
   return publishedStatuses.has(status);
-}
-
-export function isPublicDiscoveryQuiz(item: QuizLibraryItem) {
-  return item.status === "published-public" && item.visibility === "public";
 }
 
 export function getStatusLabel(status: QuizLibraryStatus) {
@@ -48,10 +45,6 @@ export function getStatusLabel(status: QuizLibraryStatus) {
     default:
       return status;
   }
-}
-
-export function getVisibilityLabel(visibility: QuizLibraryVisibility) {
-  return visibility === "public" ? "Public" : "Private";
 }
 
 export function matchesQuizSearch(item: QuizLibraryItem, search: string) {
@@ -98,14 +91,6 @@ export function matchesQuizFilters(
   }
 
   if (filters.status && filters.status !== "all" && item.status !== filters.status) {
-    return false;
-  }
-
-  if (
-    filters.visibility &&
-    filters.visibility !== "all" &&
-    item.visibility !== filters.visibility
-  ) {
     return false;
   }
 

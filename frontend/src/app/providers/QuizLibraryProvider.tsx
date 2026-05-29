@@ -10,7 +10,6 @@ import {
 import type {
   QuizLibraryItem,
   QuizLibraryStatus,
-  QuizLibraryVisibility,
   QuizQuestionRecord,
   QuizRecord,
 } from "../../features/dashboard/components/quiz-library/quizLibraryTypes";
@@ -42,7 +41,6 @@ interface SaveGeneratedQuizInput {
   difficulty: QuizRecord["difficulty"];
   language: string;
   status: QuizLibraryStatus;
-  visibility: QuizLibraryVisibility;
   tags: string[];
   sourceLabel: string;
   note?: string;
@@ -54,6 +52,7 @@ interface SaveGeneratedQuizInput {
 
 interface QuizLibraryContextValue {
   quizzes: QuizRecord[];
+  isLoading: boolean;
   saveGeneratedQuiz: (input: SaveGeneratedQuizInput) => Promise<QuizRecord>;
   ensureQuizHasBackendId: (quizId: string) => Promise<string>;
   getQuizById: (quizId: string) => QuizRecord | undefined;
@@ -69,12 +68,6 @@ interface QuizLibraryContextValue {
       >
     >,
   ) => void;
-  publishQuiz: (
-    quizId: string,
-    viewerRole: "teacher" | "student",
-    visibility?: QuizLibraryVisibility,
-  ) => void;
-  toggleSavedQuiz: (quizId: string, viewerRole: "teacher" | "student") => void;
   deleteQuiz: (
     quizId: string,
     viewerRole: "teacher" | "student",
@@ -123,10 +116,42 @@ function normalizeTags(tags: string[]) {
   });
 }
 
+const QUESTION_TYPE_TAGS = new Set(["Multiple choice", "True/False"]);
+
 function sanitizeQuizRecord(quiz: QuizRecord): QuizRecord {
+  // When the quiz has questions loaded, re-derive which question-type tags are
+  // actually valid. This fixes quizzes saved before the tag logic was corrected
+  // (they had both "Multiple choice" AND "True/False" regardless of content).
+  const actualTypes =
+    quiz.questions.length > 0
+      ? new Set(quiz.questions.map((q) => q.questionType ?? "Multiple choice"))
+      : null;
+
+  const cleanedTags = normalizeTags(
+    (quiz.tags ?? []).filter((tag) => {
+      if (QUESTION_TYPE_TAGS.has(tag)) {
+        // Keep only if this type actually appears in the quiz questions
+        return !actualTypes || actualTypes.has(tag as "Multiple choice" | "True/False");
+      }
+      return true;
+    }),
+  );
+
+  // Normalize legacy public/published-public quizzes back to private —
+  // public discovery has been removed until backend-backed support exists,
+  // so any old state must not resurface in the UI.
+  const normalizedVisibility = "private" as const;
+  const normalizedStatus =
+    quiz.status === "published-public" ? "published-private" : quiz.status;
+
   return {
     ...quiz,
-    tags: normalizeTags(quiz.tags ?? []),
+    visibility: normalizedVisibility,
+    status: normalizedStatus,
+    // savedByRoles is a defunct local-only field — clear it so stale data
+    // never re-creates a phantom "saved" badge on someone else's quiz.
+    savedByRoles: undefined,
+    tags: cleanedTags,
     questions: quiz.questions.map((question) => ({
       ...question,
       options: [...question.options],
@@ -162,7 +187,9 @@ function mapQuizRecordToCreateQuizRequest(quiz: QuizRecord) {
   return {
     title: quiz.title,
     description: quiz.description,
-    isPublic: quiz.visibility === "public",
+    // Public visibility is removed from the UI until backend-backed discovery
+    // exists. Always persist created quizzes as private.
+    isPublic: false,
     questions: quiz.questions.map((question, index) => {
       const correctIndexes = getCorrectAnswerIndexes(question);
 
@@ -190,7 +217,10 @@ function mapQuizRecordToUpdateQuizRequest(quiz: QuizRecord) {
   return {
     title: quiz.title,
     description: quiz.description,
-    isPublic: quiz.visibility === "public",
+    // Public visibility is removed from the UI until backend-backed discovery
+    // exists. Always persist updates as private — this also normalises any
+    // legacy quizzes a user previously marked public.
+    isPublic: false,
     questions: quiz.questions.map((question, index) => {
       const correctIndexes = getCorrectAnswerIndexes(question);
 
@@ -313,7 +343,6 @@ function mergeRemoteQuizWithLocalMetadata(
     description: localQuiz.description ?? remoteQuiz.description,
     ownerName: localQuiz.ownerName || remoteQuiz.ownerName,
     sourceQuizId: localQuiz.sourceQuizId,
-    savedByRoles: localQuiz.savedByRoles,
     topic: localQuiz.topic || remoteQuiz.topic,
     difficulty: localQuiz.difficulty || remoteQuiz.difficulty,
     language: localQuiz.language || remoteQuiz.language,
@@ -403,11 +432,13 @@ export function mapQuizRecordToLibraryItem(
     sourceLabel: quiz.sourceLabel,
     note: quiz.note,
     isOwner,
-    isSaved: !isOwner && quiz.savedByRoles?.includes(viewerRole),
+    // Cross-user "saved" was a localStorage gimmick that depended on
+    // discovering other users' quizzes — removed alongside Discover.
+    isSaved: false,
     isGeneratedByCurrentUser: viewerRole === "student" && isOwner,
     learnerCount: quiz.learnerCount,
     averageScore: quiz.averageScore,
-    saveCount: quiz.savedByRoles?.length ?? quiz.saveCount,
+    saveCount: quiz.saveCount,
     attemptCount: quiz.attemptCount,
     practiceState: quiz.practiceState,
     practiceProgressLabel: quiz.practiceProgressLabel,
@@ -419,14 +450,11 @@ export function getQuizLibraryItemsForRole(
   viewerRole: "teacher" | "student",
   currentUserId?: string | null,
 ) {
+  // Each user only sees the quizzes they own. Cross-user "public" discovery
+  // is intentionally removed until backend-backed discovery exists. Assigned
+  // quizzes are pulled separately by the student library sources.
   return quizzes
-    .filter((quiz) => {
-      if (quiz.ownerRole === viewerRole) {
-        return true;
-      }
-
-      return quiz.visibility === "public" && quiz.status === "published-public";
-    })
+    .filter((quiz) => quiz.ownerRole === viewerRole)
     .map((quiz) => mapQuizRecordToLibraryItem(quiz, viewerRole, currentUserId));
 }
 
@@ -441,6 +469,11 @@ export function QuizLibraryProvider({ children }: QuizLibraryProviderProps) {
     QuizRecord[]
   >([]);
   const [hiddenQuizIds, setHiddenQuizIds] = useState<string[]>([]);
+  const [isRemoteLoading, setIsRemoteLoading] = useState(true);
+  // Bumping this tick re-runs the remote fetch effect. Used to refetch
+  // when the tab regains focus and when other parts of the app broadcast
+  // `bilgenly:quiz-deleted` (e.g. the admin panel removing a quiz).
+  const [refetchTick, setRefetchTick] = useState(0);
   const userId = currentUser?.id ?? null;
   const userEmail = currentUser?.email ?? null;
   const storageScope = useMemo(
@@ -482,11 +515,13 @@ export function QuizLibraryProvider({ children }: QuizLibraryProviderProps) {
   }, [localQuizzes, storageKey]);
 
   useEffect(() => {
-    if (!token || role !== "teacher" || !currentUser?.id) {
+    if (!token || (role !== "teacher" && role !== "student") || !currentUser?.id) {
       setRemoteOwnedQuizzes((current) => (current.length ? [] : current));
+      setIsRemoteLoading(false);
       return;
     }
 
+    setIsRemoteLoading(true);
     let isCancelled = false;
 
     getMyQuizzes()
@@ -495,10 +530,11 @@ export function QuizLibraryProvider({ children }: QuizLibraryProviderProps) {
           return;
         }
 
+        const ownerRole = (role === "student" ? "student" : "teacher") as "student" | "teacher";
         const nextRemoteOwnedQuizzes = quizzes.map((quiz) =>
           mapQuizDtoToQuizRecord(quiz, {
             ownerUserId: currentUser.id,
-            ownerRole: "teacher",
+            ownerRole,
             ownerName: currentUser.fullName,
           }),
         );
@@ -508,17 +544,56 @@ export function QuizLibraryProvider({ children }: QuizLibraryProviderProps) {
             ? current
             : nextRemoteOwnedQuizzes,
         );
+
+        // Purge any stale local copies whose backend GUID didn't come back
+        // in the fresh remote list. This handles the "admin deleted my quiz
+        // out from under me" case: without this, the deleted quiz would
+        // resurrect from localStorage on every refresh.
+        const remoteIds = new Set(nextRemoteOwnedQuizzes.map((q) => q.id));
+        setLocalQuizzes((current) => {
+          const cleaned = current.filter(
+            (quiz) => !isGuidString(quiz.id) || remoteIds.has(quiz.id),
+          );
+          return cleaned.length === current.length ? current : cleaned;
+        });
       })
       .catch(() => {
         if (!isCancelled) {
           setRemoteOwnedQuizzes((current) => (current.length ? [] : current));
+        }
+      })
+      .finally(() => {
+        if (!isCancelled) {
+          setIsRemoteLoading(false);
         }
       });
 
     return () => {
       isCancelled = true;
     };
-  }, [currentUser?.fullName, currentUser?.id, role, token]);
+  }, [currentUser?.fullName, currentUser?.id, role, token, refetchTick]);
+
+  // Refetch the library whenever the tab comes back into focus, or when an
+  // admin action elsewhere in the app dispatches `bilgenly:quiz-deleted`.
+  // Together these are what make a quiz disappear "live" in the regular
+  // library view without a hard reload — the admin panel updates its own
+  // table optimistically; the rest of the app catches up via this hook.
+  useEffect(() => {
+    function bump() {
+      setRefetchTick((tick) => tick + 1);
+    }
+    function onVisibility() {
+      if (document.visibilityState === "visible") bump();
+    }
+    window.addEventListener("focus", bump);
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("bilgenly:quiz-deleted", bump as EventListener);
+    return () => {
+      window.removeEventListener("focus", bump);
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("bilgenly:quiz-deleted", bump as EventListener);
+    };
+  }, []);
 
   useEffect(() => {
     if (!token) {
@@ -616,14 +691,50 @@ export function QuizLibraryProvider({ children }: QuizLibraryProviderProps) {
       );
     });
 
+    // Compute unique joined-student counts per quiz from assigned classes
+    const learnersByQuizId = new Map<string, Set<string>>();
+    for (const teacherClass of classes) {
+      const joinedStudentIds = teacherClass.students
+        .filter((s) => s.status === "joined")
+        .map((s) => s.id);
+      for (const assignment of teacherClass.assignedQuizzes) {
+        if (!learnersByQuizId.has(assignment.quizId)) {
+          learnersByQuizId.set(assignment.quizId, new Set());
+        }
+        for (const studentId of joinedStudentIds) {
+          learnersByQuizId.get(assignment.quizId)!.add(studentId);
+        }
+      }
+    }
+
+    // Merge rule:
+    //   • Remote quizzes always show (they're the source of truth).
+    //   • Local quizzes that have a non-GUID id (= local-only drafts that
+    //     were never synced) always show too.
+    //   • Local quizzes that have a GUID id but are NOT in remote are
+    //     stale zombies — the backend deleted them (admin removal, owner
+    //     delete elsewhere, etc.). Drop them so a deleted quiz doesn't
+    //     keep haunting the library from localStorage cache.
+    //   While remote is still loading, keep showing local copies so the UI
+    //   doesn't blank out between hydration and the network response.
     const combined = [
       ...Array.from(remoteById.values()),
-      ...localQuizzes.filter((quiz) => !remoteById.has(quiz.id)),
+      ...localQuizzes.filter((quiz) => {
+        if (remoteById.has(quiz.id)) return false;
+        if (isRemoteLoading) return true;
+        return !isGuidString(quiz.id);
+      }),
     ].filter((quiz) => !hiddenQuizIds.includes(quiz.id));
 
-    return combined.map(sanitizeQuizRecord);
+    return combined.map((quiz) => {
+      const sanitized = sanitizeQuizRecord(quiz);
+      const count = learnersByQuizId.get(quiz.id)?.size;
+      return count !== undefined ? { ...sanitized, learnerCount: count } : sanitized;
+    });
   }, [
+    classes,
     hiddenQuizIds,
+    isRemoteLoading,
     localQuizzes,
     remoteOwnedQuizzes,
     remoteReferencedQuizzes,
@@ -715,6 +826,73 @@ export function QuizLibraryProvider({ children }: QuizLibraryProviderProps) {
       sourceLabel: quiz.sourceLabel,
       note: quiz.note,
       durationMinutes: quiz.durationMinutes,
+      updatedAt: formatQuizDate(new Date()),
+    });
+
+    setRemoteOwnedQuizzes((current) => upsertQuizRecord(current, mappedQuiz));
+    upsertLocalQuiz({
+      ...mappedQuiz,
+      practiceState: quiz.practiceState,
+      practiceProgressLabel: quiz.practiceProgressLabel,
+      averageScore: quiz.averageScore,
+      attemptCount: quiz.attemptCount,
+    });
+
+    return mappedQuiz;
+  };
+
+  const createStudentQuizOnBackend = async (quiz: QuizRecord) => {
+    const createdQuiz = await createQuizRequest(
+      mapQuizRecordToCreateQuizRequest(quiz),
+    );
+
+    const mappedQuiz = mapQuizDtoToQuizRecord(createdQuiz, {
+      ownerUserId: currentUser?.id,
+      ownerRole: "student",
+      ownerName: getOwnerName("student", currentUser?.fullName),
+      topic: quiz.topic,
+      difficulty: quiz.difficulty,
+      language: quiz.language,
+      status: quiz.status,
+      visibility: quiz.visibility,
+      tags: quiz.tags,
+      sourceLabel: quiz.sourceLabel,
+      note: quiz.note,
+      durationMinutes: quiz.durationMinutes,
+    });
+
+    setRemoteOwnedQuizzes((current) => upsertQuizRecord(current, mappedQuiz));
+    upsertLocalQuiz({
+      ...mappedQuiz,
+      practiceState: quiz.practiceState,
+      practiceProgressLabel: quiz.practiceProgressLabel,
+      averageScore: quiz.averageScore,
+      attemptCount: quiz.attemptCount,
+    });
+
+    return mappedQuiz;
+  };
+
+  const updateStudentQuizOnBackend = async (quiz: QuizRecord) => {
+    const updatedQuiz = await updateQuizRequest(
+      quiz.id,
+      mapQuizRecordToUpdateQuizRequest(quiz),
+    );
+
+    const mappedQuiz = mapQuizDtoToQuizRecord(updatedQuiz, {
+      ownerUserId: currentUser?.id,
+      ownerRole: "student",
+      ownerName: getOwnerName("student", currentUser?.fullName),
+      topic: quiz.topic,
+      difficulty: quiz.difficulty,
+      language: quiz.language,
+      status: quiz.status,
+      visibility: quiz.visibility,
+      tags: quiz.tags,
+      sourceLabel: quiz.sourceLabel,
+      note: quiz.note,
+      durationMinutes: quiz.durationMinutes,
+      updatedAt: formatQuizDate(new Date()),
     });
 
     setRemoteOwnedQuizzes((current) => upsertQuizRecord(current, mappedQuiz));
@@ -732,6 +910,7 @@ export function QuizLibraryProvider({ children }: QuizLibraryProviderProps) {
   const value = useMemo<QuizLibraryContextValue>(
     () => ({
       quizzes,
+      isLoading: isRemoteLoading,
       saveGeneratedQuiz: async (input) => {
         const now = new Date();
         const quiz: QuizRecord = {
@@ -750,7 +929,7 @@ export function QuizLibraryProvider({ children }: QuizLibraryProviderProps) {
           durationMinutes: input.durationMinutes,
           updatedAt: formatQuizDate(now),
           status: input.status,
-          visibility: input.visibility,
+          visibility: "private",
           tags: normalizeTags(input.tags),
           sourceLabel: input.sourceLabel,
           note: input.note,
@@ -762,6 +941,12 @@ export function QuizLibraryProvider({ children }: QuizLibraryProviderProps) {
           return isGuidString(quiz.id)
             ? updateTeacherQuizOnBackend(quiz)
             : createTeacherQuizOnBackend(quiz);
+        }
+
+        if (input.ownerRole === "student") {
+          return isGuidString(quiz.id)
+            ? updateStudentQuizOnBackend(quiz)
+            : createStudentQuizOnBackend(quiz);
         }
 
         upsertLocalQuiz(quiz);
@@ -822,49 +1007,6 @@ export function QuizLibraryProvider({ children }: QuizLibraryProviderProps) {
           averageScore: nextAverageScore,
         });
       },
-      publishQuiz: (quizId, viewerRole, visibility) => {
-        const sourceQuiz = quizzes.find((quiz) => quiz.id === quizId);
-
-        if (!sourceQuiz || sourceQuiz.ownerRole !== viewerRole) {
-          return;
-        }
-
-        const nextVisibility = visibility ?? sourceQuiz.visibility;
-        const nextStatus =
-          nextVisibility === "public"
-            ? "published-public"
-            : "published-private";
-
-        upsertLocalQuiz({
-          ...sourceQuiz,
-          visibility: nextVisibility,
-          status: nextStatus,
-          updatedAt: formatQuizDate(new Date()),
-          note:
-            nextStatus === "published-public"
-              ? "Published locally until a backend publish endpoint exists."
-              : "Saved locally as private until a backend publish endpoint exists.",
-        });
-      },
-      toggleSavedQuiz: (quizId, viewerRole) => {
-        const sourceQuiz = quizzes.find((quiz) => quiz.id === quizId);
-
-        if (!sourceQuiz || sourceQuiz.ownerRole === viewerRole) {
-          return;
-        }
-
-        const savedByRoles = new Set(sourceQuiz.savedByRoles ?? []);
-        if (savedByRoles.has(viewerRole)) {
-          savedByRoles.delete(viewerRole);
-        } else {
-          savedByRoles.add(viewerRole);
-        }
-
-        upsertLocalQuiz({
-          ...sourceQuiz,
-          savedByRoles: Array.from(savedByRoles),
-        });
-      },
       deleteQuiz: async (quizId, viewerRole) => {
         const sourceQuiz = quizzes.find((quiz) => quiz.id === quizId);
 
@@ -872,7 +1014,7 @@ export function QuizLibraryProvider({ children }: QuizLibraryProviderProps) {
           return;
         }
 
-        if (isGuidString(sourceQuiz.id) && sourceQuiz.ownerRole === "teacher") {
+        if (isGuidString(sourceQuiz.id) && (sourceQuiz.ownerRole === "teacher" || sourceQuiz.ownerRole === "student")) {
           await deleteQuizRequest(sourceQuiz.id);
           setRemoteOwnedQuizzes((current) =>
             current.filter((quiz) => quiz.id !== sourceQuiz.id),
@@ -910,7 +1052,6 @@ export function QuizLibraryProvider({ children }: QuizLibraryProviderProps) {
           ownerRole: viewerRole,
           ownerName: getOwnerName(viewerRole, currentUser?.fullName),
           sourceQuizId: source.id,
-          savedByRoles: [],
           title: `${source.title} Copy`,
           updatedAt: formatQuizDate(now),
           status: "draft",
@@ -939,7 +1080,7 @@ export function QuizLibraryProvider({ children }: QuizLibraryProviderProps) {
         return duplicate;
       },
     }),
-    [currentUser?.fullName, currentUser?.id, quizzes],
+    [currentUser?.fullName, currentUser?.id, isRemoteLoading, quizzes],
   );
 
   return (

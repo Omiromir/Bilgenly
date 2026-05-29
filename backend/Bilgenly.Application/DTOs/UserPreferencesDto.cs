@@ -12,6 +12,7 @@ public class UserPreferencesDto
     public bool NotifyEmailDeadlineReminders { get; set; } = true;
     public bool NotifyPushRealTimeUpdates { get; set; } = true;
     public bool NotifyPushWeeklySummaries { get; set; } = true;
+    public string? StudyReminderTime { get; set; }
     public DateTime UpdatedAt { get; set; }
 }
 
@@ -27,4 +28,5 @@ public class SaveUserPreferencesDto
     public bool NotifyEmailDeadlineReminders { get; set; } = true;
     public bool NotifyPushRealTimeUpdates { get; set; } = true;
     public bool NotifyPushWeeklySummaries { get; set; } = true;
+    public string? StudyReminderTime { get; set; }
 }

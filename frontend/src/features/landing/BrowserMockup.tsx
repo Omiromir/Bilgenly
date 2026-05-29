@@ -9,7 +9,7 @@ export function BrowserMockup({ url = 'bilgenly.com', children }: BrowserMockupP
   return (
     <div className="relative mx-auto w-full max-w-[1030px] overflow-hidden rounded-t-[24px]">
       {/* Top Bar */}
-      <div className="flex h-[50px] items-center justify-between bg-[#4B5563] px-3 py-1 sm:h-[56px] sm:px-6">
+      <div className="flex h-[50px] items-center justify-between bg-gradient-to-r from-[#0f1628] to-[#141b3a] px-3 py-1 sm:h-[56px] sm:px-6">
         {/* Left Buttons */}
         <div className="flex gap-6 items-center">
           {/* macOS Window Controls */}
@@ -75,7 +75,7 @@ export function BrowserMockup({ url = 'bilgenly.com', children }: BrowserMockupP
         </div>
 
         {/* Address Bar */}
-        <div className="mx-2 hidden h-7 w-full max-w-[480px] items-center gap-2 rounded-lg bg-[#F1F1F1] px-2 py-1 md:flex">
+        <div className="mx-2 hidden h-7 w-full max-w-[480px] items-center gap-2 rounded-lg bg-white/10 px-2 py-1 ring-1 ring-inset ring-white/10 md:flex">
           <div className="flex items-center gap-1 flex-1">
             {/* Lock Icon */}
             <div className="relative h-4 w-4">
@@ -85,7 +85,7 @@ export function BrowserMockup({ url = 'bilgenly.com', children }: BrowserMockupP
                 </g>
               </svg>
             </div>
-            <p className="font-['Inter',sans-serif] text-[13px] text-[#151515]">{url}</p>
+            <p className="font-['Inter',sans-serif] text-[13px] text-white/70">{url}</p>
           </div>
 
           {/* Refresh Icon */}
@@ -153,8 +153,16 @@ export function BrowserMockup({ url = 'bilgenly.com', children }: BrowserMockupP
         </div>
       </div>
 
-      {/* Content Area */}
-      <div className="h-[220px] bg-[rgba(135,132,132,0.15)] sm:h-[267px] dark:bg-[rgba(30,45,80,0.5)]">{children}</div>
+      {/* Content Area — aspect-video keeps height proportional to width at every breakpoint */}
+      <div className="relative aspect-video w-full overflow-hidden bg-[rgba(135,132,132,0.15)] dark:bg-[rgba(30,45,80,0.5)]">
+        {children}
+        {/* Bottom gradient bridge — fades dark video content into the page background
+            so both themes get the same smooth dissolve instead of an abrupt cutoff. */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute bottom-0 left-0 right-0 h-2/5 bg-gradient-to-b from-transparent to-white dark:to-[#0d1424]"
+        />
+      </div>
     </div>
   );
 }

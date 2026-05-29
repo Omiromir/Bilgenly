@@ -59,8 +59,8 @@ export const workspaceCopy: Record<"teacher" | "student", QuizBuilderCopy> = {
     successDescription:
       "Your self-study draft is ready. Move to review to refine questions, remove weak items, and finalize the practice set.",
     reviewReadyLabel: "The draft is ready for self-study",
-    saveLabel: "Save Draft",
-    publishLabel: "Save Quiz",
+    saveLabel: "Save to My Library",
+    publishLabel: "Save to My Library",
     launchLabel: "Start Self-Test",
   },
 };

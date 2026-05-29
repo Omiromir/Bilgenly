@@ -90,6 +90,15 @@ public class ClassInvitationService
         return invitations.Select(i => ToDto(i, classEntity.Name));
     }
 
+    public async Task<ClassInvitation?> GetInvitationByIdAsync(Guid id)
+        => await _invitationRepository.GetByIdAsync(id);
+
+    public async Task DeleteInvitationAsync(ClassInvitation invitation)
+    {
+        await _invitationRepository.DeleteAsync(invitation);
+        await _invitationRepository.SaveChangesAsync();
+    }
+
     private static ClassInvitationDto ToDto(ClassInvitation i, string className) => new()
     {
         Id = i.Id,

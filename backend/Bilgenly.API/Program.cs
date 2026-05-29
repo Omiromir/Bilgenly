@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using Bilgenly.Infrastructure.Services;
+using Bilgenly.Domain.Entities;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -100,6 +101,15 @@ builder.Services.AddCors(options =>
 });
 
 var app = builder.Build();
+
+// Apply pending migrations, then seed canonical badge definitions.
+// Idempotent — safe to run on every startup.
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    await db.Database.MigrateAsync();
+    await BadgeSeeder.SeedAsync(db);
+}
 
 app.UseDeveloperExceptionPage();        
 app.UseSwagger();

@@ -31,6 +31,20 @@ public class UserRepository : IUserRepository
             .ThenBy(u => u.Username)
             .ToListAsync();
 
+    public async Task<IEnumerable<User>> SearchStudentsAsync(string query, Guid excludeUserId)
+    {
+        var q = query.Trim().ToLower();
+        return await _context.Users
+            .Where(u =>
+                u.Role == UserRole.Student &&
+                !u.IsSuspended &&
+                u.Id != excludeUserId &&
+                (u.Email.ToLower().Contains(q) || u.Username.ToLower().Contains(q)))
+            .OrderBy(u => u.Username)
+            .Take(20)
+            .ToListAsync();
+    }
+
     public Task DeleteAsync(User user)
     {
         _context.Users.Remove(user);

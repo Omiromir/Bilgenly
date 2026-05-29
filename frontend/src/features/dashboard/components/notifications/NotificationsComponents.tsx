@@ -9,6 +9,7 @@ import {
   MailOpen,
   MailX,
   Send,
+  ShieldCheck,
   UserPlus,
   XCircle,
 } from "../../../../components/icons/AppIcons";
@@ -26,6 +27,7 @@ import type {
   ClassInvitationNotification,
   DashboardNotification,
   QuizFollowUpNotification,
+  QuizRemovedByAdminNotification,
 } from "./notificationTypes";
 import {
   formatDashboardNotificationDateTime,
@@ -64,23 +66,35 @@ export function NotificationList({
 
   return (
     <div className="space-y-4">
-      {notifications.map((notification) =>
-        notification.type === "class_invitation" ? (
-          <ClassInvitationNotificationCard
-            key={notification.id}
-            notification={notification}
-            onAccept={() => onAcceptInvitation?.(notification)}
-            onDecline={() => onDeclineInvitation?.(notification)}
-            onMarkRead={() => onMarkRead?.(notification)}
-          />
-        ) : (
+      {notifications.map((notification) => {
+        if (notification.type === "class_invitation") {
+          return (
+            <ClassInvitationNotificationCard
+              key={notification.id}
+              notification={notification}
+              onAccept={() => onAcceptInvitation?.(notification)}
+              onDecline={() => onDeclineInvitation?.(notification)}
+              onMarkRead={() => onMarkRead?.(notification)}
+            />
+          );
+        }
+        if (notification.type === "quiz_removed_by_admin") {
+          return (
+            <QuizRemovedByAdminNotificationCard
+              key={notification.id}
+              notification={notification}
+              onMarkRead={() => onMarkRead?.(notification)}
+            />
+          );
+        }
+        return (
           <QuizFollowUpNotificationCard
             key={notification.id}
             notification={notification}
             onMarkRead={() => onMarkRead?.(notification)}
           />
-        ),
-      )}
+        );
+      })}
     </div>
   );
 }
@@ -364,6 +378,107 @@ function QuizFollowUpNotificationCard({
               <Link to={destinationHref}>{actionLabel}</Link>
             </DashboardButton>
           </div>
+        </div>
+      </article>
+    </DashboardSurface>
+  );
+}
+
+interface QuizRemovedByAdminNotificationCardProps {
+  notification: QuizRemovedByAdminNotification;
+  onMarkRead?: () => void;
+}
+
+/**
+ * Shown when a moderator removes one of the user's quizzes. There's nothing
+ * for the user to "open" — the quiz is gone — so this card is informational
+ * only with a single "Mark read" affordance.
+ */
+function QuizRemovedByAdminNotificationCard({
+  notification,
+  onMarkRead,
+}: QuizRemovedByAdminNotificationCardProps) {
+  return (
+    <DashboardSurface
+      radius="xl"
+      padding="md"
+      className={cn(
+        "border transition",
+        notification.read
+          ? "bg-[var(--dashboard-surface)]"
+          : "bg-[var(--dashboard-danger-soft)]/35",
+      )}
+    >
+      <article className="space-y-5">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex min-w-0 items-start gap-4">
+            <div className={dashboardIconChipVariants({ tone: "danger", size: "lg" })}>
+              <ShieldCheck className="h-5 w-5" />
+            </div>
+
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="text-[1.15rem] font-semibold text-[var(--dashboard-text-strong)]">
+                  {notification.title}
+                </h3>
+                {!notification.read ? (
+                  <DashboardBadge tone="brand">Unread</DashboardBadge>
+                ) : null}
+                <DashboardBadge tone="danger">Admin action</DashboardBadge>
+              </div>
+
+              <p className="mt-2 text-sm leading-6 text-[var(--dashboard-text-soft)]">
+                {notification.message}
+              </p>
+            </div>
+          </div>
+
+          <div className={dashboardIconChipVariants({ tone: "danger", size: "md" })}>
+            <XCircle className="h-4 w-4" />
+          </div>
+        </div>
+
+        <div className="grid gap-3 md:grid-cols-2">
+          <div className={dashboardInsetBlockClassName}>
+            <p className={dashboardMetaTextClassName}>Removed quiz</p>
+            <p className="mt-1 font-semibold text-[var(--dashboard-text-strong)]">
+              {notification.quizTitle}
+            </p>
+          </div>
+          <div className={dashboardInsetBlockClassName}>
+            <p className={dashboardMetaTextClassName}>Received</p>
+            <p className="mt-1 font-semibold text-[var(--dashboard-text-strong)]">
+              {formatDashboardNotificationDateTime(notification.createdAt)}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--dashboard-border-soft)] pt-4">
+          <div className="flex items-center gap-2 text-sm text-[var(--dashboard-text-soft)]">
+            {notification.read ? (
+              <>
+                <MailOpen className="h-4 w-4" />
+                Marked as read
+              </>
+            ) : (
+              <>
+                <Bell className="h-4 w-4" />
+                Removed by {notification.senderName || "an administrator"}
+              </>
+            )}
+          </div>
+
+          {!notification.read ? (
+            <DashboardButton
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={onMarkRead}
+            >
+              <Check className="h-4 w-4" />
+              Mark read
+            </DashboardButton>
+          ) : null}
         </div>
       </article>
     </DashboardSurface>

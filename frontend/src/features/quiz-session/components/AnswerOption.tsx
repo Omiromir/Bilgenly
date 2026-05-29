@@ -48,7 +48,7 @@ export function AnswerOption({
           : isSubmitted && isIncorrectSelection
             ? "border-[var(--dashboard-danger)] bg-[var(--dashboard-danger-soft)]/35"
             : isSelected
-              ? "border-[var(--dashboard-success)] bg-[var(--dashboard-success-soft)]/65"
+              ? "border-[var(--dashboard-brand)] bg-[var(--dashboard-brand-soft)]"
               : "border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-elevated)] hover:border-[var(--dashboard-brand-soft)]",
       )}
       aria-pressed={isSelected}
@@ -61,7 +61,7 @@ export function AnswerOption({
             : isSubmitted && isIncorrectSelection
               ? "border-[var(--dashboard-danger)] bg-[var(--dashboard-danger)] text-white"
               : isSelected
-                ? "border-[var(--dashboard-success)] bg-[var(--dashboard-success)] text-white"
+                ? "border-[var(--dashboard-brand)] bg-[var(--dashboard-brand)] text-white"
                 : "border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface)] text-[var(--dashboard-text-soft)]",
         )}
       >

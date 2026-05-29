@@ -13,6 +13,7 @@ public class UserPreferences
     public bool NotifyEmailDeadlineReminders { get; set; } = true;
     public bool NotifyPushRealTimeUpdates { get; set; } = true;
     public bool NotifyPushWeeklySummaries { get; set; } = true;
+    public string? StudyReminderTime { get; set; }
     public DateTime UpdatedAt { get; set; }
 
     public User User { get; set; } = null!;

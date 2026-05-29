@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   getAssignmentAnalytics,
   getMyAnalytics,
   getQuizAnalytics,
 } from "../api/analyticsApi";
+import { useAuth } from "../../../app/providers/AuthProvider";
 import type {
   AssignmentAnalyticsDto,
   MyAnalyticsDto,
@@ -330,31 +332,38 @@ function toTeacherAssignmentAnalytics(
     .map((row) => row.completionTimestamp)
     .filter((timestamp): timestamp is string => Boolean(timestamp))
     .sort((left, right) => new Date(right).getTime() - new Date(left).getTime())[0];
+  // Only surface students who genuinely need teacher action:
+  //   • expired          — deadline passed, student never submitted
+  //   • attempts_exhausted — used every allowed attempt (possibly still failing)
+  //   • At Risk flag     — latest score < 50 %
+  //   • Needs Review flag — missed deadline / exhausted / score below threshold
+  //   • completed but still below threshold (edge case: threshold changed after submit)
+  //
+  // "active" (hasn't started) and "in_progress" (still taking) are normal
+  // operational states and must NOT appear here — showing them confused teachers
+  // into thinking students who were simply working were in trouble.
   const interventionStudents = rows
     .filter(
       (row) =>
-        row.status !== "completed" ||
+        row.status === "expired" ||
+        row.status === "attempts_exhausted" ||
         row.flags.length > 0 ||
-        (row.latestScore ?? 100) < threshold,
+        (row.status === "completed" && (row.latestScore ?? 100) < threshold),
     )
     .map((row) => ({
       studentName: row.student.fullName,
       score: row.latestScore,
       status: row.status,
       reason:
-        row.status === "active"
-          ? "Has not started the assigned quiz yet."
-          : row.status === "in_progress"
-            ? "Started the assigned quiz but has not finished."
-            : row.status === "expired"
-              ? "Missed the submission deadline."
-              : row.status === "attempts_exhausted"
-                ? "Used every allowed attempt."
-                : row.flags.includes("At Risk")
-                  ? "Latest score is in the at-risk range."
-                  : row.flags.includes("Needs Review")
-                    ? "Latest result suggests follow-up."
-                    : `Latest score is below ${threshold}%.`,
+        row.status === "expired"
+          ? "Missed the submission deadline."
+          : row.status === "attempts_exhausted"
+            ? "Used every allowed attempt without passing."
+            : row.flags.includes("At Risk")
+              ? "Latest score is below 50% — high-risk of falling behind."
+              : row.flags.includes("Needs Review")
+                ? "Score is below the intervention threshold."
+                : `Completed but scored below ${threshold}%.`,
     }));
 
   return {
@@ -430,13 +439,29 @@ export function useQuizAnalytics(quizId: string | null) {
   );
 }
 
+// useMyAnalytics uses React Query so the result is shared across all consumers
+// (StudentResultsPage + useProfile) — navigating between them hits the cache
+// rather than issuing a second network request.
+// The userId is included in the cache key so switching accounts never leaks data.
 export function useMyAnalytics(enabled = true) {
-  return useAsyncResource<MyAnalyticsDto>(
-    enabled,
-    [enabled],
-    getMyAnalytics,
-    "Unable to load student analytics.",
-  );
+  const { currentUser, token } = useAuth();
+  const userId = currentUser?.id ?? null;
+
+  const query = useQuery({
+    queryKey: ["myAnalytics", userId],
+    queryFn: getMyAnalytics,
+    enabled: enabled && Boolean(token && userId),
+    staleTime: 2 * 60 * 1000,
+    retry: 1,
+  });
+
+  return {
+    data: query.data ?? null,
+    isLoading: query.isLoading,
+    error: query.error
+      ? getRequestErrorMessage(query.error, "Unable to load student analytics.")
+      : null,
+  };
 }
 
 export interface AssignmentInsightData {

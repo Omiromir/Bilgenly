@@ -7,15 +7,19 @@ import {
   TrendingUp,
 } from "../../../components/icons/AppIcons";
 import {
+  Area,
+  AreaChart,
   CartesianGrid,
-  Line,
-  LineChart,
   ResponsiveContainer,
+  Tooltip,
   XAxis,
   YAxis,
+  type TooltipProps,
 } from "recharts";
 import { useStudentAttempts } from "../../../app/providers/StudentAttemptsProvider";
 import { useQuizSessions } from "../../../app/providers/QuizSessionProvider";
+import { useTeacherClasses } from "../../../app/providers/TeacherClassesProvider";
+import { getQuizFeedbackPolicy } from "../../../features/quiz-session/feedbackPolicy";
 import { DashboardPageHeader } from "../../../features/dashboard/components/DashboardPageHeader";
 import {
   DashboardButton,
@@ -70,6 +74,7 @@ export function StudentResultsPage() {
     isLoading: attemptsLoading,
     error: attemptsError,
   } = useStudentAttempts();
+  const { classes } = useTeacherClasses();
   const completedSessions = getCompletedSessionsForRole("student");
   const isLoading = analyticsState.isLoading || attemptsLoading;
   const [search, setSearch] = useState("");
@@ -85,6 +90,34 @@ export function StudentResultsPage() {
         ),
     [attempts],
   );
+
+  /**
+   * Look up `maxAttempts` for each assignment from the classes provider.
+   * Needed so we can decide whether the detailed review is locked for an
+   * assigned-quiz result row.
+   */
+  const assignmentMaxAttemptsById = useMemo(() => {
+    const map = new Map<string, number | null>();
+    for (const teacherClass of classes) {
+      for (const assignment of teacherClass.assignedQuizzes) {
+        map.set(assignment.assignmentId, assignment.maxAttempts);
+      }
+    }
+    return map;
+  }, [classes]);
+
+  /**
+   * Count completed attempts per assignment. Used to compute whether the
+   * student has exhausted their attempts for a given assignment.
+   */
+  const completedAttemptsByAssignmentId = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const attempt of completedAttempts) {
+      if (!attempt.assignmentId) continue;
+      map.set(attempt.assignmentId, (map.get(attempt.assignmentId) ?? 0) + 1);
+    }
+    return map;
+  }, [completedAttempts]);
 
   // Map backendAttemptId → points-based percentage from local session.
   // Used to override the backend's (correctAnswers/totalQuestions)-based score
@@ -134,7 +167,19 @@ export function StudentResultsPage() {
     const averageScore = Math.round(
       percentages.reduce((sum, p) => sum + p, 0) / percentages.length,
     );
-    const bestScore = Math.max(...percentages);
+
+    // Best score: pick the actual attempt to also surface which quiz/when —
+    // a bare lifetime max becomes meaningless once a student has ever scored
+    // 100% on any quiz (it just sits there forever with no context).
+    let bestScore = percentages[0];
+    let bestAttemptIndex = 0;
+    for (let i = 1; i < percentages.length; i += 1) {
+      if (percentages[i] > bestScore) {
+        bestScore = percentages[i];
+        bestAttemptIndex = i;
+      }
+    }
+    const bestAttempt = attemptSummaries[bestAttemptIndex];
     const completedCount = attemptSummaries.length;
 
     return [
@@ -151,8 +196,11 @@ export function StudentResultsPage() {
       {
         label: "Best Score",
         value: formatQuizScore(bestScore),
-        note:
-          bestScore === 100
+        // Show the quiz title + date so it's clear WHERE the personal best
+        // came from, instead of a fossilised lifetime number with no context.
+        note: bestAttempt
+          ? `${bestAttempt.quizTitle} · ${formatQuizAttemptDate(bestAttempt.dateTaken)}`
+          : bestScore === 100
             ? "Perfect result unlocked."
             : "Your strongest attempt so far.",
       },
@@ -167,11 +215,13 @@ export function StudentResultsPage() {
   const progressData = useMemo(
     () =>
       attemptSummaries
-        .slice(0, 6)
+        .slice(0, 10)
         .reverse()
         .map((attempt, index) => ({
-          label: `Attempt ${index + 1}`,
+          label: `#${index + 1}`,
           value: sessionPercentageByAttemptId.get(attempt.attemptId) ?? attempt.score,
+          quizTitle: attempt.quizTitle,
+          date: attempt.dateTaken ? new Date(attempt.dateTaken).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "",
         })),
     [attemptSummaries, sessionPercentageByAttemptId],
   );
@@ -223,18 +273,43 @@ export function StudentResultsPage() {
           const hasDetailedReview =
             Boolean(matchedSession) || attempt.questions.length > 0;
 
+          // Detailed review for assigned quizzes is locked until the student
+          // has used all attempts. For self-practice quizzes the review is
+          // always open.
+          const assignmentId =
+            matchedSession?.assignmentContext?.assignmentId ?? attempt.assignmentId ?? null;
+          const isAssigned = Boolean(assignmentId);
+          const maxAttempts = assignmentId
+            ? (assignmentMaxAttemptsById.get(assignmentId) ?? null)
+            : null;
+          const attemptsUsed = assignmentId
+            ? (completedAttemptsByAssignmentId.get(assignmentId) ?? 0)
+            : 0;
+          const reviewPolicy = getQuizFeedbackPolicy({
+            sourceType: matchedSession?.sourceType,
+            viewerRole: "student",
+            isAssigned,
+            attemptsUsed,
+            maxAttempts,
+            hasInProgressAttempt: false,
+          });
+          const reviewUnlocked = reviewPolicy.showDetailedReview;
+
           return {
             attempt,
             session: matchedSession,
             result,
             hasDetailedReview,
-            reviewHref: hasDetailedReview
-              ? buildSessionLink(
-                  matchedSession?.id ?? attempt.id,
-                  matchedSession?.quizId ?? attempt.quizId,
-                  matchedSession?.assignmentContext?.assignmentId,
-                )
-              : null,
+            reviewUnlocked,
+            reviewLockReason: reviewPolicy.lockReason,
+            reviewHref:
+              hasDetailedReview && reviewUnlocked
+                ? buildSessionLink(
+                    matchedSession?.id ?? attempt.id,
+                    matchedSession?.quizId ?? attempt.quizId,
+                    matchedSession?.assignmentContext?.assignmentId,
+                  )
+                : null,
             retakeHref: buildQuizLink(
               attempt.quizId,
               matchedSession?.assignmentContext?.assignmentId ?? attempt.assignmentId,
@@ -304,41 +379,116 @@ export function StudentResultsPage() {
 
       <SectionCard title="Score Progress">
         {isLoading ? (
-          <div className="h-[260px] animate-pulse rounded-2xl bg-[var(--dashboard-surface-muted)]" />
+          <div className="h-[300px] animate-pulse rounded-2xl bg-[var(--dashboard-surface-muted)]" />
         ) : progressData.length ? (
           <>
-            <div className="h-[260px]">
+            {/* Score band legend */}
+            <div className="mb-4 flex items-center gap-4 text-xs text-[var(--dashboard-text-faint)]">
+              <span className="flex items-center gap-1.5">
+                <span className="inline-block h-2.5 w-2.5 rounded-full bg-emerald-500" />
+                Great (≥80%)
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="inline-block h-2.5 w-2.5 rounded-full bg-amber-400" />
+                OK (60–79%)
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="inline-block h-2.5 w-2.5 rounded-full bg-red-400" />
+                Needs work (&lt;60%)
+              </span>
+            </div>
+
+            <div className="h-[300px]">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart
-                  data={progressData}
-                  margin={{ top: 8, right: 8, left: -14, bottom: 0 }}
-                >
-                  <CartesianGrid stroke="#E8EDF6" strokeDasharray="3 3" />
+                <AreaChart data={progressData} margin={{ top: 16, right: 16, left: -10, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="scoreGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#6366f1" stopOpacity={0.35} />
+                      <stop offset="100%" stopColor="#6366f1" stopOpacity={0.02} />
+                    </linearGradient>
+                    {/* Reference zones via stop colours */}
+                  </defs>
+
+                  {/* Horizontal reference bands */}
+                  <CartesianGrid stroke="var(--dashboard-border-soft)" strokeDasharray="4 4" vertical={false} />
+
                   <XAxis
                     dataKey="label"
-                    tick={{ fill: "#62708B", fontSize: 12 }}
-                    axisLine={{ stroke: "#D9E1EF" }}
+                    tick={{ fill: "var(--dashboard-text-faint)", fontSize: 12, fontWeight: 600 }}
+                    axisLine={false}
                     tickLine={false}
+                    dy={6}
                   />
                   <YAxis
                     domain={[0, 100]}
-                    tick={{ fill: "#62708B", fontSize: 12 }}
-                    axisLine={{ stroke: "#D9E1EF" }}
+                    tick={{ fill: "var(--dashboard-text-faint)", fontSize: 11 }}
+                    axisLine={false}
                     tickLine={false}
+                    tickFormatter={(v) => `${v}%`}
+                    width={38}
+                    ticks={[0, 25, 50, 60, 75, 80, 100]}
                   />
-                  <Line
+
+                  <Tooltip
+                    content={(props: TooltipProps<number, string>) => {
+                      const { active, payload } = props;
+                      if (!active || !payload?.length) return null;
+                      const d = payload[0].payload as { label: string; value: number; quizTitle: string; date: string };
+                      const pct = d.value;
+                      const color = pct >= 80 ? "#10b981" : pct >= 60 ? "#f59e0b" : "#f87171";
+                      const grade = pct >= 80 ? "🏆 Great" : pct >= 60 ? "👍 OK" : "📚 Keep going";
+                      return (
+                        <div className="min-w-[180px] rounded-xl border border-[var(--dashboard-border)] bg-[var(--dashboard-surface-elevated)] px-4 py-3 shadow-xl">
+                          <p className="mb-1 truncate text-xs font-semibold text-[var(--dashboard-text-muted)]">
+                            {d.date}
+                          </p>
+                          <p className="mb-2 truncate text-sm font-bold text-[var(--dashboard-text-strong)]">
+                            {d.quizTitle}
+                          </p>
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="text-2xl font-extrabold" style={{ color }}>
+                              {pct}%
+                            </span>
+                            <span className="rounded-full px-2 py-0.5 text-xs font-semibold" style={{ background: `${color}22`, color }}>
+                              {grade}
+                            </span>
+                          </div>
+                          {/* Mini progress bar */}
+                          <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-[var(--dashboard-border-soft)]">
+                            <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: color }} />
+                          </div>
+                        </div>
+                      );
+                    }}
+                    cursor={{ stroke: "#6366f1", strokeWidth: 1.5, strokeDasharray: "4 4" }}
+                  />
+
+                  <Area
                     type="monotone"
                     dataKey="value"
-                    stroke="#16B59D"
-                    strokeWidth={2.5}
-                    dot={{ r: 3.5, strokeWidth: 2, fill: "#fff" }}
+                    stroke="#6366f1"
+                    strokeWidth={3}
+                    fill="url(#scoreGradient)"
+                    dot={(dotProps: { cx: number; cy: number; payload: { value: number } }) => {
+                      const { cx, cy, payload } = dotProps;
+                      const pct = payload.value;
+                      const color = pct >= 80 ? "#10b981" : pct >= 60 ? "#f59e0b" : "#f87171";
+                      return (
+                        <circle
+                          key={`dot-${cx}-${cy}`}
+                          cx={cx}
+                          cy={cy}
+                          r={5}
+                          fill={color}
+                          stroke="#fff"
+                          strokeWidth={2.5}
+                        />
+                      );
+                    }}
+                    activeDot={{ r: 8, stroke: "#6366f1", strokeWidth: 2.5, fill: "#fff" }}
                   />
-                </LineChart>
+                </AreaChart>
               </ResponsiveContainer>
-            </div>
-            <div className="mt-2 flex items-center justify-center gap-2 text-sm text-[var(--dashboard-brand)]">
-              <span className="h-1.5 w-1.5 rounded-full bg-[var(--dashboard-brand)]" />
-              Score %
             </div>
           </>
         ) : (
@@ -395,7 +545,16 @@ export function StudentResultsPage() {
           </div>
         ) : recentResults.length ? (
           <div className="space-y-5">
-            {recentResults.map(({ attempt, session, result, reviewHref, retakeHref, hasDetailedReview }) => (
+            {recentResults.map(({
+              attempt,
+              session,
+              result,
+              reviewHref,
+              retakeHref,
+              hasDetailedReview,
+              reviewUnlocked,
+              reviewLockReason,
+            }) => (
               <article
                 key={attempt.id}
                 className="rounded-[22px] border border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-elevated)] px-5 py-5"
@@ -447,9 +606,12 @@ export function StudentResultsPage() {
                 </div>
 
                 <div className="mt-5 rounded-[12px] border border-[var(--dashboard-border)] bg-[var(--dashboard-brand-soft-alt)] px-4 py-3 text-sm text-[var(--dashboard-text-strong)]">
-                  {hasDetailedReview
-                    ? "Review feedback is saved with this attempt. Open the result to revisit each answer, explanation, and any Review Request context tied to this assigned quiz."
-                    : "Detailed per-question review is not available from the current backend summary payload yet. You can still reopen the quiz from your library or class workspace to view the overall result."}
+                  {!hasDetailedReview
+                    ? "Detailed per-question review is not available from the current backend summary payload yet. You can still reopen the quiz from your library or class workspace to view the overall result."
+                    : reviewUnlocked
+                      ? "Review feedback is saved with this attempt. Open the result to revisit each answer, explanation, and any Review Request context tied to this assigned quiz."
+                      : (reviewLockReason ??
+                          "This is an assigned quiz — detailed review unlocks after you've used all your attempts.")}
                 </div>
 
                 <div className="mt-5 flex gap-3">
@@ -459,7 +621,9 @@ export function StudentResultsPage() {
                     </DashboardButton>
                   ) : (
                     <DashboardButton type="button" size="lg" className="flex-1" disabled>
-                      Review Answers
+                      {hasDetailedReview && !reviewUnlocked
+                        ? "Review locked until attempts used"
+                        : "Review Answers"}
                     </DashboardButton>
                   )}
                   <DashboardButton asChild type="button" variant="secondary" size="lg">

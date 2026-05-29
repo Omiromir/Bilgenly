@@ -41,7 +41,17 @@ public class AuthController  : ControllerBase
     {
         var userId = Guid.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
         var user = await _authService.GetUserByIdAsync(userId);
-        if (user is null) return Unauthorized();
+        // Treat suspended/deleted users as fully unauthenticated. This is what
+        // the frontend polls for liveness — returning 401 here is the trigger
+        // that boots a suspended/deleted user out of their live session.
+        if (user is null) return Unauthorized(new { message = "Account not found." });
+        if (user.IsSuspended)
+        {
+            var reason = string.IsNullOrWhiteSpace(user.SuspensionReason)
+                ? "Your account has been suspended."
+                : $"Your account has been suspended: {user.SuspensionReason}";
+            return Unauthorized(new { message = reason, suspended = true });
+        }
 
         return Ok(new {
             userId = user.Id.ToString(),

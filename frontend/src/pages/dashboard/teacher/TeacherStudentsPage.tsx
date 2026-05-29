@@ -50,14 +50,14 @@ interface TeacherStudentRosterRow {
   rowId: string;
   classId: string;
   className: string;
+  // When showing "all classes", a student may belong to multiple classes.
+  // allClassNames lists every class; className is the primary (first) one.
+  allClassNames: string[];
   classSubject: string;
   inviteCode: string;
   quizCount: number;
   student: TeacherClassStudent;
   studentRef: string;
-  genderLabel: string;
-  averageGradeLabel: string;
-  missingDaysLabel: string;
 }
 
 function getInitials(fullName: string) {
@@ -82,13 +82,7 @@ function buildStudentReference(student: TeacherClassStudent) {
 function buildStudentRosterMetadata(student: TeacherClassStudent) {
   return {
     studentRef: buildStudentReference(student),
-    genderLabel: "—",
-    averageGradeLabel: "—",
-    missingDaysLabel: "—",
-  } satisfies Pick<
-    TeacherStudentRosterRow,
-    "studentRef" | "genderLabel" | "averageGradeLabel" | "missingDaysLabel"
-  >;
+  } satisfies Pick<TeacherStudentRosterRow, "studentRef">;
 }
 
 export function TeacherStudentsPage() {
@@ -106,21 +100,21 @@ export function TeacherStudentsPage() {
   const [classFilter, setClassFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] =
     useState<"all" | TeacherClassStudentStatus>("all");
-  const [gradeFilter, setGradeFilter] =
-    useState<"all" | "high" | "mid" | "needs-attention">("all");
   const [feedback, setFeedback] = useState<string | null>(null);
   const [isAddStudentsDialogOpen, setIsAddStudentsDialogOpen] = useState(false);
   const [addTargetClassId, setAddTargetClassId] = useState<string>("");
   const [selectedRowIds, setSelectedRowIds] = useState<string[]>([]);
   const deferredClassFilter = useDeferredValue(classFilter);
 
-  const rosterRows = useMemo<TeacherStudentRosterRow[]>(
+  // One row per student-class pair (used when a specific class is selected).
+  const allRosterRows = useMemo<TeacherStudentRosterRow[]>(
     () =>
       classes.flatMap((teacherClass) =>
         teacherClass.students.map((student) => ({
           rowId: `${teacherClass.id}-${student.id}`,
           classId: teacherClass.id,
           className: teacherClass.name,
+          allClassNames: [teacherClass.name],
           classSubject: teacherClass.subject,
           inviteCode: teacherClass.inviteCode,
           quizCount: teacherClass.quizCount,
@@ -131,16 +125,49 @@ export function TeacherStudentsPage() {
     [classes],
   );
 
+  // When showing all classes, merge rows for the same student (by email) into
+  // one row that lists all their classes. This prevents duplicates.
+  const rosterRows = useMemo<TeacherStudentRosterRow[]>(() => {
+    const emailKey = (email: string) => email.trim().toLowerCase();
+    const map = new Map<string, TeacherStudentRosterRow>();
+
+    for (const row of allRosterRows) {
+      const key = emailKey(row.student.email);
+      const existing = map.get(key);
+      if (existing) {
+        // Merge: append class name and keep the row with the most recent activity
+        map.set(key, {
+          ...existing,
+          allClassNames: [...existing.allClassNames, row.className],
+          // Keep the "best" status (joined > invited > others)
+          student:
+            row.student.status === "joined" && existing.student.status !== "joined"
+              ? row.student
+              : existing.student,
+        });
+      } else {
+        map.set(key, row);
+      }
+    }
+
+    return [...map.values()];
+  }, [allRosterRows]);
+
   const filteredRows = useMemo(() => {
-    return rosterRows.filter((row) => {
+    // When a specific class is selected, use per-class rows (no merging)
+    // so the user sees each student in that exact class context.
+    // When "all" is selected, use the deduplicated merged rows.
+    const sourceRows =
+      deferredClassFilter === "all" ? rosterRows : allRosterRows;
+
+    return sourceRows.filter((row) => {
       const matchesClass =
         deferredClassFilter === "all" ? true : row.classId === deferredClassFilter;
       const matchesStatus =
         statusFilter === "all" ? true : row.student.status === statusFilter;
-      const matchesGrade = gradeFilter === "all";
-      return matchesClass && matchesStatus && matchesGrade;
+      return matchesClass && matchesStatus;
     });
-  }, [deferredClassFilter, gradeFilter, rosterRows, statusFilter]);
+  }, [allRosterRows, deferredClassFilter, rosterRows, statusFilter]);
 
   const totalStudentsLabel = new Set(
     rosterRows.map((row) => row.student.email.trim().toLowerCase()),
@@ -206,28 +233,14 @@ export function TeacherStudentsPage() {
     }
 
     const csv = [
-      [
-        "ID",
-        "Student",
-        "Email",
-        "Gender",
-        "Class",
-        "Subject",
-        "Avg Grade",
-        "Missing Days",
-        "Status",
-        "Joined",
-      ].join(","),
+      ["ID", "Student", "Email", "Class", "Subject", "Status", "Joined"].join(","),
       ...filteredRows.map((row) =>
         [
           escapeCsvValue(row.studentRef),
           escapeCsvValue(row.student.fullName),
           escapeCsvValue(row.student.email),
-          escapeCsvValue(row.genderLabel),
           escapeCsvValue(row.className),
           escapeCsvValue(row.classSubject || "General"),
-          escapeCsvValue(row.averageGradeLabel),
-          escapeCsvValue(row.missingDaysLabel),
           escapeCsvValue(row.student.status),
           escapeCsvValue(
             formatTeacherClassDate(getTeacherClassStudentActivityDate(row.student)),
@@ -289,7 +302,6 @@ export function TeacherStudentsPage() {
           onClick={() => {
             setClassFilter("all");
             setStatusFilter("all");
-            setGradeFilter("all");
           }}
         >
           Clear filters
@@ -359,24 +371,6 @@ export function TeacherStudentsPage() {
 
               <label>
                 <select
-                  value={gradeFilter}
-                  onChange={(e) =>
-                    setGradeFilter(
-                      e.target.value as "all" | "high" | "mid" | "needs-attention",
-                    )
-                  }
-                  className={`${dashboardSelectVariants({ size: "md" })} h-10 min-w-[130px] rounded-[12px] border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-elevated)] px-3 text-sm`}
-                  aria-label="Filter by average grade"
-                >
-                  <option value="all">All grades</option>
-                  <option value="high">High (≥80%)</option>
-                  <option value="mid">Mid (60–79%)</option>
-                  <option value="needs-attention">Needs attention (&lt;60%)</option>
-                </select>
-              </label>
-
-              <label>
-                <select
                   value={statusFilter}
                   onChange={(event) =>
                     setStatusFilter(
@@ -409,7 +403,7 @@ export function TeacherStudentsPage() {
             emptyState
           ) : (
             <div className="overflow-hidden rounded-[18px] border border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-elevated)]">
-              <Table className="min-w-[1100px]">
+              <Table className="min-w-[700px]">
                 <TableHeader className="bg-[var(--dashboard-surface-muted)]">
                   <TableRow className="border-[var(--dashboard-border-soft)] hover:bg-[var(--dashboard-surface-muted)]">
                     <TableHead className="h-12 w-[48px] px-4">
@@ -433,16 +427,7 @@ export function TeacherStudentsPage() {
                       Student
                     </TableHead>
                     <TableHead className="h-12 px-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--dashboard-text-faint)]">
-                      Gender
-                    </TableHead>
-                    <TableHead className="h-12 px-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--dashboard-text-faint)]">
                       Class
-                    </TableHead>
-                    <TableHead className="h-12 px-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--dashboard-text-faint)]">
-                      Avg. grade
-                    </TableHead>
-                    <TableHead className="h-12 px-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--dashboard-text-faint)]">
-                      Missing days
                     </TableHead>
                     <TableHead className="h-12 px-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--dashboard-text-faint)]">
                       Member
@@ -508,19 +493,16 @@ export function TeacherStudentsPage() {
                         </TableCell>
 
                         <TableCell className="px-3 py-3 text-sm text-[var(--dashboard-text-soft)]">
-                          {row.genderLabel}
-                        </TableCell>
-
-                        <TableCell className="px-3 py-3 text-sm text-[var(--dashboard-text-soft)]">
-                          {row.className}
-                        </TableCell>
-
-                        <TableCell className="px-3 py-3 text-sm font-semibold text-[var(--dashboard-text-strong)]">
-                          {row.averageGradeLabel}
-                        </TableCell>
-
-                        <TableCell className="px-3 py-3 text-sm text-[var(--dashboard-text-soft)]">
-                          {row.missingDaysLabel}
+                          {row.allClassNames.length > 1 ? (
+                            <span title={row.allClassNames.join(", ")}>
+                              {row.allClassNames[0]}{" "}
+                              <span className="text-[var(--dashboard-text-faint)]">
+                                +{row.allClassNames.length - 1}
+                              </span>
+                            </span>
+                          ) : (
+                            row.className
+                          )}
                         </TableCell>
 
                         <TableCell className="px-3 py-3">
@@ -558,15 +540,22 @@ export function TeacherStudentsPage() {
                                   <Mail className="h-4 w-4" />
                                   Resend class invite
                                 </DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem
-                                  onClick={() => handleRemoveStudent(row)}
-                                  variant="destructive"
-                                  disabled={isArchivedClass}
-                                >
-                                  <Users className="h-4 w-4" />
-                                  Remove student
-                                </DropdownMenuItem>
+                                {/* Only show remove when student belongs to exactly one
+                                    class — when in multiple classes the teacher should
+                                    use the class detail page to remove from a specific class */}
+                                {row.allClassNames.length === 1 ? (
+                                  <>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem
+                                      onClick={() => handleRemoveStudent(row)}
+                                      variant="destructive"
+                                      disabled={isArchivedClass}
+                                    >
+                                      <Users className="h-4 w-4" />
+                                      Remove from {row.className}
+                                    </DropdownMenuItem>
+                                  </>
+                                ) : null}
                               </DropdownMenuContent>
                             </DropdownMenu>
                           </div>
@@ -582,7 +571,7 @@ export function TeacherStudentsPage() {
           {filteredRows.length ? (
             <div className="flex flex-col gap-3 text-sm text-[var(--dashboard-text-soft)] sm:flex-row sm:items-center sm:justify-between">
               <p>
-                1 to {filteredRows.length} of {rosterRows.length}
+                1 to {filteredRows.length} of {filteredRows.length}
               </p>
               <p>
                 Page 1 of 1

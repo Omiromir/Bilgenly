@@ -6,10 +6,12 @@ namespace Bilgenly.Application.Services;
 public class QuizService
 {
     private readonly IQuizRepository _quizRepository;
+    private readonly IAttemptRepository _attemptRepository;
 
-    public QuizService(IQuizRepository quizRepository)
+    public QuizService(IQuizRepository quizRepository, IAttemptRepository attemptRepository)
     {
         _quizRepository = quizRepository;
+        _attemptRepository = attemptRepository;
     }
 
     public async Task<QuizDto> CreateQuizAsync(CreateQuizDto dto, Guid userId, string username)
@@ -103,6 +105,15 @@ public class QuizService
         quiz.Title = dto.Title.Trim();
         quiz.Description = dto.Description.Trim();
         quiz.IsPublic = dto.IsPublic;
+
+        // Delete all attempts for this quiz before replacing its questions.
+        // Attempt rows carry AttemptAnswer FKs that point to the old Question/Answer
+        // GUIDs. Once DeleteQuizQuestionsAsync runs, those GUIDs no longer exist and
+        // the DB cascade would silently destroy the AttemptAnswer rows anyway —
+        // leaving Attempt shells with no answer data and broken analytics.
+        // Explicitly removing attempts first keeps the data consistent and ensures
+        // analytics starts clean after a quiz edit.
+        await _attemptRepository.DeleteByQuizIdAsync(quizId);
 
         // Wipe existing questions/answers via raw SQL (no EF change tracker involved).
         await _quizRepository.DeleteQuizQuestionsAsync(quizId);

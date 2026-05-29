@@ -1,5 +1,6 @@
 import {
   Bell,
+  Check,
   CircleAlert,
   CircleCheckBig,
   Info,
@@ -7,11 +8,13 @@ import {
   Menu,
   Settings,
   User,
+  X,
 } from "../../../components/icons/AppIcons";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router";
 import { useAuth } from "../../../app/providers/AuthProvider";
 import { useNotifications } from "../../../app/providers/NotificationsProvider";
+import { useTeacherClasses } from "../../../app/providers/TeacherClassesProvider";
 import { cn } from "../../../components/ui/utils";
 import {
   DashboardBadge,
@@ -25,7 +28,10 @@ import {
   getNotificationStatusLabel,
   getNotificationStatusTone,
 } from "./notifications/notificationUtils";
-import type { DashboardNotification } from "./notifications/notificationTypes";
+import type {
+  ClassInvitationNotification,
+  DashboardNotification,
+} from "./notifications/notificationTypes";
 import { useDashboardViewer } from "../hooks/useDashboardViewer";
 import { resolveAvatarUrl } from "../../profile/avatars";
 
@@ -40,9 +46,12 @@ export function DashboardHeader({ onOpenSidebar }: DashboardHeaderProps) {
     getNotificationsForRecipientIdentity,
     getUnreadCountForRecipientIdentity,
     markNotificationRead,
+    updateClassInvitationStatus,
   } = useNotifications();
+  const { joinClassByInviteCode, respondToClassInvitation } = useTeacherClasses();
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [pendingActionId, setPendingActionId] = useState<string | null>(null);
   const headerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -119,6 +128,38 @@ export function DashboardHeader({ onOpenSidebar }: DashboardHeaderProps) {
       : role === "teacher"
         ? "/dashboard/teacher/notifications"
         : userMeta.settingsPath;
+
+  const studentIdentity = { userId: currentUser?.id, email: currentUser?.email };
+
+  const handleAcceptInvitation = async (notification: ClassInvitationNotification) => {
+    if (pendingActionId) return;
+    setPendingActionId(notification.id);
+    try {
+      await joinClassByInviteCode(notification.inviteCode);
+      updateClassInvitationStatus(notification.id, "accepted");
+      respondToClassInvitation(
+        notification.relatedClassId,
+        notification.studentId,
+        "accepted",
+        studentIdentity,
+      );
+    } catch {
+      // swallow — full feedback is on the notifications page
+    } finally {
+      setPendingActionId(null);
+    }
+  };
+
+  const handleDeclineInvitation = (notification: ClassInvitationNotification) => {
+    if (pendingActionId) return;
+    updateClassInvitationStatus(notification.id, "declined");
+    respondToClassInvitation(
+      notification.relatedClassId,
+      notification.studentId,
+      "declined",
+      studentIdentity,
+    );
+  };
 
   const initials = userMeta.name
     .split(" ")
@@ -279,6 +320,38 @@ export function DashboardHeader({ onOpenSidebar }: DashboardHeaderProps) {
                               <p className="mt-1 text-[15px] leading-6 text-[var(--dashboard-text-soft)]">
                                 {notification.message}
                               </p>
+                              {notification.type === "class_invitation" &&
+                              notification.status === "pending" ? (
+                                <div className="mt-3 flex gap-2">
+                                  <DashboardButton
+                                    type="button"
+                                    size="xs"
+                                    disabled={pendingActionId === notification.id}
+                                    onClick={() => {
+                                      void handleAcceptInvitation(
+                                        notification as ClassInvitationNotification,
+                                      );
+                                    }}
+                                  >
+                                    <Check className="h-3.5 w-3.5" />
+                                    Accept
+                                  </DashboardButton>
+                                  <DashboardButton
+                                    type="button"
+                                    size="xs"
+                                    variant="secondary"
+                                    disabled={pendingActionId === notification.id}
+                                    onClick={() => {
+                                      handleDeclineInvitation(
+                                        notification as ClassInvitationNotification,
+                                      );
+                                    }}
+                                  >
+                                    <X className="h-3.5 w-3.5" />
+                                    Decline
+                                  </DashboardButton>
+                                </div>
+                              ) : null}
                               <p className="mt-2 text-sm text-[var(--dashboard-text-faint)]">
                                 {formatDashboardNotificationDateTime(
                                   notification.createdAt,

@@ -1,4 +1,4 @@
-import { useRef, type Dispatch, type SetStateAction } from "react";
+import { useRef, useState, useEffect, type Dispatch, type SetStateAction } from "react";
 import logoPng from "../../../assets/logo.png";
 import {
   experienceOptions,
@@ -152,30 +152,142 @@ export function PaceStep({ go, selected, setSelected }: ChoiceStepProps) {
   );
 }
 
+function TimePickerDropdown({
+  value,
+  onChange,
+  options,
+}: {
+  value: string;
+  onChange: (val: string) => void;
+  options: string[];
+}) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  // Close on outside click
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  // Scroll selected item into view when opening
+  const listRef = useRef<HTMLUListElement>(null);
+  useEffect(() => {
+    if (open && listRef.current) {
+      const selected = listRef.current.querySelector("[aria-selected='true']") as HTMLElement | null;
+      if (selected) {
+        selected.scrollIntoView({ block: "nearest" });
+      }
+    }
+  }, [open]);
+
+  return (
+    <div
+      ref={wrapRef}
+      style={{ position: "relative", display: "inline-block" }}
+    >
+      {/* Trigger button */}
+      <button
+        type="button"
+        className="ob-reminder-select-wrap"
+        onClick={() => setOpen((o) => !o)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        style={{ cursor: "pointer", userSelect: "none", minWidth: 160, justifyContent: "space-between" }}
+      >
+        <span style={{ fontWeight: 600, fontSize: 15 }}>{value}</span>
+        <svg
+          width="16" height="16" viewBox="0 0 24 24" fill="none"
+          stroke="currentColor" strokeWidth="2.5"
+          style={{ color: "#4F46E5", flexShrink: 0, transition: "transform 0.15s", transform: open ? "rotate(180deg)" : "none" }}
+        >
+          <path d="M6 9l6 6 6-6" />
+        </svg>
+      </button>
+
+      {/* Dropdown list — always opens upward */}
+      {open && (
+        <ul
+          ref={listRef}
+          role="listbox"
+          aria-label="Select reminder time"
+          style={{
+            position: "absolute",
+            bottom: "calc(100% + 8px)",
+            left: "50%",
+            transform: "translateX(-50%)",
+            minWidth: 180,
+            maxHeight: 260,
+            overflowY: "auto",
+            background: "#fff",
+            border: "1.5px solid #E5E7EB",
+            borderRadius: 14,
+            boxShadow: "0 8px 32px rgba(0,0,0,0.13)",
+            padding: "6px 0",
+            zIndex: 100,
+            listStyle: "none",
+            margin: 0,
+          }}
+        >
+          {options.map((t) => {
+            const isSelected = t === value;
+            return (
+              <li
+                key={t}
+                role="option"
+                aria-selected={isSelected}
+                onClick={() => { onChange(t); setOpen(false); }}
+                style={{
+                  padding: "9px 18px",
+                  fontSize: 14,
+                  fontWeight: isSelected ? 700 : 500,
+                  color: isSelected ? "#4F46E5" : "#111827",
+                  background: isSelected ? "#EEF2FF" : "transparent",
+                  cursor: "pointer",
+                  transition: "background 0.1s",
+                }}
+                onMouseEnter={(e) => {
+                  if (!isSelected) (e.currentTarget as HTMLElement).style.background = "#F5F3FF";
+                }}
+                onMouseLeave={(e) => {
+                  if (!isSelected) (e.currentTarget as HTMLElement).style.background = "transparent";
+                }}
+              >
+                {t}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 export function ReminderStep({ onContinue, onSkip, reminderTime, setReminderTime }: ReminderStepProps) {
   return (
     <div className="ob-reminder-body">
       <span className="ob-reminder-icon">🔔</span>
       <h2 className="ob-step-title">Set a daily study reminder</h2>
-      <p className="ob-step-subtitle" style={{ marginBottom: 24 }}>
+      <p className="ob-step-subtitle" style={{ marginBottom: 32 }}>
         Stay consistent — we'll nudge you at the right time. You can always change this later.
       </p>
-      <div className="ob-reminder-select-wrap">
-        <select
-          className="ob-reminder-select"
-          value={reminderTime}
-          onChange={(e) => setReminderTime(e.target.value)}
-          aria-label="Select reminder time"
-        >
-          {reminderTimes.map((t) => <option key={t}>{t}</option>)}
-        </select>
-      </div>
+      <TimePickerDropdown
+        value={reminderTime}
+        onChange={setReminderTime}
+        options={reminderTimes}
+      />
       <div className="ob-reminder-footer">
         <button className="ob-btn-later" type="button" onClick={onSkip}>
           I'll do this later
         </button>
         <button className="ob-btn-save" type="button" onClick={onContinue}>
-          Save
+          Save reminder
         </button>
       </div>
     </div>

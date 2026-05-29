@@ -9,15 +9,18 @@ public class ModerationService
     private readonly IReportRepository _reportRepository;
     private readonly IUserRepository _userRepository;
     private readonly IQuizRepository _quizRepository;
+    private readonly INotificationRepository _notificationRepository;
 
     public ModerationService(
         IReportRepository reportRepository,
         IUserRepository userRepository,
-        IQuizRepository quizRepository)
+        IQuizRepository quizRepository,
+        INotificationRepository notificationRepository)
     {
         _reportRepository = reportRepository;
         _userRepository = userRepository;
         _quizRepository = quizRepository;
+        _notificationRepository = notificationRepository;
     }
 
     public async Task<ModeratorDashboardDto> GetDashboardAsync()
@@ -229,6 +232,139 @@ public class ModerationService
             SuspensionReason = u.SuspensionReason,
             CreatedAt = u.CreatedAt,
         });
+    }
+
+    public async Task<string?> DeleteQuizAsync(Guid quizId, Guid moderatorId)
+    {
+        // Cheap existence probe — saves us from running a transaction for a
+        // quiz that's already gone and lets us surface a clear 404-style error.
+        // GetByIdShallowAsync also includes the owning User which we need for
+        // the deletion notification, so we don't pay a second round-trip.
+        var quiz = await _quizRepository.GetByIdShallowAsync(quizId);
+        if (quiz is null) return "Quiz not found.";
+
+        // Capture owner + title BEFORE the cascade — once the row is gone
+        // we can't recover them from the now-detached entity.
+        var ownerId = quiz.UserId;
+        var ownerEmail = quiz.User?.Email ?? string.Empty;
+        var quizTitle = quiz.Title;
+
+        // Cascade through every table that holds a FK to this quiz
+        // (AttemptAnswers, Attempts, Assignments, Answers, Questions) inside
+        // a single transaction so a mid-cascade failure leaves the DB clean.
+        var deleted = await _quizRepository.DeleteQuizCascadeAsync(quizId);
+        if (!deleted) return "Quiz could not be deleted.";
+
+        // Notify the owner. Failing to write the notification must not
+        // resurrect the deleted quiz, so we swallow notification-side
+        // errors and just log via the empty catch — the moderation action
+        // already succeeded.
+        try
+        {
+            var moderator = await _userRepository.GetByIdAsync(moderatorId);
+            var notification = new Notification
+            {
+                Id = Guid.NewGuid(),
+                Type = "quiz_removed_by_admin",
+                RecipientUserId = ownerId,
+                RecipientEmail = ownerEmail,
+                Title = "Your quiz was removed",
+                Message = $"\"{quizTitle}\" was removed by an administrator. Any attempts and class assignments tied to it have also been cleared.",
+                ActionType = string.Empty,
+                RelatedClassId = string.Empty,
+                RelatedClassName = string.Empty,
+                SenderName = moderator?.Username ?? "Administrator",
+                SenderEmail = moderator?.Email ?? string.Empty,
+                StudentId = string.Empty,
+                StudentName = string.Empty,
+                StudentEmail = string.Empty,
+                Status = "sent",
+                QuizId = quizId.ToString(),
+                QuizTitle = quizTitle,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow,
+            };
+            await _notificationRepository.AddAsync(notification);
+            await _notificationRepository.SaveChangesAsync();
+        }
+        catch
+        {
+            // Notification failure is best-effort — don't propagate, the
+            // quiz is already deleted and the admin shouldn't see a 500.
+        }
+
+        return null;
+    }
+
+    public async Task<AdminAnalyticsDto> GetAnalyticsAsync()
+    {
+        var users = (await _userRepository.GetAllAsync()).ToList();
+        var quizzes = (await _quizRepository.GetAllForModerationAsync()).ToList();
+
+        var today = DateTime.UtcNow.Date;
+        var startDate = today.AddDays(-29); // last 30 days inclusive
+
+        // Pre-build a bucket per day so missing days still render as zero.
+        var usersByDay = Enumerable.Range(0, 30)
+            .ToDictionary(offset => startDate.AddDays(offset), _ => 0);
+        var quizzesByDay = Enumerable.Range(0, 30)
+            .ToDictionary(offset => startDate.AddDays(offset), _ => 0);
+
+        foreach (var user in users)
+        {
+            var day = user.CreatedAt.Date;
+            if (day >= startDate && day <= today)
+                usersByDay[day] = usersByDay[day] + 1;
+        }
+        foreach (var quiz in quizzes)
+        {
+            var day = quiz.CreatedAt.Date;
+            if (day >= startDate && day <= today)
+                quizzesByDay[day] = quizzesByDay[day] + 1;
+        }
+
+        var roleBreakdown = users
+            .GroupBy(u => u.Role.ToString())
+            .Select(g => new AdminAnalyticsRoleBreakdownDto
+            {
+                Role = g.Key,
+                Count = g.Count(),
+            })
+            .OrderByDescending(x => x.Count)
+            .ToList();
+
+        var weekStart = today.AddDays(-6);
+        var newUsersWeek = users.Count(u => u.CreatedAt.Date >= weekStart);
+        var newQuizzesWeek = quizzes.Count(q => q.CreatedAt.Date >= weekStart);
+
+        return new AdminAnalyticsDto
+        {
+            TotalUsers = users.Count,
+            TotalQuizzes = quizzes.Count,
+            TotalStudents = users.Count(u => u.Role.ToString() == "Student"),
+            TotalTeachers = users.Count(u => u.Role.ToString() == "Teacher"),
+            TotalModerators = users.Count(u => u.Role.ToString() == "Moderator"),
+            SuspendedUsers = users.Count(u => u.IsSuspended),
+            NewUsersLast7Days = newUsersWeek,
+            NewQuizzesLast7Days = newQuizzesWeek,
+            RoleBreakdown = roleBreakdown,
+            UsersOverTime = usersByDay
+                .OrderBy(kv => kv.Key)
+                .Select(kv => new AdminAnalyticsTimeSeriesPointDto
+                {
+                    Date = kv.Key.ToString("yyyy-MM-dd"),
+                    Value = kv.Value,
+                })
+                .ToList(),
+            QuizzesOverTime = quizzesByDay
+                .OrderBy(kv => kv.Key)
+                .Select(kv => new AdminAnalyticsTimeSeriesPointDto
+                {
+                    Date = kv.Key.ToString("yyyy-MM-dd"),
+                    Value = kv.Value,
+                })
+                .ToList(),
+        };
     }
 
     private static ReportDto ToReportDto(Report r) => new()

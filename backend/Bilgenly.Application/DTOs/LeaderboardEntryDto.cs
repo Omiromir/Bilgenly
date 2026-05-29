@@ -7,4 +7,5 @@ public class LeaderboardEntryDto
     public string Username { get; set; } = string.Empty;
     public double AverageScore { get; set; }
     public bool IsCurrentUser { get; set; }
+    public string? AvatarUrl { get; set; }
 }

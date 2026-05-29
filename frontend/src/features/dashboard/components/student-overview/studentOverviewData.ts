@@ -37,6 +37,12 @@ interface StudentOverviewDataInput {
    * (earnedPoints/totalPoints)-based value.
    */
   correctedScoreByAttemptId?: Map<string, number>;
+  /**
+   * Backend-authoritative badge count from /api/achievements.
+   * When provided, replaces the local heuristic so Overview and Badges page
+   * always show the same number.
+   */
+  badgesEarned?: number;
 }
 
 function getLocalDayStart(value: string) {
@@ -172,6 +178,7 @@ function buildOverviewStats(
   completedAttempts: MyAttemptDto[],
   attemptsLoading: boolean,
   correctedScores?: Map<string, number>,
+  badgesEarnedOverride?: number,
 ) {
   // Prefer session-based (points-accurate) percentage over backend score
   const scores = completedAttempts.map(
@@ -185,14 +192,19 @@ function buildOverviewStats(
   const perfectScores = scores.filter((score) => score === 100).length;
   const { current, best } = getStreaksFromAttempts(completedAttempts);
   const completedThisWeek = getCompletedThisWeek(completedAttempts);
-  const badgeCount = getUnlockedBadgeCount(
-    studentSources,
-    completedAttempts,
-    averageScore,
-    perfectScores,
-    current,
-    completedThisWeek,
-  );
+  // Prefer backend-authoritative count; fall back to local heuristic only when
+  // the achievements API hasn't responded yet.
+  const badgeCount =
+    badgesEarnedOverride !== undefined
+      ? badgesEarnedOverride
+      : getUnlockedBadgeCount(
+          studentSources,
+          completedAttempts,
+          averageScore,
+          perfectScores,
+          current,
+          completedThisWeek,
+        );
 
   const latestDetailText =
     latestAttempt !== null
@@ -266,9 +278,10 @@ export function buildStudentOverviewData({
   completedAttempts,
   attemptsLoading,
   correctedScoreByAttemptId,
+  badgesEarned,
 }: StudentOverviewDataInput) {
   return {
-    stats: buildOverviewStats(studentSources, completedAttempts, attemptsLoading, correctedScoreByAttemptId),
+    stats: buildOverviewStats(studentSources, completedAttempts, attemptsLoading, correctedScoreByAttemptId, badgesEarned),
     recentResults: buildRecentResults(completedAttempts, correctedScoreByAttemptId),
   };
 }

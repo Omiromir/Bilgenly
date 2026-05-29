@@ -3,6 +3,7 @@ import {
   ArrowRight,
   CheckCircle2,
   Info,
+  Lock,
 } from "../../../components/icons/AppIcons";
 import {
   DashboardBadge,
@@ -10,6 +11,7 @@ import {
   DashboardSurface,
 } from "../../dashboard/components/DashboardPrimitives";
 import type { QuizQuestionRecord } from "../../dashboard/components/quiz-library/quizLibraryTypes";
+import type { FeedbackPolicy } from "../feedbackPolicy";
 import { AnswerOption } from "./AnswerOption";
 import { QuestionFeedbackPanel } from "./QuestionFeedbackPanel";
 
@@ -28,7 +30,22 @@ interface QuizQuestionCardProps {
   canGoPrevious: boolean;
   canGoNext: boolean;
   isLastQuestion: boolean;
+  isFinishing?: boolean;
+  /**
+   * Controls how much answer feedback is shown. Defaults to fully open so
+   * self-practice keeps its current behavior. Assigned quizzes pass a locked
+   * policy when attempts remain.
+   */
+  feedbackPolicy?: FeedbackPolicy;
 }
+
+const DEFAULT_OPEN_POLICY: FeedbackPolicy = {
+  showImmediateCorrectAnswer: true,
+  showImmediateExplanation: true,
+  showDetailedReview: true,
+  showSummaryOnly: false,
+  lockReason: null,
+};
 
 export function QuizQuestionCard({
   question,
@@ -45,7 +62,12 @@ export function QuizQuestionCard({
   canGoPrevious,
   canGoNext,
   isLastQuestion,
+  isFinishing = false,
+  feedbackPolicy = DEFAULT_OPEN_POLICY,
 }: QuizQuestionCardProps) {
+  // When the policy hides the answer key, we never expose correct/incorrect
+  // visual cues on the option buttons or the post-submit badge.
+  const revealAnswerKey = feedbackPolicy.showImmediateCorrectAnswer;
   const correctIndexes =
     question.selectionMode === "multiple"
       ? question.correctIndexes?.length
@@ -86,7 +108,7 @@ export function QuizQuestionCard({
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--dashboard-text-faint)]">
               Question
             </p>
-            <h2 className="mt-1 text-[1.2rem] font-semibold text-[#18af97]">
+            <h2 className="mt-1 text-[1.2rem] font-semibold text-[var(--dashboard-brand)]">
               {questionNumber} of {totalQuestions}
             </h2>
           </div>
@@ -126,14 +148,21 @@ export function QuizQuestionCard({
           </div>
 
           {submitted ? (
-            <DashboardBadge tone={isCorrect ? "success" : "warning"} size="md">
-              {isCorrect ? (
-                <CheckCircle2 className="h-4 w-4" />
-              ) : (
-                <Info className="h-4 w-4" />
-              )}
-              {isCorrect ? "Correct" : "Reviewed"}
-            </DashboardBadge>
+            revealAnswerKey ? (
+              <DashboardBadge tone={isCorrect ? "success" : "warning"} size="md">
+                {isCorrect ? (
+                  <CheckCircle2 className="h-4 w-4" />
+                ) : (
+                  <Info className="h-4 w-4" />
+                )}
+                {isCorrect ? "Correct" : "Reviewed"}
+              </DashboardBadge>
+            ) : (
+              <DashboardBadge tone="neutral" size="md">
+                <Lock className="h-4 w-4" />
+                Answer saved
+              </DashboardBadge>
+            )
           ) : null}
         </div>
 
@@ -155,8 +184,14 @@ export function QuizQuestionCard({
               index={optionIndex}
               isSelected={selectedIndices.includes(optionIndex)}
               isSubmitted={submitted}
-              isCorrectAnswer={submitted && correctIndexes.includes(optionIndex)}
+              // When the policy hides the answer key, mark every option as
+              // neutral after submit. The student sees only what they chose,
+              // not whether it was correct.
+              isCorrectAnswer={
+                revealAnswerKey && submitted && correctIndexes.includes(optionIndex)
+              }
               isIncorrectSelection={
+                revealAnswerKey &&
                 submitted &&
                 selectedIndices.includes(optionIndex) &&
                 !correctIndexes.includes(optionIndex)
@@ -171,7 +206,7 @@ export function QuizQuestionCard({
             <DashboardButton
               type="button"
               size="lg"
-              className="min-w-[180px] rounded-[16px] bg-[var(--dashboard-success)] hover:brightness-110"
+              className="min-w-[180px] rounded-[16px] bg-[var(--dashboard-brand)] hover:brightness-110"
               onClick={onSubmit}
               disabled={selectedIndices.length === 0 && question.required !== false}
             >
@@ -186,9 +221,14 @@ export function QuizQuestionCard({
           isCorrect={Boolean(isCorrect)}
           correctAnswerLabel={correctAnswerLabel}
           selectedAnswerLabel={selectedAnswerLabel}
-          explanation={question.explanation}
+          explanation={
+            feedbackPolicy.showImmediateExplanation ? question.explanation : undefined
+          }
           isLastQuestion={isLastQuestion}
+          isFinishing={isFinishing}
           onContinue={onContinue}
+          hideAnswerKey={!feedbackPolicy.showImmediateCorrectAnswer}
+          lockReason={feedbackPolicy.lockReason}
         />
       ) : null}
     </div>

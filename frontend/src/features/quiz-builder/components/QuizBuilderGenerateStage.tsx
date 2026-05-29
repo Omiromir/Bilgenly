@@ -1,11 +1,14 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   AlertCircle,
   CheckCircle2,
+  ChevronDown,
   Download,
   PencilLine,
   PlayCircle,
   RefreshCw,
+  Save,
+  Wand2,
   XCircle,
 } from "../../../components/icons/AppIcons";
 import { cn } from "../../../components/ui/utils";
@@ -33,14 +36,102 @@ interface QuizBuilderGenerateStageProps {
   handleCancelGeneration: () => void;
   handleDownloadQuizExport: (format: QuizExportFormat) => void;
   handleGenerateQuiz: () => void;
+  handleMockGenerate?: () => void;
   handleOpenQuizFlow: (targetStatus: "draft") => void;
   handleRetryGeneration: () => void;
+  handleSaveToLibrary: () => void;
   mode: "teacher" | "student";
   parsedSource: ParsedSource | null;
   questionsCount: number;
   setGenerationState: (value: GenerationState) => void;
   setHasEnteredReview: (value: boolean) => void;
   validationIssues: ValidationIssue[];
+}
+
+const EXPORT_OPTIONS: { value: QuizExportFormat; label: string }[] = [
+  { value: "json", label: "JSON" },
+  { value: "txt", label: "Text" },
+  { value: "xml", label: "Moodle XML" },
+];
+
+function ExportControl({
+  onDownload,
+}: {
+  onDownload: (format: QuizExportFormat) => void;
+}) {
+  const [format, setFormat] = useState<QuizExportFormat>("json");
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function handleOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handleOutside);
+    return () => document.removeEventListener("mousedown", handleOutside);
+  }, [open]);
+
+  const selected = EXPORT_OPTIONS.find((o) => o.value === format) ?? EXPORT_OPTIONS[0]!;
+
+  return (
+    <div
+      ref={ref}
+      className="relative flex items-center overflow-visible rounded-[12px] border border-[var(--dashboard-border-soft)]"
+      role="group"
+      aria-label="Export quiz"
+    >
+      {/* Format picker trigger */}
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex h-9 items-center gap-1.5 border-r border-[var(--dashboard-border-soft)] px-3 text-xs font-medium text-[var(--dashboard-text-soft)] transition hover:bg-[var(--dashboard-surface-muted)] hover:text-[var(--dashboard-text-strong)]"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+      >
+        {selected.label}
+        <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", open && "rotate-180")} />
+      </button>
+
+      {/* Download button */}
+      <button
+        type="button"
+        onClick={() => onDownload(format)}
+        className="flex h-9 w-9 shrink-0 items-center justify-center text-[var(--dashboard-text-soft)] transition hover:bg-[var(--dashboard-surface-muted)] hover:text-[var(--dashboard-text-strong)]"
+        title={`Download as ${selected.label}`}
+        aria-label={`Download as ${selected.label}`}
+      >
+        <Download className="h-4 w-4" />
+      </button>
+
+      {/* Custom dropdown */}
+      {open ? (
+        <div
+          role="listbox"
+          aria-label="Export format"
+          className="absolute bottom-full left-0 z-50 mb-1.5 min-w-[130px] overflow-hidden rounded-[12px] border border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-elevated)] py-1 shadow-[var(--dashboard-shadow-overlay)]"
+        >
+          {EXPORT_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              role="option"
+              aria-selected={opt.value === format}
+              onClick={() => { setFormat(opt.value); setOpen(false); }}
+              className={cn(
+                "flex w-full items-center px-3 py-2 text-xs font-medium transition",
+                opt.value === format
+                  ? "bg-[var(--dashboard-brand-soft)] text-[var(--dashboard-brand)]"
+                  : "text-[var(--dashboard-text-soft)] hover:bg-[var(--dashboard-surface-muted)] hover:text-[var(--dashboard-text-strong)]",
+              )}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 const STEP_THRESHOLDS = [0, 30, 120] as const;
@@ -64,8 +155,10 @@ export function QuizBuilderGenerateStage({
   handleCancelGeneration,
   handleDownloadQuizExport,
   handleGenerateQuiz,
+  handleMockGenerate,
   handleOpenQuizFlow,
   handleRetryGeneration,
+  handleSaveToLibrary,
   mode,
   parsedSource,
   questionsCount,
@@ -73,7 +166,7 @@ export function QuizBuilderGenerateStage({
   setHasEnteredReview,
   validationIssues,
 }: QuizBuilderGenerateStageProps) {
-  const [exportFormat, setExportFormat] = useState<QuizExportFormat>("json");
+  const isDev = import.meta.env.DEV;
   const steps = [
     { label: "Parsing source", sublabel: "Reading & chunking document" },
     { label: "Generating questions", sublabel: "AI building Q&A pairs" },
@@ -268,14 +361,28 @@ export function QuizBuilderGenerateStage({
                 <p className="text-sm leading-6 text-[var(--dashboard-text-soft)]">
                   Large PDFs can take 3–5 minutes. Your source is being processed securely.
                 </p>
-                <DashboardButton
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleCancelGeneration}
-                >
-                  Cancel
-                </DashboardButton>
+                <div className="flex items-center gap-2">
+                  {isDev && handleMockGenerate ? (
+                    <button
+                      type="button"
+                      onClick={handleMockGenerate}
+                      className="flex items-center gap-1.5 rounded-[10px] border border-dashed border-amber-400/60 bg-amber-50/60 px-3 py-1.5 text-xs font-semibold text-amber-700 transition hover:bg-amber-400/20 active:scale-[0.97] dark:border-amber-500/40 dark:bg-amber-950/30 dark:text-amber-400"
+                      title="DEV: skip AI, return mock quiz instantly"
+                    >
+                      <Wand2 className="h-3.5 w-3.5" />
+                      <span className="rounded bg-amber-400/25 px-1 text-[9px] font-bold uppercase tracking-wider">DEV</span>
+                      Mock result
+                    </button>
+                  ) : null}
+                  <DashboardButton
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleCancelGeneration}
+                  >
+                    Cancel
+                  </DashboardButton>
+                </div>
               </div>
             </div>
 
@@ -317,7 +424,7 @@ export function QuizBuilderGenerateStage({
               Your source and settings are still in place. Restart generation whenever
               you are ready.
             </p>
-            <div className="mt-5 flex gap-3">
+            <div className="mt-5 flex flex-wrap gap-3">
               <DashboardButton type="button" size="lg" onClick={handleRetryGeneration}>
                 <RefreshCw className="h-4.5 w-4.5" />
                 Resume generation
@@ -349,7 +456,7 @@ export function QuizBuilderGenerateStage({
               No data was lost. Try reducing the number of questions or replacing weak
               source sections first.
             </p>
-            <div className="mt-5 flex gap-3">
+            <div className="mt-5 flex flex-wrap gap-3">
               <DashboardButton type="button" size="lg" onClick={handleRetryGeneration}>
                 <RefreshCw className="h-4.5 w-4.5" />
                 Retry
@@ -419,65 +526,72 @@ export function QuizBuilderGenerateStage({
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2">
+              {/* ── Primary actions ── */}
               <DashboardButton
                 type="button"
                 size="lg"
-                variant={mode === "student" ? "primary" : "soft"}
-                onClick={() => handleOpenQuizFlow("draft")}
-              >
-                <PlayCircle className="h-4.5 w-4.5" />
-                {copy.launchLabel}
-              </DashboardButton>
-              <DashboardButton
-                type="button"
-                size="lg"
-                variant={mode === "student" ? "secondary" : "primary"}
-                onClick={() => {
-                  setHasEnteredReview(true);
-                }}
+                variant="primary"
+                onClick={() => setHasEnteredReview(true)}
               >
                 <PencilLine className="h-4.5 w-4.5" />
                 {mode === "student" ? "Review Practice Set" : "Review Questions"}
               </DashboardButton>
-              <DashboardButton
-                type="button"
-                variant="secondary"
-                size="lg"
-                onClick={handleGenerateQuiz}
-              >
-                <RefreshCw className="h-4.5 w-4.5" />
-                Regenerate
-              </DashboardButton>
-              <div
-                className="flex items-center gap-1 rounded-[var(--radius-lg)] border border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-muted)] p-1"
-                role="group"
-                aria-label="Export quiz"
-              >
-                <select
-                  value={exportFormat}
-                  onChange={(event) =>
-                    setExportFormat(event.target.value as QuizExportFormat)
-                  }
-                  aria-label="Export format"
-                  className="h-8 cursor-pointer rounded-[calc(var(--radius-lg)-4px)] border-0 bg-transparent px-2 text-xs font-medium text-[var(--dashboard-text-soft)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--dashboard-brand)] focus-visible:ring-offset-1"
-                >
-                  <option value="json">JSON</option>
-                  <option value="txt">Text</option>
-                  <option value="xml">Moodle XML</option>
-                </select>
+
+              {mode !== "student" ? (
                 <DashboardButton
                   type="button"
+                  size="lg"
                   variant="secondary"
-                  size="icon"
-                  className="h-8 w-8 shrink-0"
-                  onClick={() => handleDownloadQuizExport(exportFormat)}
-                  title={`Export as ${exportFormat.toUpperCase()}`}
-                  aria-label={`Export as ${exportFormat.toUpperCase()}`}
+                  onClick={handleSaveToLibrary}
                 >
-                  <Download className="h-4 w-4" />
+                  <Save className="h-4.5 w-4.5" />
+                  Save to My Library
                 </DashboardButton>
-              </div>
+              ) : (
+                <DashboardButton
+                  type="button"
+                  size="lg"
+                  variant="secondary"
+                  onClick={handleSaveToLibrary}
+                >
+                  <Save className="h-4.5 w-4.5" />
+                  Save
+                </DashboardButton>
+              )}
+
+              {/* ── Divider ── */}
+              <div className="hidden h-8 w-px bg-[var(--dashboard-border-soft)] sm:block" />
+
+              {/* ── Utility icon buttons ── */}
+              <DashboardButton
+                type="button"
+                size="icon"
+                variant="ghost"
+                onClick={() => handleOpenQuizFlow("draft")}
+                title={copy.launchLabel}
+                aria-label={copy.launchLabel}
+              >
+                <PlayCircle className="h-4.5 w-4.5" />
+              </DashboardButton>
+
+              <DashboardButton
+                type="button"
+                size="icon"
+                variant="ghost"
+                onClick={handleGenerateQuiz}
+                title="Regenerate"
+                aria-label="Regenerate"
+              >
+                <RefreshCw className="h-4.5 w-4.5" />
+              </DashboardButton>
+
+              {/* ── Export (teacher-only) ── */}
+              {mode !== "student" ? (
+                <ExportControl
+                  onDownload={handleDownloadQuizExport}
+                />
+              ) : null}
             </div>
           </>
         ) : null}

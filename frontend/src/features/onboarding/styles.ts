@@ -197,4 +197,85 @@ export const onboardingStyles = `
     .ob-step-title { font-size: 18px; }
     .ob-option-icon { width: 36px; height: 36px; min-width: 36px; font-size: 18px; }
   }
+
+  /* ── Dark mode ── */
+  .dark .ob-page { background: #0d1424; }
+
+  .dark .ob-back-btn { color: #9aa8c6; }
+  .dark .ob-back-btn:hover { background: #18233b; color: #dde6f7; }
+
+  .dark .ob-progress-track { background: #223150; }
+  .dark .ob-progress-fill { background: #7a72ff; }
+
+  .dark .ob-step-title { color: #f5f8ff; }
+  .dark .ob-step-subtitle { color: #9aa8c6; }
+
+  .dark .ob-option {
+    background: #111b2f;
+    border-color: #2a3858;
+  }
+  .dark .ob-option:hover { border-color: #7a72ff; background: rgba(122, 114, 255, 0.08); }
+  .dark .ob-option:focus-visible { outline-color: #7a72ff; }
+  .dark .ob-option.selected { border-color: #7a72ff; background: rgba(122, 114, 255, 0.14); }
+
+  .dark .ob-option-icon { background: #18233b; }
+  .dark .ob-option.selected .ob-option-icon { background: rgba(122, 114, 255, 0.2); }
+
+  .dark .ob-option-label { color: #f5f8ff; }
+  .dark .ob-option-sub { color: #9aa8c6; }
+
+  .dark .ob-option-badge { background: #18233b; color: #72809f; }
+  .dark .ob-option.selected .ob-option-badge { background: #7a72ff; color: #fff; }
+
+  .dark .ob-btn-primary {
+    background: #7a72ff;
+  }
+  .dark .ob-btn-primary:hover {
+    background: #6b64f5;
+    box-shadow: 0 6px 20px rgba(122, 114, 255, 0.32);
+  }
+  .dark .ob-btn-primary:focus-visible { outline-color: #7a72ff; }
+
+  .dark .ob-welcome-page { background: #0d1424; }
+  .dark .ob-welcome-card {
+    background: #111b2f;
+    border-color: #2a3858;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.36);
+  }
+  .dark .ob-welcome-title { color: #f5f8ff; }
+  .dark .ob-welcome-subtitle { color: #9aa8c6; }
+
+  .dark .ob-reminder-select-wrap {
+    background: #111b2f;
+    border-color: #2a3858;
+    color: #dde6f7;
+  }
+  .dark .ob-reminder-select-wrap:hover { border-color: #7a72ff; }
+  .dark .ob-reminder-select {
+    color: #dde6f7;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%237a72ff' stroke-width='2.5'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  }
+
+  /* Custom time-picker dropdown list — dark mode */
+  .dark [role='listbox'] {
+    background: #111b2f !important;
+    border-color: #2a3858 !important;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.48) !important;
+  }
+  .dark .ob-reminder-footer { border-color: #223150; }
+  .dark .ob-btn-later { background: #18233b; color: #9aa8c6; }
+  .dark .ob-btn-later:hover { background: #223150; }
+  .dark .ob-btn-save { background: #7a72ff; }
+  .dark .ob-btn-save:hover { background: #6b64f5; }
+
+  .dark .ob-loading-page { background: #0d1424; }
+  .dark .ob-loading-text { color: #f5f8ff; }
+  .dark .ob-loading-dots span { color: #f5f8ff; }
+
+  .dark .ob-done-title { color: #f5f8ff; }
+  .dark .ob-done-sub { color: #9aa8c6; }
+
+  .dark .ob-error { color: #f08aa1; }
+
+  .dark .auth-brand-name { color: #f5f8ff; }
 `;

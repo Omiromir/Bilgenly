@@ -8,11 +8,13 @@ public class ClassService
 {
     private readonly IClassRepository _classRepository;
     private readonly IQuizRepository _quizRepository;
+    private readonly IClassInvitationRepository _invitationRepository;
 
-    public ClassService(IClassRepository classRepository, IQuizRepository quizRepository)
+    public ClassService(IClassRepository classRepository, IQuizRepository quizRepository, IClassInvitationRepository invitationRepository)
     {
         _classRepository = classRepository;
         _quizRepository = quizRepository;
+        _invitationRepository = invitationRepository;
     }
 
     private static string GenerateInviteCode()
@@ -46,8 +48,27 @@ public class ClassService
 
     public async Task<IEnumerable<ClassDto>> GetMyClassesAsTeacherAsync(Guid teacherId)
     {
-        var classes = await _classRepository.GetByTeacherIdAsync(teacherId);
-        return classes.Select(MapToDto);
+        var classes = (await _classRepository.GetByTeacherIdAsync(teacherId)).ToList();
+
+        // Load pending invitations sequentially — DbContext is not thread-safe
+        var invitationsByClassId = new Dictionary<Guid, IEnumerable<ClassInvitation>>();
+        foreach (var c in classes)
+            invitationsByClassId[c.Id] = await _invitationRepository.GetByClassIdAsync(c.Id);
+
+        return classes.Select(c =>
+        {
+            var dto = MapToDto(c);
+            dto.PendingInvitations = (invitationsByClassId.TryGetValue(c.Id, out var invitations) ? invitations : [])
+                .Where(i => i.Status == "pending")
+                .Select(i => new PendingInvitationDto
+                {
+                    Id = i.Id,
+                    RecipientEmail = i.RecipientEmail,
+                    CreatedAt = i.CreatedAt,
+                })
+                .ToList();
+            return dto;
+        });
     }
 
     public async Task<IEnumerable<ClassDto>> GetMyClassesAsStudentAsync(Guid studentId)
@@ -191,6 +212,30 @@ public class ClassService
         _classRepository.RemoveAssignment(assignment);
         await _classRepository.SaveChangesAsync();
         return (true, null);
+    }
+
+    /// <summary>
+    /// Increments the MaxAttempts cap on an assignment by one, giving every
+    /// student in the class one extra opportunity to retake the quiz.
+    /// If MaxAttempts was null (unlimited), it stays unlimited.
+    /// </summary>
+    public async Task<(int? NewMaxAttempts, string? Error)> GrantExtraAttemptAsync(
+        Guid classId, Guid assignmentId, Guid teacherId)
+    {
+        var classEntity = await _classRepository.GetByIdAsync(classId);
+        if (classEntity is null) return (null, "Class not found");
+        if (classEntity.TeacherId != teacherId) return (null, "Access denied");
+
+        var assignment = classEntity.Assignments.FirstOrDefault(a => a.Id == assignmentId);
+        if (assignment is null) return (null, "Assignment not found");
+
+        // If attempts are already unlimited, there is nothing to grant.
+        if (assignment.MaxAttempts is null)
+            return (null, null); // success — unlimited means student can always retry
+
+        assignment.MaxAttempts += 1;
+        await _classRepository.SaveChangesAsync();
+        return (assignment.MaxAttempts, null);
     }
 
     private AssignmentDto MapAssignmentToDto(Assignment a, Quiz quiz) => new()

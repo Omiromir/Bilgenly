@@ -43,7 +43,7 @@ export function QuizSessionSidebar({
       <DashboardSurface
         radius="xl"
         padding="md"
-        className="space-y-3 bg-[linear-gradient(180deg,#159d8b_0%,#128474_100%)] text-white shadow-[0_24px_52px_rgba(19,167,144,0.18)]"
+        className="space-y-3 bg-[linear-gradient(180deg,var(--dashboard-brand)_0%,var(--dashboard-brand-strong)_100%)] text-white shadow-[0_24px_52px_rgba(91,76,240,0.22)]"
       >
         <div className="space-y-2">
           <p className="text-xs font-semibold uppercase tracking-[0.22em] text-white/72">
@@ -155,7 +155,7 @@ export function QuizSessionSidebar({
                     ? "border border-[var(--dashboard-brand-bright)] bg-[var(--dashboard-surface-elevated)] text-[var(--dashboard-brand-bright)] shadow-[0_10px_24px_rgba(33,145,246,0.18)]"
                     : questionState.submitted
                       ? questionState.isCorrect
-                        ? "bg-[linear-gradient(180deg,#159d8b_0%,#128474_100%)] text-white"
+                        ? "bg-[linear-gradient(180deg,var(--dashboard-success)_0%,#228a57_100%)] text-white"
                         : "bg-[var(--dashboard-danger)] text-white"
                       : isUnlocked
                         ? "bg-[var(--dashboard-brand-soft-alt)] text-[var(--dashboard-brand-bright)] hover:bg-[var(--dashboard-surface-accent)]"

@@ -28,3 +28,13 @@ export function getClassInvitations(classId: string) {
     fallbackErrorMessage: "Unable to load class invitations.",
   });
 }
+
+export function revokeClassInvitation(classId: string, invitationId: string) {
+  return apiRequest<{ message: string }>(
+    `/api/classes/${classId}/invitations/${invitationId}`,
+    {
+      method: "DELETE",
+      fallbackErrorMessage: "Unable to revoke invitation.",
+    },
+  );
+}

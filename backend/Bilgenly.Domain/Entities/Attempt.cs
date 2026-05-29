@@ -9,6 +9,13 @@ public class Attempt
     
     public Guid QuizId { get; set; }
     public Quiz Quiz { get; set; }
+
+    /// <summary>
+    /// The specific assignment this attempt belongs to.
+    /// Null for attempts on public/unassigned quizzes.
+    /// Used to scope attempt counts per assignment so re-assignments start fresh.
+    /// </summary>
+    public Guid? AssignmentId { get; set; }
     
     public int Score { get; set; }
     public DateTime DateTaken { get; set; }

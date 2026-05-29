@@ -7,6 +7,8 @@ import {
   useMemo,
   useState,
 } from "react";
+import { useAuth } from "./AuthProvider";
+import { getUserScopedStorageKey } from "./userScopedStorage";
 import {
   buildClassInvitationNotification,
   buildQuizFollowUpNotification,
@@ -36,11 +38,21 @@ import {
   upsertClassInvitationNotification,
 } from "../../features/dashboard/api/notificationsApi";
 
-const NOTIFICATIONS_STORAGE_KEY = "bilgenly_notifications";
+const NOTIFICATIONS_BASE_KEY = "bilgenly_notifications";
 const AUTH_TOKEN_KEY = "bilgenly_token";
 
 function hasAuthToken() {
   return Boolean(localStorage.getItem(AUTH_TOKEN_KEY));
+}
+
+/** Returns a user-scoped cache key, or the base key for anonymous sessions. */
+function getNotificationsStorageKey(userId?: string | null): string {
+  return userId
+    ? getUserScopedStorageKey(
+        NOTIFICATIONS_BASE_KEY,
+        `user:${userId.trim().toLowerCase()}`,
+      )
+    : NOTIFICATIONS_BASE_KEY;
 }
 
 function fromBackendDto(dto: BackendNotificationDto): DashboardNotification | null {
@@ -84,6 +96,18 @@ function fromBackendDto(dto: BackendNotificationDto): DashboardNotification | nu
       assignmentId: dto.assignmentId,
       attemptId: dto.attemptId ?? undefined,
       followUpKind: dto.followUpKind as QuizFollowUpKind,
+    };
+  }
+
+  if (dto.type === "quiz_removed_by_admin") {
+    if (!dto.quizId || !dto.quizTitle) return null;
+    return {
+      ...base,
+      type: "quiz_removed_by_admin",
+      actionType: "",
+      status: "sent",
+      quizId: dto.quizId,
+      quizTitle: dto.quizTitle,
     };
   }
 
@@ -143,7 +167,8 @@ function sanitizeNotificationRecord(
   if (
     typeof notification.id !== "string" ||
     (notification.type !== "class_invitation" &&
-      notification.type !== "quiz_follow_up") ||
+      notification.type !== "quiz_follow_up" &&
+      notification.type !== "quiz_removed_by_admin") ||
     typeof notification.recipientUserId !== "string" ||
     typeof notification.recipientEmail !== "string" ||
     typeof notification.relatedClassId !== "string" ||
@@ -333,6 +358,9 @@ function isNotificationEnabled(
 export function NotificationsProvider({
   children,
 }: NotificationsProviderProps) {
+  const { currentUser } = useAuth();
+  const userId = currentUser?.id ?? null;
+
   const [notifications, setNotifications] = useState<DashboardNotification[]>([]);
   const [isHydrated, setIsHydrated] = useState(false);
 
@@ -348,7 +376,11 @@ export function NotificationsProvider({
       .catch(() => {});
   }, []);
 
+  // Re-hydrate whenever the authenticated user changes (login / logout / switch)
   useEffect(() => {
+    setIsHydrated(false);
+    setNotifications([]);
+
     if (hasAuthToken()) {
       getMyNotifications()
         .then((dtos) => {
@@ -369,7 +401,13 @@ export function NotificationsProvider({
     }
 
     function hydrateFromLocalStorage() {
-      const savedValue = localStorage.getItem(NOTIFICATIONS_STORAGE_KEY);
+      // Try user-scoped key first, then fall back to legacy global key
+      const scopedKey = getNotificationsStorageKey(userId);
+      const savedValue =
+        localStorage.getItem(scopedKey) ??
+        (scopedKey !== NOTIFICATIONS_BASE_KEY
+          ? localStorage.getItem(NOTIFICATIONS_BASE_KEY)
+          : null);
       if (!savedValue) return;
       try {
         const parsed = JSON.parse(savedValue) as Partial<DashboardNotification>[];
@@ -386,7 +424,8 @@ export function NotificationsProvider({
         setNotifications([]);
       }
     }
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId]);
 
   useEffect(() => {
     if (!isHydrated || !hasAuthToken()) return;
@@ -406,16 +445,17 @@ export function NotificationsProvider({
     };
   }, [isHydrated, fetchFromBackend]);
 
+  // Persist to user-scoped key so each user's cache is isolated
   useEffect(() => {
     if (!isHydrated) {
       return;
     }
 
     localStorage.setItem(
-      NOTIFICATIONS_STORAGE_KEY,
+      getNotificationsStorageKey(userId),
       JSON.stringify(notifications),
     );
-  }, [isHydrated, notifications]);
+  }, [isHydrated, notifications, userId]);
 
   const matchesRecipientIdentity = (
     notification: DashboardNotification,
@@ -554,6 +594,26 @@ export function NotificationsProvider({
             input.recipientEmail,
           )
         ) {
+          return null;
+        }
+
+        // Spam guard: throttle identical follow-up notifications to the
+        // same student/quiz/kind to once every 60 seconds. Without this,
+        // a teacher rapidly clicking "Ask for another attempt" would flood
+        // the student's inbox with duplicate nudges (and pump duplicate
+        // backend writes).
+        const SPAM_COOLDOWN_MS = 60_000;
+        const now = Date.now();
+        const isDuplicateBurst = notifications.some((existing) => {
+          if (existing.type !== "quiz_follow_up") return false;
+          if (existing.recipientUserId !== input.recipientUserId) return false;
+          if (existing.followUpKind !== input.followUpKind) return false;
+          if (existing.quizId !== input.quizId) return false;
+          const existingTimestamp = new Date(existing.createdAt).getTime();
+          return now - existingTimestamp < SPAM_COOLDOWN_MS;
+        });
+
+        if (isDuplicateBurst) {
           return null;
         }
 

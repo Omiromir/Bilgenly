@@ -15,4 +15,12 @@ public class ClassDto
     public DateTime UpdatedAt { get; set; }
     public List<ClassStudentDto> Students { get; set; } = new();
     public List<ClassQuizDto> Quizzes { get; set; } = new();
+    public List<PendingInvitationDto> PendingInvitations { get; set; } = new();
+}
+
+public class PendingInvitationDto
+{
+    public Guid Id { get; set; }
+    public string RecipientEmail { get; set; } = string.Empty;
+    public DateTime CreatedAt { get; set; }
 }

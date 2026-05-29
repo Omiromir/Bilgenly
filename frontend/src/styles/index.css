@@ -7,6 +7,14 @@ html {
   scroll-behavior: smooth;
 }
 
+/* Hide scrollbar while preserving scroll functionality */
+.no-scrollbar {
+  scrollbar-width: none; /* Firefox */
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Edge */
+}
+
 /* Ensure proper antialiasing for fonts */
 body {
   -webkit-font-smoothing: antialiased;

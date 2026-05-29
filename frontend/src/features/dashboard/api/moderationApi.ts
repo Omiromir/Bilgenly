@@ -176,3 +176,40 @@ export function deleteUserByModerator(userId: string) {
     fallbackErrorMessage: "Unable to delete user.",
   });
 }
+
+export function deleteQuizByModerator(quizId: string) {
+  return apiRequest<void>(`/api/moderation/quizzes/${quizId}`, {
+    method: "DELETE",
+    fallbackErrorMessage: "Unable to delete quiz.",
+  });
+}
+
+export interface AdminAnalyticsTimeSeriesPointDto {
+  date: string;
+  value: number;
+}
+
+export interface AdminAnalyticsRoleBreakdownDto {
+  role: string;
+  count: number;
+}
+
+export interface AdminAnalyticsDto {
+  totalUsers: number;
+  totalQuizzes: number;
+  totalStudents: number;
+  totalTeachers: number;
+  totalModerators: number;
+  suspendedUsers: number;
+  newUsersLast7Days: number;
+  newQuizzesLast7Days: number;
+  roleBreakdown: AdminAnalyticsRoleBreakdownDto[];
+  usersOverTime: AdminAnalyticsTimeSeriesPointDto[];
+  quizzesOverTime: AdminAnalyticsTimeSeriesPointDto[];
+}
+
+export function getAdminAnalytics() {
+  return apiRequest<AdminAnalyticsDto>("/api/moderation/analytics", {
+    fallbackErrorMessage: "Unable to load admin analytics.",
+  });
+}

@@ -62,6 +62,7 @@ public class AchievementsService
                 BadgeId = ub.BadgeId,
                 Title = ub.Badge.Title,
                 Description = ub.Badge.Description,
+                Icon = ub.Badge.Icon,
                 EarnedAt = ub.EarnedAt
             }).ToList(),
             Leaderboard = leaderboard
@@ -101,7 +102,8 @@ public class AchievementsService
                 UserId = id,
                 Username = user?.Username ?? "Unknown",
                 AverageScore = avg,
-                IsCurrentUser = id == studentId
+                IsCurrentUser = id == studentId,
+                AvatarUrl = user?.AvatarUrl
             });
         }
 
@@ -120,6 +122,7 @@ public class AchievementsService
         double averageScore, List<Domain.Entities.Attempt> attempts)
     {
         var allBadges = (await _badgeRepository.GetAllAsync()).ToList();
+        var assignmentCompletions = attempts.Count(a => a.AssignmentId.HasValue);
 
         foreach (var badge in allBadges)
         {
@@ -128,11 +131,12 @@ public class AchievementsService
 
             bool earned = badge.Condition switch
             {
-                "quizzes_completed" => quizzesDone >= badge.RequiredValue,
-                "average_score" => averageScore >= badge.RequiredValue,
-                "perfect_score" => attempts.Any(a => a.Score == 100),
-                "first_quiz" => quizzesDone >= 1,
-                _ => false
+                "quizzes_completed"      => quizzesDone >= badge.RequiredValue,
+                "average_score"          => averageScore >= badge.RequiredValue,
+                "perfect_score"          => attempts.Any(a => a.Score == 100),
+                "first_quiz"             => quizzesDone >= 1,
+                "assignment_completions" => assignmentCompletions >= badge.RequiredValue,
+                _                        => false
             };
 
             if (earned)

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { useAuth } from "../../../app/providers/AuthProvider";
+import { saveMyPreferences } from "../../dashboard/api/preferencesApi";
 import {
   buildOnboardingDraftOwnerKey,
   clearOnboardingDraft,
@@ -188,6 +189,24 @@ export function BilgenlyOnboarding() {
       }
 
       clearOnboardingDraft();
+
+      // Persist study reminder time to user preferences if set
+      if (finalAnswers.reminderTime) {
+        saveMyPreferences({
+          themeMode: "system",
+          language: "en",
+          dateFormat: "MM/DD/YYYY",
+          timeZone: "UTC",
+          notifyEmailQuizAssignments: true,
+          notifyEmailGradingUpdates: true,
+          notifyEmailAchievementAlerts: true,
+          notifyEmailDeadlineReminders: true,
+          notifyPushRealTimeUpdates: true,
+          notifyPushWeeklySummaries: true,
+          studyReminderTime: finalAnswers.reminderTime,
+        }).catch(() => {/* non-critical */});
+      }
+
       navigate(getDashboardPathByRole(finalAnswers.role), { replace: true });
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : "Something went wrong");

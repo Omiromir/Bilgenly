@@ -12,10 +12,12 @@ namespace Bilgenly.API.Controllers;
 public class QuizGenerationController : ControllerBase
 {
     private readonly QuizGenerationService _generationService;
+    private readonly QuizService _quizService;
 
-    public QuizGenerationController(QuizGenerationService generationService)
+    public QuizGenerationController(QuizGenerationService generationService, QuizService quizService)
     {
         _generationService = generationService;
+        _quizService = quizService;
     }
 
     [HttpPost("from-text")]
@@ -79,7 +81,10 @@ public class QuizGenerationController : ControllerBase
     [HttpGet("{quizId}/review")]
     public async Task<IActionResult> GetForReview(Guid quizId)
     {
-        var userId = Guid.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
-        return Ok(new { quizId, message = "Use GET /api/quizzes/{id}" });
+        // Returns the full quiz (questions + answers) so the frontend review
+        // stage can populate the editor without a separate /api/quizzes/{id} call.
+        var quiz = await _quizService.GetQuizAsync(quizId);
+        if (quiz is null) return NotFound(new { message = "Quiz not found" });
+        return Ok(quiz);
     }
 }

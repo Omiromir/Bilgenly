@@ -23,7 +23,7 @@ import {
   type StudentIdentity,
 } from "../classes/teacherClassesUtils";
 import type { QuizLibraryItem, QuizRecord } from "./quizLibraryTypes";
-import { isDraftQuiz, isPublicDiscoveryQuiz } from "./quizLibraryUtils";
+import { isDraftQuiz } from "./quizLibraryUtils";
 
 export interface StudentQuizLibraryMembership {
   classId: string;
@@ -50,10 +50,8 @@ export interface StudentAssignedQuizLibraryItem extends QuizLibraryItem {
 
 export interface StudentQuizLibrarySources {
   assigned: StudentAssignedQuizLibraryItem[];
-  discover: QuizLibraryItem[];
   personalLibrary: QuizLibraryItem[];
   personalGenerated: QuizLibraryItem[];
-  personalSaved: QuizLibraryItem[];
   personalRecent: QuizLibraryItem[];
   memberships: StudentQuizLibraryMembership[];
   activeMemberships: StudentQuizLibraryMembership[];
@@ -234,10 +232,8 @@ export function buildStudentQuizLibrarySources(
   if (!studentIdentity.userId && !studentIdentity.email) {
     return {
       assigned: [],
-      discover: [],
       personalLibrary: [],
       personalGenerated: [],
-      personalSaved: [],
       personalRecent: [],
       memberships: [],
       activeMemberships: [],
@@ -259,15 +255,6 @@ export function buildStudentQuizLibrarySources(
       membership.status === "invited" && membership.invitationStatus === "pending",
   );
 
-  const discover = sortQuizItemsByUpdatedAt(
-    studentLibraryItems
-      .filter((item) => isPublicDiscoveryQuiz(item))
-      .map((item) => ({
-        ...item,
-        sourceType: "discover" as const,
-      })),
-  );
-
   const personalGenerated = studentLibraryItems
     .filter((item) => item.isGeneratedByCurrentUser)
     .map((item) => ({
@@ -282,15 +269,6 @@ export function buildStudentQuizLibrarySources(
       return getQuizDateValue(right.updatedAt) - getQuizDateValue(left.updatedAt);
     });
 
-  const personalSaved = sortQuizItemsByUpdatedAt(
-    studentLibraryItems
-      .filter((item) => item.isSaved && !item.isGeneratedByCurrentUser)
-      .map((item) => ({
-        ...item,
-        sourceType: "saved" as const,
-      })),
-  );
-
   const assigned = buildAssignedQuizLibraryItems(
     classes,
     quizzes,
@@ -302,7 +280,7 @@ export function buildStudentQuizLibrarySources(
   );
 
   const personalRecent = sortQuizItemsByUpdatedAt(
-    dedupeQuizLibraryItems([...personalGenerated, ...personalSaved, ...discover])
+    personalGenerated
       .filter(
         (item) =>
           item.practiceState === "in-progress" ||
@@ -315,19 +293,13 @@ export function buildStudentQuizLibrarySources(
   );
 
   const personalLibrary = sortQuizItemsByUpdatedAt(
-    dedupeQuizLibraryItems([
-      ...personalGenerated,
-      ...personalSaved,
-      ...personalRecent,
-    ]),
+    dedupeQuizLibraryItems([...personalGenerated, ...personalRecent]),
   );
 
   return {
     assigned,
-    discover,
     personalLibrary,
     personalGenerated,
-    personalSaved,
     personalRecent,
     memberships,
     activeMemberships,

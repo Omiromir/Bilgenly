@@ -6,6 +6,7 @@ import {
   FilePenLine,
   Layers3,
   Rocket,
+  TrendingUp,
   Users,
 } from "../../../../components/icons/AppIcons";
 import { cn } from "../../../../components/ui/utils";
@@ -129,9 +130,18 @@ export function RecentQuizzesList({
 
             <div className="flex flex-wrap gap-3">
               <CompactMetric
-                icon={Layers3}
-                label="Avg completion"
-                value={`${quiz.completionRate}%`}
+                icon={TrendingUp}
+                label="Avg grade"
+                value={quiz.avgGrade !== null ? `${quiz.avgGrade}%` : "—"}
+                toneClassName={
+                  quiz.avgGrade === null
+                    ? undefined
+                    : quiz.avgGrade >= 75
+                      ? "text-[var(--dashboard-success)]"
+                      : quiz.avgGrade >= 50
+                        ? "text-[var(--dashboard-warning)]"
+                        : "text-[var(--dashboard-danger)]"
+                }
               />
               <CompactMetric
                 icon={BookOpen}

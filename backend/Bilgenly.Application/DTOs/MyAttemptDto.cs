@@ -4,6 +4,8 @@ public class MyAttemptDto
 {
     public Guid Id { get; set; }
     public Guid QuizId { get; set; }
+    /// <summary>Populated when the attempt belongs to a class assignment.</summary>
+    public Guid? AssignmentId { get; set; }
     public string QuizTitle { get; set; } = string.Empty;
     public int Score { get; set; }
     public DateTime DateTaken { get; set; }

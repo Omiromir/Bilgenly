@@ -1,4 +1,5 @@
 import { BookOpen, Medal, Timer } from "../../../components/icons/AppIcons";
+import { useAchievementsQuery } from "../../../features/gamification/api";
 import { Link } from "react-router";
 import { useMemo } from "react";
 import { useAuth } from "../../../app/providers/AuthProvider";
@@ -56,6 +57,10 @@ export function StudentOverviewPage() {
     error: attemptsError,
   } = useStudentAttempts();
 
+  // Shares the same React Query cache as StudentBadgesPage and useProfile —
+  // no extra network request when the user navigates between pages.
+  const { data: achievementsData } = useAchievementsQuery();
+
   // Completed attempts from backend, sorted newest first. This is the
   // single source of truth for overview stats — no localStorage dependency.
   const completedAttempts = useMemo(
@@ -102,8 +107,9 @@ export function StudentOverviewPage() {
         completedAttempts,
         attemptsLoading,
         correctedScoreByAttemptId,
+        badgesEarned: achievementsData?.badgesEarned,
       }),
-    [attemptsLoading, completedAttempts, studentSources, correctedScoreByAttemptId],
+    [attemptsLoading, completedAttempts, studentSources, correctedScoreByAttemptId, achievementsData],
   );
   const assignedPreview = useMemo(
     () =>
@@ -360,18 +366,14 @@ export function StudentOverviewPage() {
                 </article>
               ))
             ) : overview.recentResults.length ? (
-              overview.recentResults.map((result, index) => (
+              overview.recentResults.map((result) => (
                 <article
                   key={`${result.title}-${result.date}`}
                   className="flex items-start justify-between gap-4 rounded-[18px] px-3 py-4"
                 >
                   <div className="flex items-start gap-4">
                     <div className="mt-1 text-[var(--dashboard-warning)]">
-                      {index < 2 ? (
-                        <Medal className="h-5 w-5" />
-                      ) : (
-                        <span className="inline-block h-5 w-5" />
-                      )}
+                      <Medal className="h-5 w-5" />
                     </div>
                     <div>
                       <h3 className="text-[1.12rem] font-semibold text-[var(--dashboard-text-strong)]">

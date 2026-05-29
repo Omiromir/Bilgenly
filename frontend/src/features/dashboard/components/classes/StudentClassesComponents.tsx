@@ -210,12 +210,16 @@ export function StudentClassDetailsPanel({
           </p>
         </div>
         <div className={dashboardInsetBlockClassName}>
-          <p className={dashboardMetaTextClassName}>Invite code</p>
-          <p className="mt-2 text-lg font-semibold tracking-[0.12em] text-[var(--dashboard-text-strong)]">
-            {teacherClass.inviteCode}
+          <p className={dashboardMetaTextClassName}>Class status</p>
+          <p className="mt-2 text-lg font-semibold tracking-[0.04em] text-[var(--dashboard-text-strong)]">
+            {teacherClass.status === "active" ? "Active" : "Archived"}
           </p>
         </div>
       </div>
+
+      {/* Note: the class invite code is intentionally NOT shown to students.
+          Anyone with the code can join the class, so exposing it on the
+          student view turns every student into a potential leak vector. */}
 
       <div className="rounded-[22px] border border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-muted)] px-5 py-4">
         <div className="grid gap-3 md:grid-cols-3">

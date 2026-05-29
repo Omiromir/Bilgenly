@@ -83,27 +83,69 @@ public class QuizGenerationService
         if (quiz is null) return (null, "Quiz not found");
         if (quiz.UserId != userId) return (null, "Access denied");
 
-       
-        var config = new GenerateQuizConfigDto
+        // Regeneration is only possible when the original source text was captured.
+        // PDF-sourced quizzes and manually-created quizzes cannot be regenerated
+        // server-side because the binary content is not stored.
+        if (string.IsNullOrWhiteSpace(quiz.SourceText))
+            return (null, "Regeneration is not available for this quiz — the original source text was not stored. Please generate a new quiz from your notes.");
+
+        var startTime = DateTime.UtcNow;
+
+        try
         {
-            Title = quiz.Title,
-            Topic = quiz.Topic,
-            TopicFocus = quiz.TopicFocus,
-            QuestionCount = quiz.Questions.Count,
-            QuestionType = "MCQ"
-        };
+            var questions = await _aiService.GenerateFromTextAsync(
+                quiz.SourceText,
+                quiz.Questions.Count > 0 ? quiz.Questions.Count : 5,
+                quiz.Topic,
+                quiz.TopicFocus,
+                "MCQ",
+                string.Empty);
 
-        
-        quiz.Questions.Clear();
-        await _quizRepository.SaveChangesAsync();
+            // Replace questions in-place: remove old ones, add new batch.
+            quiz.Questions.Clear();
+            quiz.Status = "generated";
+            await _quizRepository.SaveChangesAsync();
 
-        return (null, "Regeneration requires original source — please generate a new quiz");
+            foreach (var (q, index) in questions.Select((q, i) => (q, i)))
+            {
+                quiz.Questions.Add(new Question
+                {
+                    Id = Guid.NewGuid(),
+                    QuizId = quiz.Id,
+                    Text = q.Text,
+                    QuestionType = q.QuestionType,
+                    Explanation = q.Explanation,
+                    Position = q.Position > 0 ? q.Position : index + 1,
+                    Points = q.Points > 0 ? q.Points : 1,
+                    EstimatedMinutes = q.EstimatedMinutes > 0 ? q.EstimatedMinutes : 1,
+                    ImageUrl = q.ImageUrl,
+                    Answers = q.Answers.Select(a => new Answer
+                    {
+                        Id = Guid.NewGuid(),
+                        Text = a.Text,
+                        IsCorrect = a.IsCorrect
+                    }).ToList()
+                });
+            }
+
+            await _quizRepository.SaveChangesAsync();
+
+            var generationTime = (DateTime.UtcNow - startTime).TotalSeconds;
+            return (MapToResult(quiz, quiz.SourceType == "pdf" ? "Uploaded PDF" : "Pasted lecture text", generationTime), null);
+        }
+        catch (Exception e)
+        {
+            return (null, $"AI regeneration failed: {e.Message}");
+        }
     }
 
     public async Task<(GenerateQuizResultDto? Result, string? Error)> UpdateAfterReviewAsync(
         Guid quizId, UpdateGeneratedQuizDto dto, Guid userId)
     {
-        var quiz = await _quizRepository.GetByIdAsync(quizId);
+        // Load metadata only — questions are rebuilt from scratch below
+        // to avoid EF Core cascade-delete conflicts with the DB-level
+        // ON DELETE CASCADE constraint on Answer.QuestionId.
+        var quiz = await _quizRepository.GetByIdShallowAsync(quizId);
         if (quiz is null) return (null, "Quiz not found");
         if (quiz.UserId != userId) return (null, "Access denied");
         if (string.IsNullOrWhiteSpace(dto.Title))
@@ -125,51 +167,50 @@ public class QuizGenerationService
                 return (null, "Every question must include exactly one correct answer");
         }
 
+        // 1. Update quiz-level metadata
         quiz.Title = dto.Title.Trim();
         quiz.Description = dto.Description.Trim();
         quiz.IsPublic = dto.IsPublic;
         quiz.Status = dto.IsPublic ? "published-public" : "published-private";
 
-        var incomingQuestionIds = dto.Questions
-            .Where(q => q.Id.HasValue)
-            .Select(q => q.Id!.Value)
-            .ToHashSet();
+        // 2. Wipe all existing questions + answers via raw SQL.
+        //    Using EF Core collection manipulation here triggers
+        //    DbUpdateConcurrencyException because EF Core also marks child
+        //    entities as Deleted while the DB's ON DELETE CASCADE has already
+        //    removed them, leaving 0 rows affected for the explicit DELETE.
+        await _quizRepository.DeleteQuizQuestionsAsync(quizId);
 
-        foreach (var existingQuestion in quiz.Questions
-                     .Where(q => !incomingQuestionIds.Contains(q.Id))
-                     .ToList())
+        // 3. Re-create every question and its answers as fresh entities.
+        //    All IDs are regenerated so there is no stale-ID confusion.
+        var newQuestions = dto.Questions.Select((q, index) =>
         {
-            quiz.Questions.Remove(existingQuestion);
-        }
-
-        for (var index = 0; index < dto.Questions.Count; index++)
-        {
-            var q = dto.Questions[index];
-            var question = q.Id.HasValue
-                ? quiz.Questions.FirstOrDefault(existing => existing.Id == q.Id.Value)
-                : null;
-
-            if (question is null)
+            var question = new Question
             {
-                question = new Question
-                {
-                    Id = Guid.NewGuid(),
-                    QuizId = quiz.Id
-                };
-                quiz.Questions.Add(question);
-            }
+                Id = Guid.NewGuid(),
+                QuizId = quizId,
+                Text = q.Text.Trim(),
+                QuestionType = q.QuestionType,
+                Explanation = q.Explanation.Trim(),
+                Position = q.Position > 0 ? q.Position : index + 1,
+            };
 
-            question.Text = q.Text.Trim();
-            question.QuestionType = q.QuestionType;
-            question.Explanation = q.Explanation.Trim();
-            question.Position = q.Position > 0 ? q.Position : index + 1;
+            question.Answers = q.Answers.Select(a => new Answer
+            {
+                Id = Guid.NewGuid(),
+                QuestionId = question.Id,
+                Text = a.Text.Trim(),
+                IsCorrect = a.IsCorrect,
+            }).ToList();
 
-            ApplyAnswerUpdates(question, q.Answers);
-        }
+            return question;
+        }).ToList();
 
+        await _quizRepository.AddQuestionsRangeAsync(newQuestions);
         await _quizRepository.SaveChangesAsync();
 
-        return (MapToResult(quiz, "Edited by teacher", 0), null);
+        // 4. Reload with full hierarchy so the response includes the new IDs.
+        var reloadedQuiz = await _quizRepository.GetByIdAsync(quizId);
+        return (MapToResult(reloadedQuiz!, "Saved", 0), null);
     }
 
     private async Task<(GenerateQuizResultDto? Result, string? Error)> SaveGeneratedQuiz(
@@ -188,6 +229,10 @@ public class QuizGenerationService
             Topic = config.Topic,
             TopicFocus = config.TopicFocus,
             SourceType = sourceType,
+            // Persist the original source text so RegenerateAsync can re-call
+            // the AI without requiring the user to resubmit their document.
+            // Only stored for text-based generation; PDF bytes are not retained.
+            SourceText = sourceType == "text" ? config.Text : null,
             Status = "generated",
             UserId = userId,
             CreatedAt = DateTime.UtcNow,
@@ -242,38 +287,4 @@ public class QuizGenerationService
             }).OrderBy(q => q.Position).ToList()
         };
 
-    private static void ApplyAnswerUpdates(Question question, List<UpdateAnswerDto> answers)
-    {
-        var incomingAnswerIds = answers
-            .Where(a => a.Id.HasValue)
-            .Select(a => a.Id!.Value)
-            .ToHashSet();
-
-        foreach (var existingAnswer in question.Answers
-                     .Where(a => !incomingAnswerIds.Contains(a.Id))
-                     .ToList())
-        {
-            question.Answers.Remove(existingAnswer);
-        }
-
-        foreach (var incomingAnswer in answers)
-        {
-            var answer = incomingAnswer.Id.HasValue
-                ? question.Answers.FirstOrDefault(existing => existing.Id == incomingAnswer.Id.Value)
-                : null;
-
-            if (answer is null)
-            {
-                answer = new Answer
-                {
-                    Id = Guid.NewGuid(),
-                    QuestionId = question.Id
-                };
-                question.Answers.Add(answer);
-            }
-
-            answer.Text = incomingAnswer.Text.Trim();
-            answer.IsCorrect = incomingAnswer.IsCorrect;
-        }
-    }
 }

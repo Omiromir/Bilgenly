@@ -11,6 +11,7 @@ export interface UserPreferencesDto {
   notifyEmailDeadlineReminders: boolean;
   notifyPushRealTimeUpdates: boolean;
   notifyPushWeeklySummaries: boolean;
+  studyReminderTime: string | null;
   updatedAt: string;
 }
 
@@ -25,6 +26,7 @@ export interface SaveUserPreferencesDto {
   notifyEmailDeadlineReminders: boolean;
   notifyPushRealTimeUpdates: boolean;
   notifyPushWeeklySummaries: boolean;
+  studyReminderTime?: string | null;
 }
 
 export function getMyPreferences() {

@@ -39,6 +39,7 @@ public class UserPreferencesService
         existing.NotifyEmailDeadlineReminders = dto.NotifyEmailDeadlineReminders;
         existing.NotifyPushRealTimeUpdates = dto.NotifyPushRealTimeUpdates;
         existing.NotifyPushWeeklySummaries = dto.NotifyPushWeeklySummaries;
+        existing.StudyReminderTime = dto.StudyReminderTime;
         existing.UpdatedAt = DateTime.UtcNow;
 
         await _preferencesRepository.SaveChangesAsync();
@@ -57,6 +58,7 @@ public class UserPreferencesService
         NotifyEmailDeadlineReminders = p.NotifyEmailDeadlineReminders,
         NotifyPushRealTimeUpdates = p.NotifyPushRealTimeUpdates,
         NotifyPushWeeklySummaries = p.NotifyPushWeeklySummaries,
+        StudyReminderTime = p.StudyReminderTime,
         UpdatedAt = p.UpdatedAt,
     };
 }

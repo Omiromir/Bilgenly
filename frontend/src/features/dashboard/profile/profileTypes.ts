@@ -9,7 +9,7 @@ export interface ProfileActivityItem {
   time: string;
 }
 
-export type ProfileStatIconKey = "book" | "badge" | "trend" | "clock";
+export type ProfileStatIconKey = "book" | "badge" | "trend" | "clock" | "users";
 
 export interface ProfileStat {
   label: string;

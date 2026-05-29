@@ -484,6 +484,39 @@ export function QuizSessionProvider({ children }: QuizSessionProviderProps) {
     AttemptSummaryDto[]
   >([]);
   const [attemptRefreshKey, setAttemptRefreshKey] = useState(0);
+
+  // When a quiz is deleted anywhere in the app, prune local session state
+  // immediately. Without this, a finished session whose quiz no longer
+  // exists would still appear in "Recent Results" and crash on click. Also
+  // bump the remote attempt refresh so the next pass strips the gone quiz.
+  useEffect(() => {
+    function onQuizDeleted(event: Event) {
+      const detail = (event as CustomEvent<{ quizId?: string }>).detail;
+      const quizId = detail?.quizId;
+      if (!quizId) {
+        setAttemptRefreshKey((k) => k + 1);
+        return;
+      }
+      setSessions((current) => current.filter((s) => s.quizId !== quizId));
+      setSharedAssignedSessions((current) =>
+        current.filter((s) => s.quizId !== quizId),
+      );
+      setRemoteCompletedAttempts((current) =>
+        current.filter((a) => a.quizId !== quizId),
+      );
+      setAttemptRefreshKey((k) => k + 1);
+    }
+    window.addEventListener(
+      "bilgenly:quiz-deleted",
+      onQuizDeleted as EventListener,
+    );
+    return () => {
+      window.removeEventListener(
+        "bilgenly:quiz-deleted",
+        onQuizDeleted as EventListener,
+      );
+    };
+  }, []);
   const [sharedAssignedSessions, setSharedAssignedSessions] = useState<
     SharedAssignedQuizSessionRecord[]
   >([]);
@@ -495,6 +528,11 @@ export function QuizSessionProvider({ children }: QuizSessionProviderProps) {
   );
   const hydratedStorageScopeRef = useRef<string | null>(null);
   const syncedPracticeSummaryRef = useRef<Record<string, string>>({});
+  // Tracks sessions that are currently being completed (submitAttempt in
+  // flight). Synchronous check + set in completeSession prevents the
+  // "rapid double-click Finish Quiz" race condition where two API submits
+  // both pass the not-completed-yet state check.
+  const completionInFlightRef = useRef<Set<string>>(new Set());
   const userId = currentUser?.id ?? null;
   const userEmail = currentUser?.email ?? null;
   const storageScope = useMemo(
@@ -922,15 +960,27 @@ export function QuizSessionProvider({ children }: QuizSessionProviderProps) {
         return;
       }
 
+      // Teacher's own test runs must NOT contribute to the quiz's public
+      // analytics (attemptCount / averageScore). Those metrics are for
+      // student attempts only — otherwise a draft quiz would falsely show
+      // "1 attempt, 0%" the moment the teacher tries it once.
+      const safeSummary =
+        viewerRole === "teacher"
+          ? {
+              practiceState: summary.practiceState,
+              practiceProgressLabel: summary.practiceProgressLabel,
+            }
+          : summary;
+
       const syncKey = `${viewerRole}:${quizId}`;
-      const signature = JSON.stringify(summary);
+      const signature = JSON.stringify(safeSummary);
       nextSyncedPracticeSummaries[syncKey] = signature;
 
       if (syncedPracticeSummaryRef.current[syncKey] === signature) {
         return;
       }
 
-      syncQuizPracticeStateRef.current(quizId, summary);
+      syncQuizPracticeStateRef.current(quizId, safeSummary);
     });
 
     syncedPracticeSummaryRef.current = nextSyncedPracticeSummaries;
@@ -1327,6 +1377,16 @@ export function QuizSessionProvider({ children }: QuizSessionProviderProps) {
           return;
         }
 
+        // Race-condition guard: if a submitAttempt is already in flight for
+        // this session, ignore the duplicate call. The local `status ===
+        // "completed"` check above is insufficient because setSessions only
+        // resolves AFTER the backend responds, so two rapid clicks would
+        // both pass this check and fire two API requests.
+        if (completionInFlightRef.current.has(sessionId)) {
+          return;
+        }
+        completionInFlightRef.current.add(sessionId);
+
         const timestamp = options?.finishedAt ?? new Date().toISOString();
 
         if (
@@ -1334,6 +1394,7 @@ export function QuizSessionProvider({ children }: QuizSessionProviderProps) {
           options?.completionReason !== "deadline-expired"
         ) {
           if (!canSubmitSessionToBackend(targetSession)) {
+            completionInFlightRef.current.delete(sessionId);
             throw new Error(
               "This quiz uses answer settings that the backend attempt API does not support yet.",
             );
@@ -1355,8 +1416,10 @@ export function QuizSessionProvider({ children }: QuizSessionProviderProps) {
               ),
             );
             setAttemptRefreshKey((current) => current + 1);
+            completionInFlightRef.current.delete(sessionId);
             return;
           } catch (error) {
+            completionInFlightRef.current.delete(sessionId);
             throw new Error(
               getRequestErrorMessage(error, "Unable to submit quiz attempt."),
             );
@@ -1380,6 +1443,7 @@ export function QuizSessionProvider({ children }: QuizSessionProviderProps) {
             }),
           ),
         );
+        completionInFlightRef.current.delete(sessionId);
       },
     }),
     [sessions, sharedAssignedSessions, isHydrated],

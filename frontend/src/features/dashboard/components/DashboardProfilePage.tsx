@@ -7,6 +7,7 @@ import {
   MapPin,
   Medal,
   TrendingUp,
+  Users,
 } from "../../../components/icons/AppIcons";
 import { Input } from "../../../components/ui/input";
 import { Textarea } from "../../../components/ui/textarea";
@@ -43,6 +44,7 @@ export function DashboardProfilePage({
 }: DashboardProfilePageProps) {
   const {
     profile,
+    isStatsLoading,
     formValues,
     formErrors,
     isEditing,
@@ -259,7 +261,7 @@ export function DashboardProfilePage({
 
       <div className="grid gap-5 xl:grid-cols-4">
         {profile.stats.map((stat) => (
-          <ProfileStatCard key={stat.label} stat={stat} />
+          <ProfileStatCard key={stat.label} stat={stat} loading={isStatsLoading} />
         ))}
       </div>
 
@@ -381,7 +383,13 @@ function EditableSelectInfoLine({
   );
 }
 
-function ProfileStatCard({ stat }: { stat: ProfileStat }) {
+function ProfileStatCard({
+  stat,
+  loading = false,
+}: {
+  stat: ProfileStat;
+  loading?: boolean;
+}) {
   const Icon = getStatIcon(stat.icon);
 
   return (
@@ -395,9 +403,13 @@ function ProfileStatCard({ stat }: { stat: ProfileStat }) {
             {stat.label}
           </p>
         </div>
-        <p className="mt-4 text-[2.2rem] font-semibold tracking-tight text-[var(--dashboard-text-strong)]">
-          {stat.value}
-        </p>
+        {loading ? (
+          <div className="mt-4 h-9 w-20 animate-pulse rounded-[10px] bg-[var(--dashboard-surface-muted)]" />
+        ) : (
+          <p className="mt-4 text-[2.2rem] font-semibold tracking-tight text-[var(--dashboard-text-strong)]">
+            {stat.value}
+          </p>
+        )}
       </article>
     </DashboardSurface>
   );
@@ -411,6 +423,8 @@ function getStatIcon(icon: ProfileStat["icon"]) {
       return TrendingUp;
     case "clock":
       return Clock3;
+    case "users":
+      return Users;
     case "book":
     default:
       return BookOpen;

@@ -78,6 +78,19 @@ function padDatePart(value: string) {
 }
 
 function resolveDate(value: string | Date) {
+  if (typeof value === "string") {
+    // The backend serializes DateTime (UTC) without a timezone suffix when
+    // Npgsql reads timestamp-without-time-zone columns back as Unspecified.
+    // Treat any ISO datetime string that has no explicit offset as UTC so
+    // the browser doesn't interpret it as local time.
+    const needsUtcSuffix =
+      /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(value) &&
+      !value.endsWith("Z") &&
+      !/[+-]\d{2}:?\d{2}$/.test(value);
+    const normalized = needsUtcSuffix ? `${value}Z` : value;
+    const resolvedDate = new Date(normalized);
+    return Number.isNaN(resolvedDate.getTime()) ? null : resolvedDate;
+  }
   const resolvedDate = value instanceof Date ? value : new Date(value);
   return Number.isNaN(resolvedDate.getTime()) ? null : resolvedDate;
 }
@@ -128,8 +141,9 @@ function formatNumericDate(
 function formatLocalizedTime(date: Date, preferences: FormattingPreferences) {
   return new Intl.DateTimeFormat(resolveLocale(preferences.language), {
     timeZone: TIME_ZONE_TO_IANA[preferences.timeZone],
-    hour: "numeric",
+    hour: "2-digit",
     minute: "2-digit",
+    hour12: false,
   }).format(date);
 }
 
@@ -153,8 +167,63 @@ export function getDefaultCountry(): SettingsCountry {
   return SETTINGS_COUNTRY_OPTIONS[0];
 }
 
+function detectBrowserTimeZone(): SettingsTimeZone {
+  const ianaEntries = Object.entries(TIME_ZONE_TO_IANA) as [
+    SettingsTimeZone,
+    string,
+  ][];
+
+  // 1. Direct IANA match — works when the browser timezone is one of our
+  //    supported zones (e.g. user is already on "Asia/Almaty")
+  const browserIana = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const direct = ianaEntries.find(([, iana]) => iana === browserIana);
+  if (direct) return direct[0];
+
+  // 2. Closest by current UTC offset (handles all other IANA zones)
+  //    JS getTimezoneOffset() = minutes WEST of UTC  →  negate for east
+  const browserOffsetMin = -new Date().getTimezoneOffset();
+
+  const getIanaOffsetMin = (iana: string): number => {
+    // Use a fixed UTC reference so DST doesn't matter for comparison
+    const ref = new Date("2024-07-15T12:00:00Z");
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: iana,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    }).formatToParts(ref);
+    const h = Number(parts.find((p) => p.type === "hour")?.value ?? "12");
+    const m = Number(parts.find((p) => p.type === "minute")?.value ?? "0");
+    // ref is 12:00 UTC; if local shows 17:00 → offset = +5 h east = +300 min
+    const normalizedH = h >= 24 ? h - 24 : h;
+    return (normalizedH - 12) * 60 + m;
+  };
+
+  let best: SettingsTimeZone = DEFAULT_FORMATTING_PREFERENCES.timeZone;
+  let bestDiff = Infinity;
+  for (const [tz, iana] of ianaEntries) {
+    try {
+      const diff = Math.abs(getIanaOffsetMin(iana) - browserOffsetMin);
+      if (diff < bestDiff) {
+        bestDiff = diff;
+        best = tz;
+      }
+    } catch {
+      // ignore unsupported zones
+    }
+  }
+  return best;
+}
+
 export function getDefaultTimeZone(): SettingsTimeZone {
-  return DEFAULT_FORMATTING_PREFERENCES.timeZone;
+  try {
+    return detectBrowserTimeZone();
+  } catch {
+    return DEFAULT_FORMATTING_PREFERENCES.timeZone;
+  }
 }
 
 export function getDefaultLanguage(): SettingsLanguage {

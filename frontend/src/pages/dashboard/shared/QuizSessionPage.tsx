@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router";
 import { toast } from "sonner";
 import { useQuizLibrary } from "../../../app/providers/QuizLibraryProvider";
@@ -18,7 +18,9 @@ import { buildCompletedSessionFromAttempt } from "../../../features/quiz-session
 import { QuizPlayer } from "../../../features/quiz-session/components/QuizPlayer";
 import { QuizResultsSummary } from "../../../features/quiz-session/components/QuizResultsSummary";
 import { QuizReviewList } from "../../../features/quiz-session/components/QuizReviewList";
+import { QuizReviewLockedNotice } from "../../../features/quiz-session/components/QuizReviewLockedNotice";
 import { QuizStartScreen } from "../../../features/quiz-session/components/QuizStartScreen";
+import { getQuizFeedbackPolicy } from "../../../features/quiz-session/feedbackPolicy";
 import {
   buildQuizSessionPath,
   buildQuizSessionSearch,
@@ -225,6 +227,8 @@ export function QuizSessionPage({ viewerRole }: QuizSessionPageProps) {
   // stripped the ?session= param, or a direct navigation to the quiz page),
   // immediately redirect into that session so the student can't accidentally
   // start a duplicate attempt.
+  const [isStarting, setIsStarting] = useState(false);
+  const [isResuming, setIsResuming] = useState(false);
   const autoResumedRef = useRef(false);
   useEffect(() => {
     if (!isHydrated || autoResumedRef.current) {
@@ -354,6 +358,8 @@ export function QuizSessionPage({ viewerRole }: QuizSessionPageProps) {
       return;
     }
 
+    setIsStarting(true);
+
     try {
       const nextSession = await createSession(quiz, {
         viewerRole,
@@ -370,6 +376,7 @@ export function QuizSessionPage({ viewerRole }: QuizSessionPageProps) {
       if (viewerRole === "student") {
         void refreshAttempts();
       }
+      setIsStarting(false);
     }
   };
 
@@ -378,6 +385,7 @@ export function QuizSessionPage({ viewerRole }: QuizSessionPageProps) {
       return;
     }
 
+    setIsResuming(true);
     openSession(latestInProgressSession.id);
   };
 
@@ -398,22 +406,50 @@ export function QuizSessionPage({ viewerRole }: QuizSessionPageProps) {
       }
     >
       {activeSession?.status === "completed" ? (
-        <div className="space-y-6">
-          <QuizResultsSummary
-            session={activeSession}
-          onRetake={assignmentConstraints?.canStart ? handleStart : undefined}
-            returnLink={resolvedBackLink}
-            secondaryLink={
-              viewerRole === "student"
-                ? {
-                    path: "/dashboard/student/results",
-                    label: "Open My Results",
-                  }
-                : undefined
-            }
-          />
-          <QuizReviewList session={activeSession} />
-        </div>
+        (() => {
+          const reviewPolicy = getQuizFeedbackPolicy({
+            sourceType: activeSession.sourceType,
+            viewerRole: activeSession.viewerRole,
+            isAssigned: Boolean(activeSession.assignmentContext),
+            attemptsUsed: assignmentConstraints?.attemptsUsed ?? 0,
+            maxAttempts: assignmentConstraints?.maxAttempts ?? null,
+            hasInProgressAttempt: false,
+          });
+
+          return (
+            <div className="space-y-6">
+              <QuizResultsSummary
+                session={activeSession}
+                // Personal-library quizzes (no `assignmentConstraints`) have no
+                // attempt limit or deadline — let the student retake them freely.
+                // For assigned quizzes, defer to the constraint's `canStart` flag.
+                onRetake={
+                  !assignmentConstraints || assignmentConstraints.canStart
+                    ? handleStart
+                    : undefined
+                }
+                returnLink={resolvedBackLink}
+                secondaryLink={
+                  viewerRole === "student"
+                    ? {
+                        path: "/dashboard/student/results",
+                        label: "Open My Results",
+                      }
+                    : undefined
+                }
+              />
+              {reviewPolicy.showDetailedReview ? (
+                <QuizReviewList session={activeSession} />
+              ) : (
+                <QuizReviewLockedNotice
+                  attemptsUsed={assignmentConstraints?.attemptsUsed ?? 0}
+                  maxAttempts={assignmentConstraints?.maxAttempts ?? 0}
+                  reason={reviewPolicy.lockReason}
+                />
+              )}
+            </div>
+          );
+        })()
       ) : activeSession?.status === "in-progress" ? (
         <div className="space-y-4">
           <DashboardButton asChild type="button" size="lg" variant="ghost">
@@ -430,6 +466,8 @@ export function QuizSessionPage({ viewerRole }: QuizSessionPageProps) {
           assignmentConstraints={assignmentConstraints}
           latestInProgressSession={latestInProgressSession}
           latestCompletedSession={latestCompletedSession}
+          isStarting={isStarting}
+          isResuming={isResuming}
           onStart={assignmentConstraints?.canStart === false ? undefined : handleStart}
           onResume={latestInProgressSession ? handleResume : undefined}
           onReviewLatest={latestCompletedSession ? handleReviewLatest : undefined}

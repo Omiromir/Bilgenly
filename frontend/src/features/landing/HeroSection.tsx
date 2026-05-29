@@ -1,7 +1,9 @@
+import { useState } from "react";
 import { motion, useReducedMotion } from "motion/react";
 import { useNavigate } from "react-router";
 import { useAuth } from "../../app/providers/AuthProvider";
 import { BrowserMockup } from "./BrowserMockup";
+import { DemoVideoModal, DemoVideoPreview } from "./DemoVideo";
 import { LandingButton } from "./LandingButton";
 
 export function HeroSection() {
@@ -9,6 +11,7 @@ export function HeroSection() {
   const { defaultRedirectPath, isAuthenticated, onboardingCompleted } = useAuth();
   const primaryActionPath = isAuthenticated ? defaultRedirectPath : "/signup";
   const shouldReduceMotion = useReducedMotion();
+  const [isVideoModalOpen, setIsVideoModalOpen] = useState(false);
 
   const fadeUp = shouldReduceMotion
     ? { initial: { opacity: 0 }, animate: { opacity: 1 }, transition: { duration: 0.01 } }
@@ -121,6 +124,7 @@ export function HeroSection() {
             variant="secondary"
             size="md"
             className="w-full max-w-[220px] sm:w-auto"
+            onClick={() => setIsVideoModalOpen(true)}
           >
             Watch Demo
           </LandingButton>
@@ -140,12 +144,21 @@ export function HeroSection() {
           {...fadeUp}
           transition={{ duration: 0.6, delay: shouldReduceMotion ? 0 : 0.42 }}
         >
-          <BrowserMockup />
+          <BrowserMockup>
+            <DemoVideoPreview onExpand={() => setIsVideoModalOpen(true)} />
+          </BrowserMockup>
           <div className="pointer-events-none absolute -bottom-7 left-1/2 h-20 w-[92%] -translate-x-1/2 rounded-[24px] bg-white blur-[18px] sm:-bottom-10 sm:h-28 sm:rounded-[32px] sm:blur-[22px] dark:bg-[#0d1424]" />
         </motion.div>
 
         <div className="pointer-events-none mx-auto -mt-3 h-[30px] w-full rounded-[28px] bg-white shadow-[0_24px_70px_rgba(255,255,255,1)] sm:-mt-6 sm:h-[140px] sm:rounded-[40px] sm:shadow-[0_44px_110px_rgba(255,255,255,1)] dark:bg-[#0d1424] dark:shadow-[0_24px_70px_rgba(13,20,36,1)] sm:dark:shadow-[0_44px_110px_rgba(13,20,36,1)]" />
       </div>
+
+      {/* Fullscreen video modal — rendered outside the centered container so it
+          covers the entire viewport without any layout constraints. */}
+      <DemoVideoModal
+        isOpen={isVideoModalOpen}
+        onClose={() => setIsVideoModalOpen(false)}
+      />
     </section>
   );
 }

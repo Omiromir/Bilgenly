@@ -14,10 +14,26 @@ import type {
   TeacherClassRecord,
   TeacherClassStudent,
 } from "../components/classes/teacherClassesTypes";
-import type { AssignmentDto, ClassDto, ClassQuizDto } from "./dashboardApiTypes";
+import type { AssignmentDto, ClassDto, ClassQuizDto, PendingInvitationDto } from "./dashboardApiTypes";
 
 export function toCreateClassRequest(values: TeacherClassFormValues) {
   return normalizeTeacherClassFormValues(values);
+}
+
+function mapPendingInvitationDto(invitation: PendingInvitationDto): TeacherClassStudent {
+  return {
+    id: invitation.id,
+    fullName: buildTeacherStudentNameFromEmail(invitation.recipientEmail),
+    email: invitation.recipientEmail,
+    status: "invited" as const,
+    invitationStatus: "pending" as const,
+    invitedAt: invitation.createdAt,
+    joinedAt: undefined,
+    respondedAt: undefined,
+    linkedUserId: undefined,
+    avatar: undefined,
+    role: undefined,
+  } satisfies TeacherClassStudent;
 }
 
 function mapStudentDto(
@@ -172,7 +188,14 @@ export function mapClassDtoToTeacherClassRecord(
 
     return mapStudentDto(student, existingStudent);
   });
-  const students = mergeStudents(remoteStudents, existingStudents);
+
+  // Map pending invitations from backend — these survive page refresh
+  const joinedEmails = new Set(remoteStudents.map((s) => normalizeEmail(s.email)));
+  const remotePending = (teacherClass.pendingInvitations ?? [])
+    .filter((inv) => !joinedEmails.has(normalizeEmail(inv.recipientEmail)))
+    .map(mapPendingInvitationDto);
+
+  const students = mergeStudents([...remoteStudents, ...remotePending], existingStudents);
   const remoteAssignments = assignments
     ? assignments.map(mapAssignmentDtoToTeacherAssignedQuiz)
     : teacherClass.quizzes.map((quiz) =>

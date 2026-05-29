@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import { toast } from "sonner";
 import {
@@ -48,9 +48,64 @@ import { LoadingCard } from "../../../features/dashboard/components/LoadingCard"
 import { useAssignmentAnalytics } from "../../../features/dashboard/hooks/useDashboardAnalytics";
 import { useDashboardPageMeta } from "../../../features/dashboard/hooks/useDashboardPageMeta";
 import { formatCurrentShortDate } from "../../../features/dashboard/settings/settingsPreferences";
+import { grantExtraAttempt } from "../../../features/dashboard/api/classesApi";
 
 function escapeCsvValue(value: string | number) {
   return `"${String(value).replace(/"/g, '""')}"`;
+}
+
+// ─── Action cooldown helpers ──────────────────────────────────────────────────
+//
+// Prevents teachers from hammering the same follow-up action repeatedly.
+// State is persisted in localStorage so a page refresh doesn't reset it.
+//
+// Cooldown windows (intentionally different per action severity):
+//   • Notification nudges  — 10 min per student × assignment × kind
+//   • Grant extra attempt  —  3 min per assignment (mutates DB for all students)
+
+const COOLDOWN_MS: Record<string, number> = {
+  needs_review: 10 * 60_000,
+  follow_up_practice: 10 * 60_000,
+  grant_attempt: 3 * 60_000,
+};
+
+const COOLDOWN_STORAGE_PREFIX = "bilgenly:teacher:cooldown:";
+
+function buildCooldownKey(
+  kind: string,
+  assignmentId: string,
+  studentId?: string,
+): string {
+  return studentId
+    ? `${COOLDOWN_STORAGE_PREFIX}${kind}:${assignmentId}:${studentId}`
+    : `${COOLDOWN_STORAGE_PREFIX}${kind}:${assignmentId}`;
+}
+
+/** Returns milliseconds remaining on a cooldown, or 0 if the action is allowed. */
+function getCooldownRemaining(key: string, cooldownMs: number): number {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return 0;
+    const elapsed = Date.now() - parseInt(raw, 10);
+    return Math.max(0, cooldownMs - elapsed);
+  } catch {
+    return 0;
+  }
+}
+
+function stampCooldown(key: string): void {
+  try {
+    localStorage.setItem(key, String(Date.now()));
+  } catch {
+    // localStorage unavailable — just allow the action
+  }
+}
+
+function formatCooldownRemaining(ms: number): string {
+  const totalSeconds = Math.ceil(ms / 1000);
+  if (totalSeconds < 60) return `${totalSeconds}s`;
+  const minutes = Math.ceil(totalSeconds / 60);
+  return `${minutes} min`;
 }
 
 function matchesScoreRange(
@@ -88,25 +143,125 @@ function getFollowUpToastCopy(
   if (wasCreated) {
     switch (followUpKind) {
       case "reassign_quiz":
-        return `Another Attempt Requested added to ${studentName}'s in-app notifications.`;
+        return `Sent ${studentName} a nudge to retake the quiz.`;
       case "follow_up_practice":
-        return `Practice Follow-up added to ${studentName}'s in-app notifications.`;
+        return `Sent ${studentName} a practice suggestion.`;
       case "needs_review":
       default:
-        return `Review Request added to ${studentName}'s in-app notifications.`;
+        return `Sent ${studentName} a review reminder.`;
     }
   }
 
   switch (followUpKind) {
     case "reassign_quiz":
-      return `No in-app notification was created because ${studentName}'s Another Attempt Requested preference is disabled.`;
+      return `${studentName} has retake nudges disabled — no notification was sent.`;
     case "follow_up_practice":
-      return `No in-app notification was created because ${studentName}'s Practice Follow-up preference is disabled.`;
+      return `${studentName} has practice suggestions disabled — no notification was sent.`;
     case "needs_review":
     default:
-      return `No in-app notification was created because ${studentName}'s Review Request preference is disabled.`;
+      return `${studentName} has review reminders disabled — no notification was sent.`;
   }
 }
+
+// ─── Skeleton helpers ────────────────────────────────────────────────────────
+
+function StatCardSkeleton() {
+  return (
+    <div className="animate-pulse space-y-3 rounded-[20px] border border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-elevated)] p-5">
+      <div className="flex items-center justify-between">
+        <div className="h-3 w-24 rounded-full bg-[var(--dashboard-surface-muted)]" />
+        <div className="h-8 w-8 rounded-xl bg-[var(--dashboard-surface-muted)]" />
+      </div>
+      <div className="h-9 w-20 rounded-lg bg-[var(--dashboard-surface-muted)]" />
+      <div className="h-3 w-40 rounded-full bg-[var(--dashboard-surface-muted)]" />
+    </div>
+  );
+}
+
+function TableBodySkeleton() {
+  return (
+    <>
+      {Array.from({ length: 6 }).map((_, i) => (
+        <tr
+          key={i}
+          className="animate-pulse border-b border-[var(--dashboard-border-soft)]"
+        >
+          <td className="px-4 py-3.5">
+            <div className="space-y-1.5">
+              <div className="h-3.5 w-28 rounded-full bg-[var(--dashboard-surface-muted)]" />
+              <div className="h-3 w-36 rounded-full bg-[var(--dashboard-surface-muted)] opacity-60" />
+            </div>
+          </td>
+          <td className="px-3 py-3.5">
+            <div className="h-5 w-16 rounded-full bg-[var(--dashboard-surface-muted)]" />
+          </td>
+          <td className="px-3 py-3.5">
+            <div className="h-3.5 w-12 rounded-full bg-[var(--dashboard-surface-muted)]" />
+          </td>
+          <td className="px-3 py-3.5">
+            <div className="h-3.5 w-10 rounded-full bg-[var(--dashboard-surface-muted)]" />
+          </td>
+          <td className="px-3 py-3.5">
+            <div className="h-3.5 w-20 rounded-full bg-[var(--dashboard-surface-muted)]" />
+          </td>
+          <td className="px-3 py-3.5">
+            <div className="h-3.5 w-16 rounded-full bg-[var(--dashboard-surface-muted)]" />
+          </td>
+          <td className="px-4 py-3.5 text-right">
+            <div className="ml-auto h-7 w-7 rounded-lg bg-[var(--dashboard-surface-muted)]" />
+          </td>
+        </tr>
+      ))}
+    </>
+  );
+}
+
+function AnalyticsContentSkeleton() {
+  return (
+    <div className="animate-pulse space-y-5 p-2">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div
+            key={i}
+            className="space-y-2 rounded-xl border border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-elevated)] p-4"
+          >
+            <div className="h-3 w-16 rounded-full bg-[var(--dashboard-surface-muted)]" />
+            <div className="h-6 w-10 rounded-lg bg-[var(--dashboard-surface-muted)]" />
+          </div>
+        ))}
+      </div>
+      <div className="h-40 rounded-xl bg-[var(--dashboard-surface-muted)]" />
+      <div className="space-y-2.5">
+        {[70, 55, 40].map((w, i) => (
+          <div
+            key={i}
+            className="h-3 rounded-full bg-[var(--dashboard-surface-muted)]"
+            style={{ width: `${w}%` }}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function InsightsPanelSkeleton() {
+  return (
+    <div className="animate-pulse space-y-5 rounded-[20px] border border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-elevated)] p-5">
+      <div className="space-y-2">
+        <div className="h-4 w-32 rounded-full bg-[var(--dashboard-surface-muted)]" />
+        <div className="h-3 w-48 rounded-full bg-[var(--dashboard-surface-muted)]" />
+      </div>
+      <div className="h-20 rounded-xl bg-[var(--dashboard-surface-muted)]" />
+      <div className="space-y-2.5">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="h-12 rounded-xl bg-[var(--dashboard-surface-muted)]" />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 export function TeacherAnalyticsPage() {
   const meta = useDashboardPageMeta();
@@ -175,6 +330,29 @@ export function TeacherAnalyticsPage() {
 
   const analytics = assignmentAnalyticsState.data;
 
+  // Track which assignment's data is currently rendered so we can detect when
+  // the selection has moved ahead of the loaded data.
+  //
+  // IMPORTANT: selectedAssignment?.assignmentId is intentionally NOT in the
+  // deps array. If it were included, the effect would fire the moment the user
+  // switches selection — at that instant isLoading is still false and data is
+  // still the old payload, so the ref would jump to the new ID before loading
+  // even starts, making isSwitchingAnalytics always evaluate to false.
+  // We only want the ref to advance when a fetch actually completes.
+  const loadedAssignmentIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (assignmentAnalyticsState.data && !assignmentAnalyticsState.isLoading) {
+      // At this point selectedAssignment?.assignmentId is the assignment whose
+      // data just arrived — correct to record as "loaded".
+      loadedAssignmentIdRef.current = selectedAssignment?.assignmentId ?? null;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [assignmentAnalyticsState.data, assignmentAnalyticsState.isLoading]);
+
+  const isSwitchingAnalytics =
+    assignmentAnalyticsState.isLoading &&
+    loadedAssignmentIdRef.current !== (selectedAssignment?.assignmentId ?? null);
+
   const filteredRows = useMemo(() => {
     if (!analytics) {
       return [];
@@ -241,6 +419,17 @@ export function TeacherAnalyticsPage() {
       return;
     }
 
+    const cooldownKey = buildCooldownKey(
+      followUpKind,
+      selectedAssignment.assignmentId,
+      row.student.id,
+    );
+    const remaining = getCooldownRemaining(cooldownKey, COOLDOWN_MS[followUpKind] ?? 600_000);
+    if (remaining > 0) {
+      toast(`${row.student.fullName} was already nudged recently. Try again in ${formatCooldownRemaining(remaining)}.`);
+      return;
+    }
+
     const recipientUserId = row.student.linkedUserId ?? row.student.id;
     if (!recipientUserId) {
       toast.error("This student is missing a linked account, so no in-app notification was created.");
@@ -271,11 +460,74 @@ export function TeacherAnalyticsPage() {
     );
 
     if (notification) {
+      stampCooldown(cooldownKey);
       toast.success(toastMessage);
       return;
     }
 
+    // Even when the student has notifications disabled we still stamp the
+    // cooldown — the teacher has "acted" and we shouldn't let them try again
+    // immediately in case the student re-enables notifications.
+    stampCooldown(cooldownKey);
     toast(toastMessage);
+  };
+
+  // Grants one extra attempt on the assignment (increments MaxAttempts by 1
+  // server-side so the student can actually start a new attempt), then also
+  // sends them an in-app notification so they know the door is open again.
+  const handleGrantAttempt = async (row: TeacherStudentQuizResultRowData) => {
+    if (!selectedClass || !selectedAssignment || !currentUser) {
+      return;
+    }
+
+    // Cooldown is per-assignment (not per-student) because this action changes
+    // the DB cap for ALL students — rapid re-clicks would increment it multiple
+    // times unintentionally.
+    const cooldownKey = buildCooldownKey("grant_attempt", selectedAssignment.assignmentId);
+    const remaining = getCooldownRemaining(cooldownKey, COOLDOWN_MS.grant_attempt);
+    if (remaining > 0) {
+      toast(`Extra attempt was granted recently for this quiz. You can grant another in ${formatCooldownRemaining(remaining)}.`);
+      return;
+    }
+
+    try {
+      const result = await grantExtraAttempt(
+        selectedClass.id,
+        selectedAssignment.assignmentId,
+      );
+
+      const recipientUserId = row.student.linkedUserId ?? row.student.id;
+      if (recipientUserId) {
+        sendQuizFollowUpNotification({
+          recipientUserId,
+          recipientEmail: row.student.email,
+          relatedClassId: selectedClass.id,
+          relatedClassName: selectedClass.name,
+          senderName: currentUser.fullName,
+          senderEmail: currentUser.email,
+          studentId: row.student.id,
+          studentName: row.student.fullName,
+          studentEmail: row.student.email,
+          quizId: selectedAssignment.quizId,
+          quizTitle: selectedAssignment.title,
+          assignmentId: selectedAssignment.assignmentId,
+          attemptId: row.latestAttemptId ?? undefined,
+          followUpKind: "reassign_quiz",
+        });
+      }
+
+      stampCooldown(cooldownKey);
+
+      if (result.unlimited) {
+        toast.success(`Attempts are already unlimited for "${selectedAssignment.title}" — ${row.student.fullName} can retake anytime.`);
+      } else {
+        toast.success(
+          `Granted one extra attempt for "${selectedAssignment.title}". New cap: ${result.maxAttempts} attempts. ${row.student.fullName} has been notified.`,
+        );
+      }
+    } catch {
+      toast.error("Could not grant the extra attempt. Please try again.");
+    }
   };
 
   const handleExportCsv = () => {
@@ -461,7 +713,14 @@ export function TeacherAnalyticsPage() {
 
             <div className="flex flex-wrap gap-2">
               <DashboardBadge tone="white">
-                {filteredRows.length} visible students
+                {isSwitchingAnalytics ? (
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-white/60" />
+                    Loading…
+                  </span>
+                ) : (
+                  `${filteredRows.length} visible students`
+                )}
               </DashboardBadge>
               <DashboardBadge tone="white">
                 {selectedAssignment.questionCount} questions
@@ -588,38 +847,49 @@ export function TeacherAnalyticsPage() {
       </DashboardSurface>
 
       <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
-        <ClassQuizAnalyticsCard
-          title="Completion Rate"
-          value={`${analytics.completionRate}%`}
-          helper={`${analytics.completedStudentsCount} of ${analytics.assignedStudentsCount} joined students finished the assigned quiz.`}
-          icon={CheckCircle2}
-          tone="success"
-        />
-        <ClassQuizAnalyticsCard
-          title="Average Score"
-          value={analytics.averageScore === null ? "--" : `${analytics.averageScore}%`}
-          helper="Based on each student's latest completed attempt."
-          icon={TrendingUp}
-          tone="brand"
-        />
-        <ClassQuizAnalyticsCard
-          title="Needs Attention"
-          value={String(analytics.interventionStudents.length)}
-          helper={`${analytics.exhaustedAttemptsStudentsCount} exhausted attempts or fell below ${DEFAULT_INTERVENTION_THRESHOLD}%.`}
-          icon={Users}
-          tone="warning"
-        />
-        <ClassQuizAnalyticsCard
-          title="Missed Deadline"
-          value={String(analytics.missedDeadlineStudentsCount)}
-          helper={
-            analytics.missedDeadlineStudentsCount
-              ? `${analytics.expirationRate}% of the class`
-              : "No missed deadlines yet."
-          }
-          icon={CalendarDays}
-          tone="accent"
-        />
+        {isSwitchingAnalytics ? (
+          <>
+            <StatCardSkeleton />
+            <StatCardSkeleton />
+            <StatCardSkeleton />
+            <StatCardSkeleton />
+          </>
+        ) : (
+          <>
+            <ClassQuizAnalyticsCard
+              title="Completion Rate"
+              value={`${analytics.completionRate}%`}
+              helper={`${analytics.completedStudentsCount} of ${analytics.assignedStudentsCount} joined students finished the assigned quiz.`}
+              icon={CheckCircle2}
+              tone="success"
+            />
+            <ClassQuizAnalyticsCard
+              title="Average Score"
+              value={analytics.averageScore === null ? "--" : `${analytics.averageScore}%`}
+              helper="Based on each student's latest completed attempt."
+              icon={TrendingUp}
+              tone="brand"
+            />
+            <ClassQuizAnalyticsCard
+              title="Needs Attention"
+              value={String(analytics.interventionStudents.length)}
+              helper={`${analytics.exhaustedAttemptsStudentsCount} exhausted attempts or fell below ${DEFAULT_INTERVENTION_THRESHOLD}%.`}
+              icon={Users}
+              tone="warning"
+            />
+            <ClassQuizAnalyticsCard
+              title="Missed Deadline"
+              value={String(analytics.missedDeadlineStudentsCount)}
+              helper={
+                analytics.missedDeadlineStudentsCount
+                  ? `${analytics.expirationRate}% of the class`
+                  : "No missed deadlines yet."
+              }
+              icon={CalendarDays}
+              tone="accent"
+            />
+          </>
+        )}
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(360px,0.95fr)]">
@@ -687,29 +957,31 @@ export function TeacherAnalyticsPage() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {filteredRows.map((row) => (
-                          <StudentQuizResultRow
-                            key={row.rowId}
-                            row={row}
-                            isSelected={row.rowId === selectedStudentRowId}
-                            onSelect={() => setSelectedStudentRowId(row.rowId)}
-                            actionMenu={
-                              <ActionMenu
-                                studentName={row.student.fullName}
-                                onViewDetails={() => setSelectedStudentRowId(row.rowId)}
-                                onNotifyStudent={() =>
-                                  handleTeacherFollowUp(row, "needs_review")
-                                }
-                                onReassignQuiz={() =>
-                                  handleTeacherFollowUp(row, "reassign_quiz")
-                                }
-                                onScheduleFollowUp={() =>
-                                  handleTeacherFollowUp(row, "follow_up_practice")
-                                }
-                              />
-                            }
-                          />
-                        ))}
+                        {isSwitchingAnalytics ? (
+                          <TableBodySkeleton />
+                        ) : (
+                          filteredRows.map((row) => (
+                            <StudentQuizResultRow
+                              key={row.rowId}
+                              row={row}
+                              isSelected={row.rowId === selectedStudentRowId}
+                              onSelect={() => setSelectedStudentRowId(row.rowId)}
+                              actionMenu={
+                                <ActionMenu
+                                  studentName={row.student.fullName}
+                                  onViewDetails={() => setSelectedStudentRowId(row.rowId)}
+                                  onNotifyStudent={() =>
+                                    handleTeacherFollowUp(row, "needs_review")
+                                  }
+                                  onReassignQuiz={() => handleGrantAttempt(row)}
+                                  onScheduleFollowUp={() =>
+                                    handleTeacherFollowUp(row, "follow_up_practice")
+                                  }
+                                />
+                              }
+                            />
+                          ))
+                        )}
                       </TableBody>
                     </Table>
                   </div>
@@ -748,50 +1020,62 @@ export function TeacherAnalyticsPage() {
                 </TabsTrigger>
               </TabsList>
 
-              <TabsContent value="summary">
-                <QuizSummaryPanel
-                  assignment={selectedAssignment}
-                  analytics={analytics}
-                  onExportCsv={handleExportCsv}
-                />
-              </TabsContent>
+              {isSwitchingAnalytics ? (
+                <TabsContent value={analyticsView}>
+                  <AnalyticsContentSkeleton />
+                </TabsContent>
+              ) : (
+                <>
+                  <TabsContent value="summary">
+                    <QuizSummaryPanel
+                      assignment={selectedAssignment}
+                      analytics={analytics}
+                      onExportCsv={handleExportCsv}
+                    />
+                  </TabsContent>
 
-              <TabsContent value="questions">
-                <div className="max-h-[420px] overflow-y-auto pr-1">
-                  <QuestionAnalyticsPanel questions={analytics.questionAnalytics} />
-                </div>
-              </TabsContent>
+                  <TabsContent value="questions">
+                    <div className="max-h-[420px] overflow-y-auto pr-1">
+                      <QuestionAnalyticsPanel questions={analytics.questionAnalytics} />
+                    </div>
+                  </TabsContent>
 
-              <TabsContent value="distribution">
-                <ScoreDistributionPanel analytics={analytics} />
-              </TabsContent>
+                  <TabsContent value="distribution">
+                    <ScoreDistributionPanel analytics={analytics} />
+                  </TabsContent>
 
-              <TabsContent value="interventions">
-                <InterventionPanel analytics={analytics} />
-              </TabsContent>
+                  <TabsContent value="interventions">
+                    <InterventionPanel analytics={analytics} />
+                  </TabsContent>
+                </>
+              )}
             </Tabs>
           </SectionCard>
         </div>
 
-        <StudentQuizInsightsPanel
-          assignment={selectedAssignment}
-          row={selectedRow}
-          onNotifyStudent={
-            selectedRow
-              ? () => handleTeacherFollowUp(selectedRow, "needs_review")
-              : undefined
-          }
-          onReassignQuiz={
-            selectedRow
-              ? () => handleTeacherFollowUp(selectedRow, "reassign_quiz")
-              : undefined
-          }
-          onScheduleFollowUp={
-            selectedRow
-              ? () => handleTeacherFollowUp(selectedRow, "follow_up_practice")
-              : undefined
-          }
-        />
+        {isSwitchingAnalytics ? (
+          <InsightsPanelSkeleton />
+        ) : (
+          <StudentQuizInsightsPanel
+            assignment={selectedAssignment}
+            row={selectedRow}
+            onNotifyStudent={
+              selectedRow
+                ? () => handleTeacherFollowUp(selectedRow, "needs_review")
+                : undefined
+            }
+            onReassignQuiz={
+              selectedRow
+                ? () => handleGrantAttempt(selectedRow)
+                : undefined
+            }
+            onScheduleFollowUp={
+              selectedRow
+                ? () => handleTeacherFollowUp(selectedRow, "follow_up_practice")
+                : undefined
+            }
+          />
+        )}
       </div>
     </div>
   );

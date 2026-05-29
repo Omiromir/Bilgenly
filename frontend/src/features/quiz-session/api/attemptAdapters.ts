@@ -30,10 +30,43 @@ export function mergeQuizWithStartedAttempt(
       .sort((left, right) => left.position - right.position)
       .map((backendQuestion) => {
         const existingQuestion = questionById.get(backendQuestion.id);
-        const correctIndexes =
-          existingQuestion?.selectionMode === "multiple" && existingQuestion.correctIndexes?.length
+
+        // CRITICAL: the backend may return `answers` in a different order than
+        // the cached `existingQuestion.options` (e.g. shuffled per-attempt).
+        // Carrying over the cached `correctIndexes` verbatim would then point
+        // at the WRONG options. Re-resolve correctness by stable option ID
+        // (falling back to text), then map back to indexes in the NEW order.
+        const cachedCorrectPositions =
+          existingQuestion?.selectionMode === "multiple" &&
+          existingQuestion.correctIndexes?.length
             ? existingQuestion.correctIndexes
             : [existingQuestion?.correctIndex ?? 0];
+
+        const cachedCorrectIds = new Set(
+          cachedCorrectPositions
+            .map((position) => existingQuestion?.optionIds?.[position])
+            .filter((value): value is string => Boolean(value)),
+        );
+        const cachedCorrectTexts = new Set(
+          cachedCorrectPositions
+            .map((position) => existingQuestion?.options?.[position])
+            .filter((value): value is string => Boolean(value)),
+        );
+
+        const remappedCorrectIndexes = backendQuestion.answers
+          .map((answer, index) =>
+            cachedCorrectIds.has(answer.id) || cachedCorrectTexts.has(answer.text)
+              ? index
+              : -1,
+          )
+          .filter((index) => index >= 0);
+
+        // Defensive: if remapping yields nothing (e.g. brand-new question
+        // with no cached entry), fall back to the cached positions so we
+        // don't show a question with zero correct answers.
+        const correctIndexes = remappedCorrectIndexes.length
+          ? remappedCorrectIndexes
+          : cachedCorrectPositions;
 
         return {
           id: backendQuestion.id,

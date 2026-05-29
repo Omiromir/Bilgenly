@@ -210,8 +210,12 @@ public class AnalyticsService
             .Where(cs => cs.Student != null)
             .ToList();
         var studentIds = students.Select(cs => cs.StudentId).ToHashSet();
+        // Scope to this assignment only — excludes attempts from a previous
+        // assignment that was removed and recreated for the same quiz.
+        // Attempts created before the AssignmentId field existed (null) are
+        // excluded so stale data from old assignments doesn't bleed through.
         var allAttempts = (await _attemptRepository.GetByQuizIdAsync(quiz.Id))
-            .Where(a => studentIds.Contains(a.UserId))
+            .Where(a => studentIds.Contains(a.UserId) && a.AssignmentId == assignment.Id)
             .OrderByDescending(a => a.DateTaken)
             .ToList();
         var deadlinePassed = assignment.Deadline.HasValue
@@ -386,7 +390,9 @@ public class AnalyticsService
                 ? Math.Round((double)completed / students.Count * 100, 1)
                 : 0,
             AverageScore = completedStudentResults.Any(result => result.LatestScore.HasValue)
-                ? Math.Round(completedStudentResults.Average(result => result.LatestScore!.Value), 1)
+                ? Math.Round(completedStudentResults
+                    .Where(result => result.LatestScore.HasValue)
+                    .Average(result => result.LatestScore!.Value), 1)
                 : null,
             AvgAttemptsUsed = students.Count > 0
                 ? Math.Round(studentResults.Average(result => result.AttemptsUsed), 1)

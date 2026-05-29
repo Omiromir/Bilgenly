@@ -1,6 +1,6 @@
-import { createContext, useContext, useEffect, useState, useCallback, useMemo } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getMyAttempts, type MyAttemptDto } from "../../features/quiz-session/api/attemptsApi";
-import { useQuizSessions } from "./QuizSessionProvider";
 import { useAuth } from "./AuthProvider";
 
 interface StudentAttemptsContextType {
@@ -17,64 +17,58 @@ interface StudentAttemptsProviderProps {
 }
 
 export function StudentAttemptsProvider({ children }: StudentAttemptsProviderProps) {
-  const [attempts, setAttempts] = useState<MyAttemptDto[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [refreshKey, setRefreshKey] = useState(0);
-  const { sessions } = useQuizSessions();
-  const { role, token } = useAuth();
+  const { role, token, currentUser } = useAuth();
+  const userId = currentUser?.id ?? null;
+  const queryClient = useQueryClient();
 
-  // Track number of completed sessions to trigger refresh when a new one is completed
-  const completedSessionCount = useMemo(
-    () => sessions.filter((s) => s.status === "completed").length,
-    [sessions]
-  );
+  // The query key includes userId so different accounts never share cached data.
+  // staleTime is intentionally short (30 s) since attempt history changes after
+  // each quiz completion — refreshAttempts() force-invalidates the cache anyway.
+  const queryKey = useMemo(() => ["myAttempts", userId] as const, [userId]);
 
+  const { data, isLoading, error } = useQuery({
+    queryKey,
+    queryFn: getMyAttempts,
+    enabled: Boolean(token && userId && role === "student"),
+    staleTime: 30 * 1000,
+    retry: 1,
+  });
+
+  // Invalidating the query triggers an immediate background re-fetch.
+  // Callers (e.g. QuizSessionPage after quiz completion) no longer need to wait
+  // for a 500 ms debounce — the data updates as soon as the API responds.
   const refreshAttempts = useCallback(async () => {
-    if (!token || role !== "student") {
-      setAttempts([]);
-      setError(null);
-      setIsLoading(false);
-      return;
-    }
+    await queryClient.invalidateQueries({ queryKey });
+  }, [queryClient, queryKey]);
 
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      const data = await getMyAttempts();
-      setAttempts(data);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to load attempts";
-      setError(message);
-      console.error("Failed to load student attempts:", err);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [role, token]);
-
-  // Initial load
+  // When a quiz is deleted (by admin or anywhere else in the app), every
+  // attempt referencing that quiz is also gone on the backend — invalidate
+  // so the student's results list updates live instead of showing ghost
+  // entries that 404 on click.
   useEffect(() => {
-    void refreshAttempts();
-  }, [refreshAttempts, refreshKey]);
-
-  // Auto-refresh when completed sessions change
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setRefreshKey((prev) => prev + 1);
-    }, 500);
-
-    return () => clearTimeout(timer);
-  }, [completedSessionCount, role]);
+    function onQuizDeleted() {
+      void queryClient.invalidateQueries({ queryKey });
+    }
+    window.addEventListener(
+      "bilgenly:quiz-deleted",
+      onQuizDeleted as EventListener,
+    );
+    return () => {
+      window.removeEventListener(
+        "bilgenly:quiz-deleted",
+        onQuizDeleted as EventListener,
+      );
+    };
+  }, [queryClient, queryKey]);
 
   const value: StudentAttemptsContextType = useMemo(
     () => ({
-      attempts,
-      isLoading,
-      error,
+      attempts: data ?? [],
+      isLoading: isLoading && !data, // don't flash loading when stale data is shown
+      error: error ? (error instanceof Error ? error.message : String(error)) : null,
       refreshAttempts,
     }),
-    [attempts, isLoading, error, refreshAttempts]
+    [data, isLoading, error, refreshAttempts],
   );
 
   return (

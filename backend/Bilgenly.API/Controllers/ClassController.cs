@@ -15,12 +15,35 @@ public class ClassController : ControllerBase
     private readonly ClassService _classService;
     private readonly IClassRepository _classRepository;
     private readonly ClassInvitationService _classInvitationService;
+    private readonly IUserRepository _userRepository;
 
-    public ClassController(ClassService classService, IClassRepository classRepository, ClassInvitationService classInvitationService)
+    public ClassController(ClassService classService, IClassRepository classRepository, ClassInvitationService classInvitationService, IUserRepository userRepository)
     {
         _classService = classService;
         _classInvitationService = classInvitationService;
         _classRepository = classRepository;
+        _userRepository = userRepository;
+    }
+
+    [HttpGet("student-search")]
+    [Authorize(Roles = "Teacher")]
+    public async Task<IActionResult> SearchStudents([FromQuery] string q)
+    {
+        if (string.IsNullOrWhiteSpace(q) || q.Trim().Length < 2)
+            return Ok(new List<object>());
+
+        var teacherId = Guid.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+        var students = await _userRepository.SearchStudentsAsync(q.Trim(), teacherId);
+
+        var result = students.Select(u => new
+        {
+            id = u.Id,
+            username = u.Username,
+            email = u.Email,
+            avatarUrl = u.AvatarUrl,
+        });
+
+        return Ok(result);
     }
 
     [HttpPost("{classId:guid}/invite")]
@@ -50,6 +73,23 @@ public class ClassController : ControllerBase
         var (success, error) = await _classService.RemoveStudentAsync(classId, studentId, teacherId);
         if (!success) return BadRequest(new { message = error });
         return Ok(new { message = "Student removed from class" });
+    }
+
+    [HttpDelete("{classId:guid}/invitations/{invitationId:guid}")]
+    [Authorize(Roles = "Teacher")]
+    public async Task<IActionResult> RevokeInvitation(Guid classId, Guid invitationId)
+    {
+        var teacherId = Guid.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+        var classEntity = await _classRepository.GetByIdAsync(classId);
+        if (classEntity is null) return NotFound(new { message = "Class not found" });
+        if (classEntity.TeacherId != teacherId) return Forbid();
+
+        var invitation = await _classInvitationService.GetInvitationByIdAsync(invitationId);
+        if (invitation is null || invitation.ClassId != classId)
+            return NotFound(new { message = "Invitation not found" });
+
+        await _classInvitationService.DeleteInvitationAsync(invitation);
+        return Ok(new { message = "Invitation revoked" });
     }
     [HttpPost]
     [Authorize(Roles = "Teacher")]
@@ -125,6 +165,27 @@ public class ClassController : ControllerBase
         var (success, error) = await _classService.RemoveAssignmentAsync(classId, assignmentId, teacherId);
         if (!success) return BadRequest(new { message = error });
         return Ok(new { message = "Assignment removed" });
+    }
+
+    /// <summary>
+    /// Grants one extra attempt to all students for the given assignment by
+    /// incrementing its MaxAttempts cap. If the assignment has no cap
+    /// (unlimited attempts) the endpoint returns a success with unlimited=true.
+    /// </summary>
+    [HttpPatch("{classId}/assignments/{assignmentId}/grant-attempt")]
+    [Authorize(Roles = "Teacher")]
+    public async Task<IActionResult> GrantExtraAttempt(Guid classId, Guid assignmentId)
+    {
+        var teacherId = Guid.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+        var (newMaxAttempts, error) = await _classService.GrantExtraAttemptAsync(classId, assignmentId, teacherId);
+        if (error is not null) return BadRequest(new { message = error });
+
+        return Ok(new
+        {
+            message = "Extra attempt granted",
+            maxAttempts = newMaxAttempts,
+            unlimited = newMaxAttempts is null
+        });
     }
     [HttpPost("{classId}/assignments")]
     [Authorize(Roles = "Teacher")]

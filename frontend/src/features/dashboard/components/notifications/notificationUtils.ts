@@ -135,6 +135,9 @@ export function getNotificationStatusLabel(notification: DashboardNotification) 
   if (notification.type === "quiz_follow_up") {
     return "In app";
   }
+  if (notification.type === "quiz_removed_by_admin") {
+    return "Admin action";
+  }
 
   switch (notification.status) {
     case "accepted":
@@ -152,6 +155,9 @@ export function getNotificationStatusLabel(notification: DashboardNotification) 
 export function getNotificationStatusTone(notification: DashboardNotification) {
   if (notification.type === "quiz_follow_up") {
     return "info" as const;
+  }
+  if (notification.type === "quiz_removed_by_admin") {
+    return "danger" as const;
   }
 
   switch (notification.status) {
