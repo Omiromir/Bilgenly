@@ -130,6 +130,7 @@ export interface StudentAttemptQuestionResponseDto {
   correctAnswerId?: string | null;
   correctAnswerText?: string | null;
   isCorrect: boolean;
+  tags?: string[];
   answerOptions: StudentAttemptQuestionResponseOptionDto[];
 }
 
@@ -201,6 +202,7 @@ export interface CreateQuizQuestionRequest {
   points?: number;
   estimatedMinutes?: number;
   imageUrl?: string;
+  tags?: string[];
   answers: CreateQuizAnswerRequest[];
 }
 
@@ -226,6 +228,7 @@ export interface UpdateQuizQuestionRequest {
   points: number;
   estimatedMinutes: number;
   imageUrl?: string;
+  tags?: string[];
   answers: UpdateQuizAnswerRequest[];
 }
 
@@ -251,6 +254,7 @@ export interface QuizQuestionDto {
   points: number;
   estimatedMinutes: number;
   imageUrl?: string | null;
+  tags?: string[];
   answers: QuizAnswerDto[];
 }
 

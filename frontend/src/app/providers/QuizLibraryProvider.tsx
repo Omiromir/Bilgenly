@@ -1,4 +1,4 @@
-import {
+﻿import {
   createContext,
   type ReactNode,
   useContext,
@@ -119,9 +119,6 @@ function normalizeTags(tags: string[]) {
 const QUESTION_TYPE_TAGS = new Set(["Multiple choice", "True/False"]);
 
 function sanitizeQuizRecord(quiz: QuizRecord): QuizRecord {
-  // When the quiz has questions loaded, re-derive which question-type tags are
-  // actually valid. This fixes quizzes saved before the tag logic was corrected
-  // (they had both "Multiple choice" AND "True/False" regardless of content).
   const actualTypes =
     quiz.questions.length > 0
       ? new Set(quiz.questions.map((q) => q.questionType ?? "Multiple choice"))
@@ -130,16 +127,12 @@ function sanitizeQuizRecord(quiz: QuizRecord): QuizRecord {
   const cleanedTags = normalizeTags(
     (quiz.tags ?? []).filter((tag) => {
       if (QUESTION_TYPE_TAGS.has(tag)) {
-        // Keep only if this type actually appears in the quiz questions
         return !actualTypes || actualTypes.has(tag as "Multiple choice" | "True/False");
       }
       return true;
     }),
   );
 
-  // Normalize legacy public/published-public quizzes back to private —
-  // public discovery has been removed until backend-backed support exists,
-  // so any old state must not resurface in the UI.
   const normalizedVisibility = "private" as const;
   const normalizedStatus =
     quiz.status === "published-public" ? "published-private" : quiz.status;
@@ -148,8 +141,6 @@ function sanitizeQuizRecord(quiz: QuizRecord): QuizRecord {
     ...quiz,
     visibility: normalizedVisibility,
     status: normalizedStatus,
-    // savedByRoles is a defunct local-only field — clear it so stale data
-    // never re-creates a phantom "saved" badge on someone else's quiz.
     savedByRoles: undefined,
     tags: cleanedTags,
     questions: quiz.questions.map((question) => ({
@@ -187,8 +178,6 @@ function mapQuizRecordToCreateQuizRequest(quiz: QuizRecord) {
   return {
     title: quiz.title,
     description: quiz.description,
-    // Public visibility is removed from the UI until backend-backed discovery
-    // exists. Always persist created quizzes as private.
     isPublic: false,
     questions: quiz.questions.map((question, index) => {
       const correctIndexes = getCorrectAnswerIndexes(question);
@@ -204,6 +193,7 @@ function mapQuizRecordToCreateQuizRequest(quiz: QuizRecord) {
           Math.round(question.estimatedMinutes ?? 1),
         ),
         imageUrl: question.imageUrl,
+        tags: question.tags ?? [],
         answers: question.options.map((option, optionIndex) => ({
           text: option,
           isCorrect: correctIndexes.includes(optionIndex),
@@ -217,9 +207,6 @@ function mapQuizRecordToUpdateQuizRequest(quiz: QuizRecord) {
   return {
     title: quiz.title,
     description: quiz.description,
-    // Public visibility is removed from the UI until backend-backed discovery
-    // exists. Always persist updates as private — this also normalises any
-    // legacy quizzes a user previously marked public.
     isPublic: false,
     questions: quiz.questions.map((question, index) => {
       const correctIndexes = getCorrectAnswerIndexes(question);
@@ -236,6 +223,7 @@ function mapQuizRecordToUpdateQuizRequest(quiz: QuizRecord) {
           Math.round(question.estimatedMinutes ?? 1),
         ),
         imageUrl: question.imageUrl,
+        tags: question.tags ?? [],
         answers: question.options.map((option, optionIndex) => {
           const optionId = question.optionIds?.[optionIndex];
 
@@ -432,8 +420,6 @@ export function mapQuizRecordToLibraryItem(
     sourceLabel: quiz.sourceLabel,
     note: quiz.note,
     isOwner,
-    // Cross-user "saved" was a localStorage gimmick that depended on
-    // discovering other users' quizzes — removed alongside Discover.
     isSaved: false,
     isGeneratedByCurrentUser: viewerRole === "student" && isOwner,
     learnerCount: quiz.learnerCount,
@@ -450,9 +436,6 @@ export function getQuizLibraryItemsForRole(
   viewerRole: "teacher" | "student",
   currentUserId?: string | null,
 ) {
-  // Each user only sees the quizzes they own. Cross-user "public" discovery
-  // is intentionally removed until backend-backed discovery exists. Assigned
-  // quizzes are pulled separately by the student library sources.
   return quizzes
     .filter((quiz) => quiz.ownerRole === viewerRole)
     .map((quiz) => mapQuizRecordToLibraryItem(quiz, viewerRole, currentUserId));
@@ -470,9 +453,6 @@ export function QuizLibraryProvider({ children }: QuizLibraryProviderProps) {
   >([]);
   const [hiddenQuizIds, setHiddenQuizIds] = useState<string[]>([]);
   const [isRemoteLoading, setIsRemoteLoading] = useState(true);
-  // Bumping this tick re-runs the remote fetch effect. Used to refetch
-  // when the tab regains focus and when other parts of the app broadcast
-  // `bilgenly:quiz-deleted` (e.g. the admin panel removing a quiz).
   const [refetchTick, setRefetchTick] = useState(0);
   const userId = currentUser?.id ?? null;
   const userEmail = currentUser?.email ?? null;
@@ -500,7 +480,6 @@ export function QuizLibraryProvider({ children }: QuizLibraryProviderProps) {
   const storageScopeRef = useRef<string | null>(null);
 
   useEffect(() => {
-    // Only load when scope actually changes to prevent loops
     if (storageScopeRef.current === storageScope) {
       return;
     }
@@ -545,10 +524,6 @@ export function QuizLibraryProvider({ children }: QuizLibraryProviderProps) {
             : nextRemoteOwnedQuizzes,
         );
 
-        // Purge any stale local copies whose backend GUID didn't come back
-        // in the fresh remote list. This handles the "admin deleted my quiz
-        // out from under me" case: without this, the deleted quiz would
-        // resurrect from localStorage on every refresh.
         const remoteIds = new Set(nextRemoteOwnedQuizzes.map((q) => q.id));
         setLocalQuizzes((current) => {
           const cleaned = current.filter(
@@ -573,11 +548,6 @@ export function QuizLibraryProvider({ children }: QuizLibraryProviderProps) {
     };
   }, [currentUser?.fullName, currentUser?.id, role, token, refetchTick]);
 
-  // Refetch the library whenever the tab comes back into focus, or when an
-  // admin action elsewhere in the app dispatches `bilgenly:quiz-deleted`.
-  // Together these are what make a quiz disappear "live" in the regular
-  // library view without a hard reload — the admin panel updates its own
-  // table optimistically; the rest of the app catches up via this hook.
   useEffect(() => {
     function bump() {
       setRefetchTick((tick) => tick + 1);
@@ -691,7 +661,6 @@ export function QuizLibraryProvider({ children }: QuizLibraryProviderProps) {
       );
     });
 
-    // Compute unique joined-student counts per quiz from assigned classes
     const learnersByQuizId = new Map<string, Set<string>>();
     for (const teacherClass of classes) {
       const joinedStudentIds = teacherClass.students
@@ -707,16 +676,6 @@ export function QuizLibraryProvider({ children }: QuizLibraryProviderProps) {
       }
     }
 
-    // Merge rule:
-    //   • Remote quizzes always show (they're the source of truth).
-    //   • Local quizzes that have a non-GUID id (= local-only drafts that
-    //     were never synced) always show too.
-    //   • Local quizzes that have a GUID id but are NOT in remote are
-    //     stale zombies — the backend deleted them (admin removal, owner
-    //     delete elsewhere, etc.). Drop them so a deleted quiz doesn't
-    //     keep haunting the library from localStorage cache.
-    //   While remote is still loading, keep showing local copies so the UI
-    //   doesn't blank out between hydration and the network response.
     const combined = [
       ...Array.from(remoteById.values()),
       ...localQuizzes.filter((quiz) => {

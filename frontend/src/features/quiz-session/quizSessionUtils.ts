@@ -1,4 +1,4 @@
-import type { QuizRecord } from "../dashboard/components/quiz-library/quizLibraryTypes";
+﻿import type { QuizRecord } from "../dashboard/components/quiz-library/quizLibraryTypes";
 import { formatCurrentDate } from "../dashboard/settings/settingsPreferences";
 import type {
   QuizPlaybackSummary,
@@ -276,16 +276,16 @@ export function formatQuizAttemptDuration(session: QuizSessionRecord) {
     Math.round((endTimestamp - startTimestamp) / 1000),
   );
 
+  const estimatedMinutes = session.quiz.durationMinutes;
+  const capMinutes = Math.max(estimatedMinutes > 0 ? estimatedMinutes * 4 : 0, 60);
+  if (durationInSeconds > capMinutes * 60) {
+    return "--";
+  }
+
   return formatDurationFromSeconds(durationInSeconds);
 }
 
-/**
- * Derive a human-readable duration string from a raw attempt DTO.
- * Priority:
- *   1. `durationSeconds` field (if the backend populates it)
- *   2. `finishedAt − dateTaken` (start → finish timestamps)
- *   3. "--" fallback
- */
+
 export function formatAttemptDtoDuration({
   durationSeconds,
   dateTaken,

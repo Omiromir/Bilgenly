@@ -10,5 +10,6 @@ public class QuestionDto
     public int Points { get; set; } = 1;
     public int EstimatedMinutes { get; set; } = 1;
     public string? ImageUrl { get; set; }
+    public List<string> Tags { get; set; } = new();
     public List<AnswerDto> Answers { get; set; } = new ();
 }

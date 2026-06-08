@@ -1,7 +1,8 @@
-import { useDeferredValue, useMemo, useState } from "react";
+﻿import { useDeferredValue, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   BookOpen,
+  ChevronDown,
   Clock3,
   FilePenLine,
   Play,
@@ -9,6 +10,17 @@ import {
   Trash2,
   UserRound,
 } from "../../../components/icons/AppIcons";
+import { cn } from "../../../components/ui/utils";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "../../../components/ui/alert-dialog";
 import { Link, useLocation, useNavigate } from "react-router";
 import { useAuth } from "../../../app/providers/AuthProvider";
 import { useTeacherClasses } from "../../../app/providers/TeacherClassesProvider";
@@ -45,6 +57,11 @@ import {
 } from "../../../features/dashboard/components/quiz-library/quizLibraryUtils";
 import { useQuizLauncher } from "../../../features/quiz-session/useQuizLauncher";
 import { useDashboardPageMeta } from "../../../features/dashboard/hooks/useDashboardPageMeta";
+import {
+  isDismissibleAssignment,
+  useDismissedAssignments,
+} from "../../../features/assignments/useDismissedAssignments";
+import { matchesAssignedProgress } from "../../../features/assignments/assignedQuizAvailability";
 
 type StudentLibraryTab = "assigned" | "personal-library";
 
@@ -58,6 +75,7 @@ export function StudentQuizLibraryPage() {
   const { sessions } = useQuizSessions();
   const { openQuiz } = useQuizLauncher();
   const studentViewer = currentUser?.role === "student" ? currentUser : null;
+  const { dismissed, dismiss } = useDismissedAssignments(studentViewer?.id);
   const studentIdentity = useMemo(
     () => ({
       userId: studentViewer?.id,
@@ -90,11 +108,29 @@ export function StudentQuizLibraryPage() {
   );
   const [search, setSearch] = useState("");
   const [practiceState, setPracticeState] = useState("all");
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  const [quizPendingDelete, setQuizPendingDelete] = useState<QuizLibraryItem | null>(null);
   const deferredSearch = useDeferredValue(search);
 
-  const handleDeleteQuiz = async (quizId: string) => {
+  const toggleGroup = (classId: string) => {
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(classId)) {
+        next.delete(classId);
+      } else {
+        next.add(classId);
+      }
+      return next;
+    });
+  };
+
+  const confirmDeleteQuiz = async () => {
+    if (!quizPendingDelete) {
+      return;
+    }
     try {
-      await deleteQuiz(quizId, "student");
+      await deleteQuiz(quizPendingDelete.id, "student");
+      setQuizPendingDelete(null);
     } catch (nextError) {
       toast.error(
         nextError instanceof Error ? nextError.message : "Unable to delete quiz.",
@@ -114,46 +150,44 @@ export function StudentQuizLibraryPage() {
   };
 
   const activeTabItems = getStudentItemsForTab(activeTab);
+  const isAssignedTab = activeTab === "assigned";
 
-  // Hide assigned quizzes that the student has fully completed and cannot
-  // attempt again. They stay accessible from the Results page; keeping them
-  // in the Assigned tab just clutters the list once there's nothing left
-  // to do on them.
   const assignedTabFiltered =
-    activeTab === "assigned"
+    isAssignedTab
       ? activeTabItems.filter((item) => {
           if (item.sourceType !== "assigned" && !("isAssigned" in item && item.isAssigned)) {
             return true;
           }
           const assigned = item as StudentAssignedQuizLibraryItem;
           const state = assigned.assignmentState;
-          // Drop if the student has completed at least one attempt and
-          // the assignment doesn't allow another (maxAttempts reached
-          // or deadline forces no-more-starts).
-          const isFullyDone = state.canReview && !state.canStart && !state.canResume;
-          return !isFullyDone;
+          if (dismissed.has(assigned.assignmentContext.assignmentId)) return false;
+          if (!matchesAssignedProgress(state, practiceState)) return false;
+          if (practiceState === "all") {
+            const isFullyDone = state.canReview && !state.canStart && !state.canResume;
+            if (isFullyDone) return false;
+          }
+          return true;
         })
       : activeTabItems;
 
-  const filteredItems = assignedTabFiltered.filter(
-    (item) =>
-      matchesQuizSearch(item, deferredSearch) &&
-      matchesQuizFilters(item, {
-        practiceState,
-        topic: "all",
-        difficulty: "all",
-        language: "all",
-        creator: "all",
-      }),
-  );
+  const filteredItems = isAssignedTab
+    ? assignedTabFiltered.filter((item) => matchesQuizSearch(item, deferredSearch))
+    : assignedTabFiltered.filter(
+        (item) =>
+          matchesQuizSearch(item, deferredSearch) &&
+          matchesQuizFilters(item, {
+            practiceState,
+            topic: "all",
+            difficulty: "all",
+            language: "all",
+            creator: "all",
+          }),
+      );
 
-  // Tab count should reflect what's actually visible (filtered set), not
-  // the raw source, otherwise "Assigned (3)" stays at 3 forever even after
-  // the student finishes those 3 quizzes.
   const visibleAssignedCount = studentSources.assigned.filter((item) => {
     const state = item.assignmentState;
     const isFullyDone = state.canReview && !state.canStart && !state.canResume;
-    return !isFullyDone;
+    return !isFullyDone && !dismissed.has(item.assignmentContext.assignmentId);
   }).length;
 
   const tabs = [
@@ -283,8 +317,6 @@ export function StudentQuizLibraryPage() {
       return assignedItem.assignmentState.primaryActionLabel;
     }
 
-    // Personal-library quizzes have no attempt cap or deadline — once you've
-    // finished one, the natural next action is to retake it.
     if (item.practiceState === "completed") {
       return "Retake Practice";
     }
@@ -314,9 +346,7 @@ export function StudentQuizLibraryPage() {
             })()
           : item.practiceState === "in-progress"
             ? "in-progress"
-            : // Completed personal-library quizzes deliberately fall through to
-              // `undefined` so the launcher opens the start screen (which
-              // creates a fresh attempt) rather than the locked completed view.
+            :
               undefined,
       navigationState: {
         launchSourceType: item.sourceType ?? "quiz-library",
@@ -349,9 +379,6 @@ export function StudentQuizLibraryPage() {
       ];
     }
 
-    // Everything in the personal library is owned by the current student —
-    // no cross-user save/duplicate flows exist since public discovery was
-    // removed. Always offer practice + edit + delete.
     return [
       {
         label: getPracticeLabel(item),
@@ -379,7 +406,7 @@ export function StudentQuizLibraryPage() {
         icon: Trash2,
         variant: "ghost",
         iconDisplay: "icon-only",
-        onClick: () => void handleDeleteQuiz(item.id),
+        onClick: () => setQuizPendingDelete(item),
       },
     ];
   };
@@ -412,47 +439,86 @@ export function StudentQuizLibraryPage() {
     if (activeTab === "assigned") {
       if (assignedGroups.length) {
         return (
-          <div className="space-y-6">
-            {assignedGroups.map((group) => (
-              <section key={group.classId} className="space-y-4">
-                <div className="flex flex-wrap items-center justify-between gap-3 rounded-[22px] border border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-muted)] px-5 py-4">
-                  <div>
-                    <h3 className="text-lg font-semibold text-[var(--dashboard-text-strong)]">
-                      {group.className}
-                    </h3>
-                    <p className="mt-1 text-sm leading-6 text-[var(--dashboard-text-soft)]">
-                      {group.classSubject || "Class assigned quiz feed"} with {group.items.length}{" "}
-                      {group.items.length === 1 ? "quiz" : "quizzes"} currently assigned.
-                    </p>
-                  </div>
-
-                  <DashboardButton
+          <div className="space-y-3">
+            {assignedGroups.map((group) => {
+              const isCollapsed = collapsedGroups.has(group.classId);
+              return (
+                <section key={group.classId}>
+                  
+                  <button
                     type="button"
-                    variant="secondary"
-                    size="sm"
-                    onClick={() =>
-                      navigate("/dashboard/student/classes", {
-                        state: { selectedClassId: group.classId },
-                      })
-                    }
+                    onClick={() => toggleGroup(group.classId)}
+                    className="flex w-full flex-wrap items-center justify-between gap-3 rounded-[22px] border border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-muted)] px-5 py-4 text-left transition hover:bg-[var(--dashboard-surface-elevated)] active:scale-[0.995]"
+                    aria-expanded={!isCollapsed}
                   >
-                    Open class
-                  </DashboardButton>
-                </div>
+                    <div className="min-w-0 flex-1">
+                      <h3 className="text-base font-semibold text-[var(--dashboard-text-strong)]">
+                        {group.className}
+                      </h3>
+                      <p className="mt-0.5 text-sm leading-6 text-[var(--dashboard-text-soft)]">
+                        {group.classSubject || "General"} ·{" "}
+                        <span className={cn(isCollapsed && "font-medium text-[var(--dashboard-text-strong)]")}>
+                          {group.items.length} {group.items.length === 1 ? "quiz" : "quizzes"}
+                        </span>
+                        {isCollapsed ? " hidden" : " assigned"}
+                      </p>
+                    </div>
 
-                <QuizGrid
-                  items={group.items}
-                  renderCard={(item) => (
-                    <AssignedQuizCard
-                      key={item.assignmentContext.assignmentId}
-                      item={item}
-                      actions={getStudentActions(item)}
-                      badgeLabel={group.classSubject || undefined}
-                    />
-                  )}
-                />
-              </section>
-            ))}
+                    <div className="flex shrink-0 items-center gap-2">
+                      <DashboardButton
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate("/dashboard/student/classes", {
+                            state: { selectedClassId: group.classId },
+                          });
+                        }}
+                      >
+                        Open class
+                      </DashboardButton>
+
+                      <span
+                        className={cn(
+                          "flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] text-[var(--dashboard-text-soft)] transition-transform duration-200",
+                          isCollapsed ? "rotate-0" : "rotate-180",
+                        )}
+                      >
+                        <ChevronDown className="h-4 w-4" />
+                      </span>
+                    </div>
+                  </button>
+
+                  
+                  <div
+                    className={cn(
+                      "overflow-hidden transition-all duration-300 ease-in-out",
+                      isCollapsed ? "max-h-0 opacity-0" : "max-h-[9999px] opacity-100",
+                    )}
+                  >
+                    <div className="pt-3">
+                      <QuizGrid
+                        items={group.items}
+                        renderCard={(item) => (
+                          <AssignedQuizCard
+                            key={item.assignmentContext.assignmentId}
+                            item={item}
+                            actions={getStudentActions(item)}
+                            badgeLabel={group.classSubject || undefined}
+                            onDismiss={
+                              isDismissibleAssignment(item.assignmentState)
+                                ? () => dismiss(item.assignmentContext.assignmentId)
+                                : undefined
+                            }
+                          />
+                        )}
+                      />
+                    </div>
+                  </div>
+                </section>
+              );
+            })}
           </div>
         );
       }
@@ -543,6 +609,36 @@ export function StudentQuizLibraryPage() {
 
         {renderActiveContent()}
       </section>
+
+      <AlertDialog
+        open={Boolean(quizPendingDelete)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setQuizPendingDelete(null);
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete quiz?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {quizPendingDelete
+                ? `Delete "${quizPendingDelete.title}" permanently. This removes it from your personal library and cannot be undone.`
+                : "Delete this quiz permanently."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-[var(--dashboard-danger)] text-white hover:bg-[var(--dashboard-danger)]/90"
+              onClick={confirmDeleteQuiz}
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              Delete quiz
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

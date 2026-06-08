@@ -1,11 +1,10 @@
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
+﻿import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   BookOpen,
   Clock3,
   FilePenLine,
   Layers3,
-  Lock,
   Play,
   Rocket,
   SearchCheck,
@@ -16,6 +15,16 @@ import { Link, useLocation, useNavigate } from "react-router";
 import {
   Dialog,
 } from "../../../components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "../../../components/ui/alert-dialog";
 import { useTeacherClasses } from "../../../app/providers/TeacherClassesProvider";
 import {
   getQuizLibraryItemsForRole,
@@ -91,6 +100,8 @@ export function TeacherQuizLibraryPage() {
   const [status, setStatus] = useState("all");
   const [quizPendingAssignment, setQuizPendingAssignment] =
     useState<QuizLibraryItem | null>(null);
+  const [quizPendingDelete, setQuizPendingDelete] =
+    useState<QuizLibraryItem | null>(null);
   const [selectedClassIds, setSelectedClassIds] = useState<string[]>([]);
   const [assignmentSettings, setAssignmentSettings] = useState<AssignmentSettingsFormValues>(
     DEFAULT_ASSIGNMENT_SETTINGS_VALUES,
@@ -102,8 +113,6 @@ export function TeacherQuizLibraryPage() {
   const deferredSearch = useDeferredValue(search);
   const shouldShowStatusFilter = activeTab === "my-quizzes";
 
-  // Quiz IDs that are currently assigned to at least one class — editing
-  // these would corrupt existing student attempts and analytics.
   const assignedQuizIds = useMemo(
     () =>
       new Set(
@@ -303,9 +312,6 @@ export function TeacherQuizLibraryPage() {
           ? `${item.learnerCount ?? 0} learners`
           : `${item.saveCount ?? 0} saves`,
       },
-      // Updated date is now shown ALWAYS — previously it was hidden whenever
-      // an average score existed, which made it impossible to tell when a
-      // quiz had been edited last.
       {
         icon: Clock3,
         label: `Updated ${formatCurrentDate(item.updatedAt)}`,
@@ -339,8 +345,6 @@ export function TeacherQuizLibraryPage() {
       return "Continue Test Run";
     }
 
-    // Teachers can test-run their quiz unlimited times. After a completed
-    // run, the label invites another attempt rather than forcing review.
     if (item.practiceState === "completed") {
       return "Test Run Again";
     }
@@ -352,8 +356,6 @@ export function TeacherQuizLibraryPage() {
     openQuiz({
       quizId: item.id,
       viewerRole: "teacher",
-      // Don't auto-open a completed session for teachers — they need to be
-      // able to start a fresh test run. Only resume in-progress sessions.
       preferredSession:
         item.practiceState === "in-progress" ? "in-progress" : undefined,
       navigationState: {
@@ -365,9 +367,14 @@ export function TeacherQuizLibraryPage() {
     });
   };
 
-  const handleDeleteQuiz = async (quizId: string) => {
+  const confirmDeleteQuiz = async () => {
+    if (!quizPendingDelete) {
+      return;
+    }
+
     try {
-      await deleteQuiz(quizId, "teacher");
+      await deleteQuiz(quizPendingDelete.id, "teacher");
+      setQuizPendingDelete(null);
     } catch (nextError) {
       toast.error(
         nextError instanceof Error ? nextError.message : "Unable to delete quiz.",
@@ -394,7 +401,7 @@ export function TeacherQuizLibraryPage() {
           icon: Trash2,
           variant: "ghost",
           iconDisplay: "icon-only",
-          onClick: () => void handleDeleteQuiz(item.id),
+          onClick: () => setQuizPendingDelete(item),
         },
       ];
     }
@@ -415,13 +422,11 @@ export function TeacherQuizLibraryPage() {
           icon: Trash2,
           variant: "ghost",
           iconDisplay: "icon-only",
-          onClick: () => void handleDeleteQuiz(item.id),
+          onClick: () => setQuizPendingDelete(item),
         },
       ];
     }
 
-      // Assigned quizzes must not be structurally edited — doing so corrupts
-      // existing student attempts and analytics. Offer Duplicate & Edit instead.
       if (assignedQuizIds.has(item.id)) {
         return [
           {
@@ -453,19 +458,11 @@ export function TeacherQuizLibraryPage() {
             },
           },
           {
-            label: "Edit (locked)",
-            icon: Lock,
-            variant: "ghost",
-            iconDisplay: "icon-only",
-            disabled: true,
-            title: "Editing is disabled while the quiz is assigned to a class. Use \"Duplicate & Edit\" to make changes safely.",
-          },
-          {
             label: "Delete",
             icon: Trash2,
             variant: "ghost",
             iconDisplay: "icon-only",
-            onClick: () => void handleDeleteQuiz(item.id),
+            onClick: () => setQuizPendingDelete(item),
           },
         ];
       }
@@ -495,11 +492,26 @@ export function TeacherQuizLibraryPage() {
             }),
         },
         {
+          label: "Duplicate",
+          icon: Layers3,
+          variant: "secondary",
+          iconDisplay: "icon-only",
+          title: "Duplicate this quiz into a new draft",
+          onClick: () => {
+            const duplicate = duplicateQuizToLibrary(item.id, "teacher");
+            if (duplicate) {
+              setAssignmentFeedback(
+                `"${item.title}" was duplicated as "${duplicate.title}" in your Drafts.`,
+              );
+            }
+          },
+        },
+        {
           label: "Delete",
           icon: Trash2,
           variant: "ghost",
           iconDisplay: "icon-only",
-          onClick: () => void handleDeleteQuiz(item.id),
+          onClick: () => setQuizPendingDelete(item),
         },
       ];
   };
@@ -579,7 +591,7 @@ export function TeacherQuizLibraryPage() {
         <DashboardModalContent className="max-w-[720px]">
           <div className="flex min-h-0 flex-1 flex-col">
 
-            {/* ── Step indicator ── */}
+            
             <div className="flex items-center gap-3 px-6 pt-8 pr-14 pb-2">
               <div className="flex items-center gap-2">
                 <span
@@ -628,7 +640,7 @@ export function TeacherQuizLibraryPage() {
               </div>
             </div>
 
-            {/* ── Step 1: Select classes ── */}
+            
             {assignStep === "select" && (
               <>
                 <DashboardModalHeader
@@ -640,7 +652,7 @@ export function TeacherQuizLibraryPage() {
                   }
                 />
                 <DashboardModalBody className="space-y-5">
-                  {/* Quiz summary */}
+                  
                   {quizPendingAssignment ? (
                     <div className="rounded-[18px] border border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-elevated)] px-5 py-4">
                       <p className="text-[1.05rem] font-semibold tracking-[-0.02em] text-[var(--dashboard-text-strong)]">
@@ -653,7 +665,7 @@ export function TeacherQuizLibraryPage() {
                     </div>
                   ) : null}
 
-                  {/* Class checkboxes */}
+                  
                   <div className="space-y-3">
                     {activeClasses.length ? (
                       activeClasses.map((teacherClass) => {
@@ -755,7 +767,7 @@ export function TeacherQuizLibraryPage() {
               </>
             )}
 
-            {/* ── Step 2: Settings ── */}
+            
             {assignStep === "configure" && (
               <>
                 <DashboardModalHeader
@@ -763,7 +775,7 @@ export function TeacherQuizLibraryPage() {
                   description="Configure deadline, attempts, and other options for this assignment."
                 />
                 <DashboardModalBody className="space-y-5">
-                  {/* Quiz summary */}
+                  
                   {quizPendingAssignment ? (
                     <div className="rounded-[18px] border border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-elevated)] px-5 py-4">
                       <p className="text-[1.05rem] font-semibold tracking-[-0.02em] text-[var(--dashboard-text-strong)]">
@@ -776,7 +788,7 @@ export function TeacherQuizLibraryPage() {
                     </div>
                   ) : null}
 
-                  {/* Selected classes summary */}
+                  
                   <p className="text-sm text-[var(--dashboard-text-soft)]">
                     Assigning to{" "}
                     <span className="font-semibold text-[var(--dashboard-text-strong)]">
@@ -830,6 +842,36 @@ export function TeacherQuizLibraryPage() {
           </div>
         </DashboardModalContent>
       </Dialog>
+
+      <AlertDialog
+        open={Boolean(quizPendingDelete)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setQuizPendingDelete(null);
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete quiz?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {quizPendingDelete
+                ? `Delete "${quizPendingDelete.title}" permanently. This also removes it from any classes it's assigned to, and cannot be undone.`
+                : "Delete this quiz permanently."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-[var(--dashboard-danger)] text-white hover:bg-[var(--dashboard-danger)]/90"
+              onClick={confirmDeleteQuiz}
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              Delete quiz
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

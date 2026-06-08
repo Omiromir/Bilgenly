@@ -1,24 +1,4 @@
-/**
- * Quiz builder draft persistence
- *
- * Persists the in-progress quiz draft to localStorage so navigating away
- * from the builder (and coming back later) doesn't lose the user's work.
- *
- * Scoping: per-user + per-mode (teacher / student) — a teacher's in-progress
- * draft must not bleed into a student session on the same device.
- *
- * Cleared on:
- *  - successful save / publish
- *  - explicit cancel
- *  - viewer logout (via clearAllUserStorage)
- *
- * Skipped when:
- *  - user is editing an existing saved quiz (`editingQuizId` is set), since
- *    the draft would overwrite real backend state
- *  - the workspace is at its pristine initial state (nothing to recover)
- *
- * Drafts older than DRAFT_TTL_MS are treated as stale and dropped on read.
- */
+﻿
 
 import {
   getUserScopedStorageKey,
@@ -32,11 +12,8 @@ import type {
 } from "./quizBuilderTypes";
 
 const DRAFT_BASE_KEY = "bilgenly_quiz_builder_draft";
-// Bumped from v1 → v2 after removing the `publishVisibility` field. Older
-// drafts (with the now-defunct field) are dropped on read so we don't pull
-// stale state into the simplified workspace.
 const DRAFT_SCHEMA_VERSION = 2;
-const DRAFT_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+const DRAFT_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 export interface QuizBuilderDraft {
   schemaVersion: number;
@@ -56,14 +33,14 @@ export interface QuizBuilderDraft {
   selectedQuestionId: string | null;
   hasEnteredReview: boolean;
   generatedBackendQuizId: string | null;
-  updatedAt: string; // ISO timestamp
+  updatedAt: string;
 }
 
 function getStorageKey(scope: string, mode: "teacher" | "student") {
   return getUserScopedStorageKey(`${DRAFT_BASE_KEY}:${mode}`, scope);
 }
 
-/** Returns true if the draft holds meaningful work worth restoring. */
+
 export function isDraftWorthRestoring(draft: QuizBuilderDraft): boolean {
   return (
     draft.quizTitle.trim().length > 0 ||
@@ -92,14 +69,12 @@ export function loadQuizBuilderDraft(
       return null;
     }
 
-    // TTL: drop drafts that are clearly stale (e.g. user vanished for weeks).
     const timestamp = parsed.updatedAt ? Date.parse(parsed.updatedAt) : NaN;
     if (Number.isFinite(timestamp) && Date.now() - timestamp > DRAFT_TTL_MS) {
       clearQuizBuilderDraft(scope, mode);
       return null;
     }
 
-    // Defensive shape check: bail if any required array got corrupted.
     if (!Array.isArray(parsed.questions) || !Array.isArray(parsed.questionTypes)) {
       return null;
     }
@@ -124,8 +99,6 @@ export function saveQuizBuilderDraft(
       updatedAt: new Date().toISOString(),
     };
 
-    // No point persisting an empty workspace — also prevents the draft
-    // from being restored if the user just briefly opened the page.
     if (!isDraftWorthRestoring(full)) {
       clearQuizBuilderDraft(scope, mode);
       return;
@@ -133,7 +106,6 @@ export function saveQuizBuilderDraft(
 
     localStorage.setItem(getStorageKey(scope, mode), JSON.stringify(full));
   } catch {
-    // Quota errors / corrupted storage — best-effort, swallow.
   }
 }
 
@@ -144,6 +116,5 @@ export function clearQuizBuilderDraft(
   try {
     localStorage.removeItem(getStorageKey(scope, mode));
   } catch {
-    // ignore
   }
 }

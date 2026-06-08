@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+﻿import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router";
 import { toast } from "sonner";
 import { useQuizLibrary } from "../../../app/providers/QuizLibraryProvider";
@@ -75,6 +75,7 @@ export function QuizSessionPage({ viewerRole }: QuizSessionPageProps) {
   const { classes } = useTeacherClasses();
   const { getQuizById } = useQuizLibrary();
   const {
+    completeSession,
     createSession,
     getLatestCompletedSession,
     getLatestInProgressSession,
@@ -96,8 +97,6 @@ export function QuizSessionPage({ viewerRole }: QuizSessionPageProps) {
     () => resolveAssignmentContext(assignmentId, classes),
     [assignmentId, classes],
   );
-  // Use quizId from URL params directly so this resolves immediately on page
-  // refresh, before the quiz library has finished loading from the backend.
   const latestInProgressSession = quizId
     ? getLatestInProgressSession(quizId, viewerRole, assignmentId)
     : undefined;
@@ -164,10 +163,6 @@ export function QuizSessionPage({ viewerRole }: QuizSessionPageProps) {
     fallbackCompletedAttempt ??
     undefined;
   const assignmentConstraints = backendAssignmentState;
-  // Do NOT gate on `quiz` here. QuizPlayer is fully self-contained and reads
-  // all quiz data from the session snapshot stored in localStorage, so we can
-  // resolve an active in-progress session immediately on page refresh before
-  // the quiz library has loaded from the backend (Moodle-like seamless resume).
   const activeSession =
     sessionId
       ? (() => {
@@ -181,7 +176,6 @@ export function QuizSessionPage({ viewerRole }: QuizSessionPageProps) {
             return matchingSession;
           }
 
-          // requestedCompletedSession requires quiz to be loaded
           return (quiz ? requestedCompletedSession : null) ?? undefined;
         })()
       : undefined;
@@ -215,27 +209,21 @@ export function QuizSessionPage({ viewerRole }: QuizSessionPageProps) {
     };
   }, [assignmentContext, navigationState, viewerRole]);
 
-  // Refetch backend attempts when quiz is completed to update attempt counts
   useEffect(() => {
     if (viewerRole === "student" && activeSession?.status === "completed") {
       void refreshAttempts();
     }
   }, [activeSession?.status, activeSession?.finishedAt, refreshAttempts, viewerRole]);
 
-  // Auto-resume: once localStorage is hydrated, if there is an in-progress
-  // session but the URL doesn't point at it (e.g. after a page refresh that
-  // stripped the ?session= param, or a direct navigation to the quiz page),
-  // immediately redirect into that session so the student can't accidentally
-  // start a duplicate attempt.
   const [isStarting, setIsStarting] = useState(false);
   const [isResuming, setIsResuming] = useState(false);
   const autoResumedRef = useRef(false);
+  const staleAutoCompleteRef = useRef(false);
   useEffect(() => {
     if (!isHydrated || autoResumedRef.current) {
       return;
     }
 
-    // Only auto-resume when there is no active session already showing
     if (activeSession?.status === "in-progress") {
       return;
     }
@@ -263,10 +251,34 @@ export function QuizSessionPage({ viewerRole }: QuizSessionPageProps) {
     viewerRole,
   ]);
 
-  // Block all interaction until localStorage sessions are hydrated.
-  // This is the primary guard that prevents the start-button race condition
-  // on page refresh (student pressing Start before their in-progress session
-  // is visible in the React session list).
+  useEffect(() => {
+    if (staleAutoCompleteRef.current) {
+      return;
+    }
+
+    if (!activeSession || activeSession.status !== "in-progress") {
+      return;
+    }
+
+    const durationMinutes = activeSession.quiz.durationMinutes;
+    const thresholdMs =
+      Math.max(durationMinutes > 0 ? durationMinutes * 3 : 0, 120) * 60 * 1000;
+    const lastActiveMs = new Date(activeSession.updatedAt).getTime();
+
+    if (Date.now() - lastActiveMs < thresholdMs) {
+      return;
+    }
+
+    staleAutoCompleteRef.current = true;
+
+    void completeSession(activeSession.id, {
+      completionReason:
+        activeSession.syncMode === "backend" ? "deadline-expired" : "submitted",
+      finishedAt: activeSession.updatedAt,
+    }).catch(() => {
+    });
+  }, [activeSession, completeSession]);
+
   if (!isHydrated) {
     return (
       <div className={dashboardPageNarrowClassName}>
@@ -286,11 +298,6 @@ export function QuizSessionPage({ viewerRole }: QuizSessionPageProps) {
     );
   }
 
-  // Fast-path: if there is an active in-progress session, jump straight into
-  // the quiz player without waiting for the quiz library to finish loading.
-  // QuizPlayer is self-contained — it reads all quiz data from the session
-  // snapshot persisted in localStorage, so no quiz-library data is needed.
-  // This gives Moodle-like seamless resume: refresh → instantly back in quiz.
   if (activeSession?.status === "in-progress") {
     return (
       <div className="mx-auto max-w-[1360px] space-y-6">
@@ -416,18 +423,25 @@ export function QuizSessionPage({ viewerRole }: QuizSessionPageProps) {
             hasInProgressAttempt: false,
           });
 
+          const reviewedAttempt = attempts.find(
+            (candidate) =>
+              candidate.id === activeSession.id ||
+              candidate.id === activeSession.backendAttemptId,
+          );
+          const wasAssignedQuiz =
+            activeSession.sourceType === "assigned" ||
+            Boolean(activeSession.assignmentContext) ||
+            Boolean(reviewedAttempt?.assignmentId);
+          const canRetake = wasAssignedQuiz
+            ? Boolean(assignmentConstraints?.canStart)
+            : !assignmentConstraints || assignmentConstraints.canStart;
+
           return (
             <div className="space-y-6">
               <QuizResultsSummary
                 session={activeSession}
-                // Personal-library quizzes (no `assignmentConstraints`) have no
-                // attempt limit or deadline — let the student retake them freely.
-                // For assigned quizzes, defer to the constraint's `canStart` flag.
-                onRetake={
-                  !assignmentConstraints || assignmentConstraints.canStart
-                    ? handleStart
-                    : undefined
-                }
+                onRetake={canRetake ? handleStart : undefined}
+                isRetaking={isStarting}
                 returnLink={resolvedBackLink}
                 secondaryLink={
                   viewerRole === "student"

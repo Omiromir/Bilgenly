@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router';
+﻿import { useNavigate } from 'react-router';
 import { useAuth } from "../../app/providers/AuthProvider";
 import { LandingButton } from './LandingButton';
 
@@ -7,19 +7,29 @@ export function CTASection() {
   const { defaultRedirectPath, isAuthenticated, onboardingCompleted } = useAuth();
   const primaryActionPath = isAuthenticated ? defaultRedirectPath : "/signup";
 
+  const handleLearnMore = () => {
+    const section = document.getElementById("how-it-works");
+    if (!section) return;
+    const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    section.scrollIntoView({
+      behavior: prefersReducedMotion ? "auto" : "smooth",
+      block: "start",
+    });
+  };
+
   return (
     <section
       aria-labelledby="cta-heading"
       className="relative overflow-hidden bg-gradient-to-br from-[#0F172A] via-[#1E3A8A] to-[#1D4ED8] px-4 py-20 sm:px-6 sm:py-28 lg:px-8"
     >
-      {/* Decorative glows */}
+      
       <div aria-hidden="true" className="pointer-events-none absolute inset-0">
-        {/* Primary glows */}
+        
         <div className="absolute -left-40 top-0 h-[480px] w-[480px] rounded-full bg-[radial-gradient(circle,rgba(99,102,241,0.28)_0%,transparent_70%)]" />
         <div className="absolute -right-20 bottom-0 h-[400px] w-[400px] rounded-full bg-[radial-gradient(circle,rgba(33,145,246,0.22)_0%,transparent_70%)]" />
-        {/* Central shimmer */}
+        
         <div className="absolute left-1/2 top-1/2 h-[300px] w-[600px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[radial-gradient(ellipse,rgba(255,255,255,0.04)_0%,transparent_70%)]" />
-        {/* Subtle dot pattern */}
+        
         <div
           className="absolute inset-0 opacity-[0.05]"
           style={{
@@ -27,7 +37,7 @@ export function CTASection() {
             backgroundSize: "28px 28px",
           }}
         />
-        {/* Diagonal lines overlay */}
+        
         <div
           className="absolute inset-0 opacity-[0.025]"
           style={{
@@ -55,7 +65,7 @@ export function CTASection() {
               Unlock AI-powered quiz creation and watch your students actually enjoy studying.
             </p>
 
-            {/* Social proof row */}
+            
             <div className="mt-8 flex flex-wrap items-center gap-6">
               <div className="text-center">
                 <p className="font-['Montserrat',sans-serif] text-[26px] font-extrabold text-white">10k+</p>
@@ -89,6 +99,7 @@ export function CTASection() {
             </LandingButton>
             <button
               type="button"
+              onClick={handleLearnMore}
               className="h-12 min-w-[160px] rounded-xl border-2 border-white/40 px-6 font-['Montserrat',sans-serif] text-[15px] font-semibold text-white transition-all duration-200 ease-out hover:-translate-y-[1px] hover:border-white hover:bg-white/10 active:translate-y-0 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#1D4ED8]"
             >
               Learn More

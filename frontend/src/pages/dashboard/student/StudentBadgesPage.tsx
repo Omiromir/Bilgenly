@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+﻿import { useMemo, useState } from "react";
 import { Trophy } from "../../../components/icons/AppIcons";
 import { Skeleton } from "../../../components/ui/skeleton";
 import { CtaPanel } from "../../../features/dashboard/components/CtaPanel";
@@ -29,12 +29,11 @@ import { useStudentAttempts } from "../../../app/providers/StudentAttemptsProvid
 import { useQuizSessions } from "../../../app/providers/QuizSessionProvider";
 import { getQuizSessionResultSummary } from "../../../features/quiz-session/quizSessionUtils";
 
-/* ─── Badge icon mapping ────────────────────────────────────────────────────── */
 
 interface BadgeMeta {
   emoji: string;
-  gradient: string;     // tailwind gradient classes
-  glow: string;         // box-shadow colour for earned glow
+  gradient: string;
+  glow: string;
   tier: "bronze" | "silver" | "gold" | "legendary";
 }
 
@@ -56,11 +55,9 @@ function getBadgeMeta(badge: UserBadgeDto): BadgeMeta {
   const t = badge.title.toLowerCase();
   const d = badge.description.toLowerCase();
 
-  // Perfect score
   if (t.includes("perfect") || d.includes("100%") || d.includes("perfect"))
     return { emoji: "👑", gradient: "from-purple-500 to-pink-500", glow: "rgba(168,85,247,0.5)", tier: "legendary" };
 
-  // High average score (>=85, >=95)
   if (t.includes("elite") || d.includes("95") || d.includes("90"))
     return { emoji: "💎", gradient: "from-cyan-400 to-blue-600", glow: "rgba(34,211,238,0.5)", tier: "gold" };
   if (t.includes("sharp") || t.includes("scholar") || d.includes("85") || d.includes("80"))
@@ -68,7 +65,6 @@ function getBadgeMeta(badge: UserBadgeDto): BadgeMeta {
   if (t.includes("average") || t.includes("score") || d.includes("average"))
     return { emoji: "🎯", gradient: "from-green-400 to-emerald-600", glow: "rgba(52,211,153,0.4)", tier: "bronze" };
 
-  // Quiz count milestones
   if (d.includes("50") || t.includes("veteran") || t.includes("master"))
     return { emoji: "⚡", gradient: "from-yellow-300 to-orange-500", glow: "rgba(251,191,36,0.5)", tier: "gold" };
   if (d.includes("25") || t.includes("dedicated"))
@@ -78,19 +74,15 @@ function getBadgeMeta(badge: UserBadgeDto): BadgeMeta {
   if (d.includes("5") || t.includes("active"))
     return { emoji: "⭐", gradient: "from-amber-400 to-yellow-500", glow: "rgba(251,191,36,0.4)", tier: "bronze" };
 
-  // First quiz / starter
   if (t.includes("first") || t.includes("starter") || t.includes("begin") || d.includes("first"))
     return { emoji: "🚀", gradient: "from-sky-400 to-blue-600", glow: "rgba(56,189,248,0.4)", tier: "bronze" };
 
-  // Streak / consistency
   if (t.includes("streak") || d.includes("streak") || t.includes("consistent"))
     return { emoji: "🔥", gradient: "from-orange-400 to-red-500", glow: "rgba(249,115,22,0.5)", tier: "silver" };
 
-  // Generic fallback
   return { emoji: "🏅", gradient: "from-slate-400 to-slate-600", glow: "rgba(100,116,139,0.4)", tier: "bronze" };
 }
 
-/* ─── Avatar component ──────────────────────────────────────────────────────── */
 
 function Avatar({
   username,
@@ -104,7 +96,6 @@ function Avatar({
   className?: string;
 }) {
   const initials = username.slice(0, 2).toUpperCase();
-  // Deterministic hue from username
   let hash = 0;
   for (let i = 0; i < username.length; i++) hash = username.charCodeAt(i) + ((hash << 5) - hash);
   const hue = Math.abs(hash) % 360;
@@ -138,7 +129,6 @@ function Avatar({
   );
 }
 
-/* ─── Podium component ──────────────────────────────────────────────────────── */
 
 const PODIUM_MEDALS = ["🥇", "🥈", "🥉"];
 const PODIUM_HEIGHTS = ["h-24", "h-16", "h-12"];
@@ -147,16 +137,16 @@ const PODIUM_COLORS = [
   "from-slate-300/30 to-slate-500/20 border-slate-400/50",
   "from-amber-600/30 to-amber-800/20 border-amber-600/50",
 ];
-const PODIUM_ORDER = [1, 0, 2]; // silver, gold, bronze display order
+const PODIUM_ORDER = [1, 0, 2];
 
 function PodiumEntry({ entry, position }: { entry: LeaderboardEntryDto; position: 0 | 1 | 2 }) {
   const isFirst = position === 0;
   return (
     <div className="flex flex-col items-center gap-2">
-      {/* Medal */}
+      
       <span className="text-2xl">{PODIUM_MEDALS[position]}</span>
 
-      {/* Avatar */}
+      
       <div className={`relative ${isFirst ? "ring-4 ring-yellow-400/60 rounded-full" : ""}`}>
         <Avatar
           username={entry.username}
@@ -170,23 +160,22 @@ function PodiumEntry({ entry, position }: { entry: LeaderboardEntryDto; position
         )}
       </div>
 
-      {/* Name */}
+      
       <p className={`max-w-[80px] truncate text-center text-xs font-bold ${entry.isCurrentUser ? "text-[var(--dashboard-brand)]" : "text-[var(--dashboard-text-strong)]"}`}>
         {entry.isCurrentUser ? "You" : entry.username}
       </p>
 
-      {/* Score */}
+      
       <p className="text-sm font-semibold text-[var(--dashboard-text-soft)]">
         {Math.round(entry.averageScore)}%
       </p>
 
-      {/* Pedestal */}
+      
       <div className={`w-20 rounded-t-lg border bg-gradient-to-b ${PODIUM_COLORS[position]} ${PODIUM_HEIGHTS[position]}`} />
     </div>
   );
 }
 
-/* ─── Skeletons ─────────────────────────────────────────────────────────────── */
 
 function HeroSkeleton() {
   return (
@@ -227,7 +216,6 @@ function BadgeCardSkeleton() {
   );
 }
 
-/* ─── Page ───────────────────────────────────────────────────────────────────── */
 
 const LEADERBOARD_TOP_N = 10;
 
@@ -235,11 +223,10 @@ export function StudentBadgesPage() {
   const meta = useDashboardPageMeta();
   const { currentUser } = useAuth();
   const { classes } = useTeacherClasses();
-  const { data, isLoading, error } = useAchievementsQuery();
   const [leaderboardClassFilter, setLeaderboardClassFilter] = useState<string>("all");
+  const activeClassId = leaderboardClassFilter !== "all" ? leaderboardClassFilter : undefined;
+  const { data, isLoading, error } = useAchievementsQuery(activeClassId);
 
-  // Use session-based (earnedPoints/totalPoints) percentages to compute average —
-  // same method as My Results page, so both pages always agree.
   const { attempts: allAttempts } = useStudentAttempts();
   const { getCompletedSessionsForRole } = useQuizSessions();
   const completedSessions = getCompletedSessionsForRole("student");
@@ -271,27 +258,11 @@ export function StudentBadgesPage() {
     [classes, currentUser?.email, currentUser?.id],
   );
 
-  const classMembersForFilter = useMemo(() => {
-    if (leaderboardClassFilter === "all") return null;
-    const target = studentClasses.find((cls) => cls.id === leaderboardClassFilter);
-    if (!target) return null;
-    const memberUserIds = new Set<string>();
-    for (const s of target.students) {
-      if (s.status !== "joined") continue;
-      if (s.linkedUserId) memberUserIds.add(s.linkedUserId);
-    }
-    return { memberUserIds };
-  }, [leaderboardClassFilter, studentClasses]);
-
   const filteredLeaderboard = useMemo(() => {
     if (!data) return [];
-    if (!classMembersForFilter) return data.leaderboard;
-    return data.leaderboard.filter(
-      (e) => classMembersForFilter.memberUserIds.has(e.userId) || e.isCurrentUser,
-    );
-  }, [classMembersForFilter, data]);
+    return data.leaderboard;
+  }, [data]);
 
-  // Re-rank entries locally after filtering so medals and #N reflect the filtered order
   const rerankedLeaderboard = useMemo(
     () => filteredLeaderboard.map((entry, i) => ({ ...entry, localRank: i + 1 })),
     [filteredLeaderboard],
@@ -308,11 +279,9 @@ export function StudentBadgesPage() {
 
 
   const rankLabel = data?.rank ? `#${data.rank}` : "Unranked";
-  // Prefer corrected (session-based) average; fall back to backend value.
   const displayAverage = correctedAverageScore ?? (data?.averageScore !== undefined ? Math.round(data.averageScore) : null);
   const formattedScore = displayAverage !== null ? `${displayAverage}%` : "—";
 
-  // Podium: top 3 in display order [silver, gold, bronze]
   const podiumEntries = topEntries.slice(0, 3);
 
   return (
@@ -322,7 +291,7 @@ export function StudentBadgesPage() {
         subtitle={meta?.subtitle ?? "Track your badges, rank up, and compete with classmates"}
       />
 
-      {/* ── Hero ─────────────────────────────────────────────────────────── */}
+      
       {isLoading ? (
         <HeroSkeleton />
       ) : (
@@ -360,7 +329,7 @@ export function StudentBadgesPage() {
         />
       )}
 
-      {/* ── Badges ───────────────────────────────────────────────────────── */}
+      
       <SectionCard title="Your Badges">
         <div className="mb-5 flex items-center justify-between">
           <p className="text-sm text-[var(--dashboard-text-soft)]">
@@ -390,13 +359,13 @@ export function StudentBadgesPage() {
                   className={`relative overflow-hidden rounded-2xl border border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-elevated)] p-4 transition-transform hover:-translate-y-0.5 ${TIER_RING[m.tier]}`}
                   style={{ boxShadow: `0 0 18px ${m.glow}, 0 2px 8px rgba(0,0,0,0.08)` }}
                 >
-                  {/* Background shimmer accent */}
+                  
                   <div
                     className={`absolute -right-6 -top-6 h-20 w-20 rounded-full bg-gradient-to-br ${m.gradient} opacity-15 blur-xl`}
                   />
 
                   <div className="relative flex items-start gap-4">
-                    {/* Icon */}
+                    
                     <div
                       className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br ${m.gradient} text-3xl shadow-md`}
                     >
@@ -435,7 +404,7 @@ export function StudentBadgesPage() {
         )}
       </SectionCard>
 
-      {/* ── Leaderboard ──────────────────────────────────────────────────── */}
+      
       <SectionCard
         title="Class Leaderboard"
         actions={
@@ -467,7 +436,7 @@ export function StudentBadgesPage() {
         ) : topEntries.length > 0 ? (
           <div className="space-y-6">
 
-            {/* Podium (top 3) */}
+            
             {podiumEntries.length >= 2 ? (
               <div className="flex items-end justify-center gap-4 pb-2 pt-4">
                 {PODIUM_ORDER.map((pos) => {
@@ -478,7 +447,7 @@ export function StudentBadgesPage() {
               </div>
             ) : null}
 
-            {/* Full ranking list */}
+            
             <div className="space-y-2">
               {topEntries.map((entry) => {
                 const isTop3 = entry.localRank <= 3;
@@ -492,7 +461,7 @@ export function StudentBadgesPage() {
                         : "border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-elevated)]"
                     }`}
                   >
-                    {/* Rank */}
+                    
                     <div className="w-8 shrink-0 text-center">
                       {rankEmoji ? (
                         <span className="text-xl">{rankEmoji}</span>
@@ -503,19 +472,19 @@ export function StudentBadgesPage() {
                       )}
                     </div>
 
-                    {/* Avatar */}
+                    
                     <Avatar
                       username={entry.username}
                       avatarUrl={entry.avatarUrl}
                       size={36}
                     />
 
-                    {/* Name */}
+                    
                     <p className={`flex-1 truncate text-sm font-semibold ${entry.isCurrentUser ? "text-[var(--dashboard-brand)]" : "text-[var(--dashboard-text-strong)]"}`}>
                       {entry.isCurrentUser ? `${entry.username} (You)` : entry.username}
                     </p>
 
-                    {/* Score */}
+                    
                     <span className={`text-sm font-bold tabular-nums ${isTop3 ? "text-[var(--dashboard-warning)]" : "text-[var(--dashboard-text-soft)]"}`}>
                       {Math.round(entry.averageScore)}%
                     </span>
@@ -523,7 +492,7 @@ export function StudentBadgesPage() {
                 );
               })}
 
-              {/* Current user outside top N */}
+              
               {currentUserOutsideTop && currentUserEntry ? (
                 <>
                   <div className="flex items-center gap-2 py-1">
@@ -549,7 +518,7 @@ export function StudentBadgesPage() {
               ) : null}
             </div>
 
-            {/* Footer note */}
+            
             <p className="text-center text-xs text-[var(--dashboard-text-faint)]">
               Showing top {Math.min(LEADERBOARD_TOP_N, topEntries.length)} students · Ranked by average quiz score
             </p>

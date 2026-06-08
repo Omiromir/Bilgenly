@@ -1,4 +1,4 @@
-import { getToken } from "../../auth/api";
+﻿import { getToken } from "../../auth/api";
 import { apiRequest, getApiBaseUrl } from "../../../lib/apiClient";
 
 export interface GenerateQuizConfigRequest {
@@ -24,6 +24,7 @@ export interface GeneratedQuizQuestionDto {
   explanation: string;
   position: number;
   answers: GeneratedQuizAnswerDto[];
+  tags?: string[];
 }
 
 export interface GeneratedQuizResultDto {
@@ -50,6 +51,7 @@ export interface UpdateGeneratedQuizRequest {
       text: string;
       isCorrect: boolean;
     }>;
+    tags: string[];
   }>;
 }
 

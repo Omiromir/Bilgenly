@@ -1,4 +1,4 @@
-import {
+﻿import {
   buildAssignmentConstraintState,
   toAssignmentConstraintSource,
   type AssignmentProgressStatus,
@@ -42,6 +42,7 @@ export interface TeacherAttemptQuestionResponse {
   correctAnswerId?: string | null;
   correctAnswerText?: string | null;
   isCorrect: boolean;
+  tags: string[];
   answerOptions: TeacherAttemptAnswerOption[];
 }
 
@@ -55,7 +56,7 @@ export interface TeacherQuizAttemptHistoryItem {
   totalQuestions: number;
   responsesCount: number;
   durationSeconds: number;
-  /** Present only when attempt was recorded from a local quiz session. Absent for backend-derived entries. */
+  
   session?: SharedAssignedQuizSessionRecord;
 }
 
@@ -244,6 +245,61 @@ function buildTopicPerformance(attempts: SharedAssignedQuizSessionRecord[]) {
     .sort((left, right) => left.percentage - right.percentage);
 }
 
+export function buildTopicPerformanceFromResponses(
+  responses: TeacherAttemptQuestionResponse[],
+): TeacherStudentTopicPerformance[] {
+  const buckets = new Map<
+    string,
+    { label: string; correctCount: number; totalCount: number }
+  >();
+
+  responses.forEach((response) => {
+    const seen = new Set<string>();
+
+    (response.tags ?? []).forEach((rawTag) => {
+      const label = rawTag.trim();
+      const normalized = label.toLowerCase();
+
+      if (!normalized || seen.has(normalized)) {
+        return;
+      }
+
+      seen.add(normalized);
+      const bucket = buckets.get(normalized) ?? {
+        label,
+        correctCount: 0,
+        totalCount: 0,
+      };
+
+      bucket.totalCount += 1;
+      if (response.isCorrect) {
+        bucket.correctCount += 1;
+      }
+
+      buckets.set(normalized, bucket);
+    });
+  });
+
+  return Array.from(buckets.values())
+    .map((bucket) => ({
+      ...bucket,
+      percentage: bucket.totalCount
+        ? Math.round((bucket.correctCount / bucket.totalCount) * 100)
+        : 0,
+    }))
+    .sort((left, right) => left.percentage - right.percentage);
+}
+
+export function selectWeakTopics(
+  topicPerformance: TeacherStudentTopicPerformance[],
+  threshold: number,
+) {
+  return topicPerformance
+    .filter((topic) => topic.percentage < threshold)
+    .slice(0, 2)
+    .map((topic) => topic.label);
+}
+
 function buildLatestAttemptQuestions(
   latestCompletedAttempt: SharedAssignedQuizSessionRecord | null,
 ) {
@@ -282,6 +338,7 @@ function buildLatestAttemptQuestions(
         .map((answerIndex) => question.options[answerIndex] ?? `Option ${answerIndex + 1}`)
         .join(", "),
       isCorrect: Boolean(state?.isCorrect),
+      tags: getQuestionInsightTags(question),
       answerOptions: question.options.map((option, optionIndex) => ({
         id: `${question.id}-${optionIndex}`,
         text: option,
@@ -352,10 +409,6 @@ function buildQuestionAnalytics(latestCompletedRows: TeacherStudentQuizResultRow
     }
   >();
 
-  // Seed buckets from the quiz definition (any attempt suffices — all
-  // attempts of one assignment share the same quiz). Without this seed,
-  // questions that nobody answered would be missing from analytics, so a
-  // 10-question quiz would appear as 8 questions if 2 went unanswered.
   const seedQuiz = latestCompletedRows.find(
     (row) => row.latestCompletedAttempt?.session.quiz.questions.length,
   )?.latestCompletedAttempt?.session.quiz;
@@ -516,11 +569,10 @@ export function buildTeacherAssignedQuizAnalytics(
       const latestResult = latestCompletedAttempt
         ? getQuizSessionResultSummary(latestCompletedAttempt.session)
         : null;
-      const topicPerformance = buildTopicPerformance(studentAttempts);
-      const weakTopics = topicPerformance
-        .filter((topic) => topic.percentage < threshold)
-        .slice(0, 2)
-        .map((topic) => topic.label);
+      const topicPerformance = buildTopicPerformance(
+        latestCompletedAttempt ? [latestCompletedAttempt] : [],
+      );
+      const weakTopics = selectWeakTopics(topicPerformance, threshold);
       const latestScore = latestResult?.percentage ?? null;
       const averageScore = attemptHistory.length
         ? Math.round(
@@ -616,11 +668,6 @@ export function buildTeacherAssignedQuizAnalytics(
   const exhaustedAttemptsStudentsCount = rows.filter(
     (row) => row.exhaustedAttempts,
   ).length;
-  // Average attempts is divided by the number of students who actually
-  // ENGAGED with the quiz (made an attempt or are in-progress).  Dividing
-  // by the full assigned class made the metric meaningless — a class of 30
-  // with only 10 active students would show "0.3 avg attempts" instead of
-  // the real "1.0 per active student".
   const averageAttemptsUsed = studentsWithAttemptsCount
     ? Number(
         (

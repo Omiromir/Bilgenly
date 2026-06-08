@@ -1,4 +1,4 @@
-import {
+﻿import {
   AlertCircle,
   BookOpen,
   CheckCircle2,
@@ -151,7 +151,7 @@ export function RecentQuizzesList({
               <CompactMetric
                 icon={CheckCircle2}
                 label="Completed"
-                value={`${quiz.completedCount}`}
+                value={`${quiz.completedCount} of ${quiz.assignedStudentsCount}`}
                 toneClassName="text-[var(--dashboard-success)]"
               />
               {quiz.inProgressCount > 0 ? (

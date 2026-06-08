@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useAuth } from "../../../app/providers/AuthProvider";
 import { useQuizLibrary } from "../../../app/providers/QuizLibraryProvider";
@@ -52,6 +52,7 @@ interface UseProfileResult {
     value: ProfileFormValues[TField],
   ) => void;
   selectStaticAvatar: (avatarId: string) => void;
+  clearAvatar: () => void;
 }
 
 function buildRoleLabel(role: string | null | undefined) {
@@ -294,8 +295,6 @@ export function useProfile(): UseProfileResult {
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
-  // Reuse the same React Query cache that StudentBadgesPage populates, so
-  // visiting Achievements before Profile means badge count is instant here.
   const achievementsQuery = useAchievementsQuery();
   const studentBadgesEarned = achievementsQuery.data?.badgesEarned ?? 0;
   const isBadgesLoading = role === "student" && achievementsQuery.isLoading;
@@ -328,9 +327,6 @@ export function useProfile(): UseProfileResult {
       if (quiz.ownerRole !== "teacher") {
         return false;
       }
-      // Prefer ID-based match (immune to name changes).
-      // Fall back to name match only for legacy local-only quizzes that
-      // pre-date the ownerUserId field being populated.
       if (quiz.ownerUserId) {
         return quiz.ownerUserId === viewerId;
       }
@@ -339,10 +335,6 @@ export function useProfile(): UseProfileResult {
   }, [dashboardViewer, quizzes, role]);
   const completedSessions = getCompletedSessionsForRole(role === "teacher" ? "teacher" : "student");
 
-  // Build the same session-percentage map that StudentResultsPage uses so the
-  // "Average Score" on the profile matches the value shown on My Results.
-  // Session-based percentages use earnedPoints/totalPoints (points-accurate),
-  // while the raw backend averageScore uses correctAnswers/totalQuestions.
   const sessionPercentageByAttemptId = useMemo(() => {
     const map = new Map<string, number>();
     for (const session of completedSessions) {
@@ -358,11 +350,6 @@ export function useProfile(): UseProfileResult {
       return null;
     }
 
-    // Prefer backend-synced viewer data so the displayed profile survives a
-    // page refresh on a different device / cleared localStorage.
-    // Exception: bio uses settings.profile.bio first so edits are reflected
-    // immediately after save (saveProfileSettings updates settings synchronously,
-    // while dashboardViewer.bio is a stale snapshot from the last login fetch).
     const joinedLabel = dashboardViewer.joinedLabel || "Member";
     const location = settings.profile.country;
     const fullName = dashboardViewer.fullName || settings.profile.fullName;
@@ -427,9 +414,6 @@ export function useProfile(): UseProfileResult {
 
     const analyticsAttempts = analyticsState.data?.attempts ?? [];
     const completedQuizCount = analyticsAttempts.length || completedSessions.length;
-    // Compute average score the same way StudentResultsPage does: prefer the
-    // session-based percentage (earnedPoints/totalPoints, points-accurate) over
-    // the raw backend score (correctAnswers/totalQuestions) so both pages agree.
     const averageScore = (() => {
       if (analyticsAttempts.length > 0) {
         const percentages = analyticsAttempts.map((attempt) =>
@@ -576,8 +560,6 @@ export function useProfile(): UseProfileResult {
         country: formValues.location.trim(),
         avatarUrl: resolvedAvatarUrl,
       });
-      // Sync the avatarUrl (and name) into the AuthProvider's currentUser so
-      // the header avatar updates immediately without a page reload.
       updateCurrentUserProfile({
         username: response.username || trimmedFullName,
         avatarUrl: resolvedAvatarUrl,
@@ -586,9 +568,6 @@ export function useProfile(): UseProfileResult {
       setIsEditing(false);
       toast.success("Profile updated.");
 
-      // Refresh class records so the updated name is reflected everywhere
-      // (e.g. student-visible "Teacher: <name>" in class detail panels).
-      // Fire-and-forget — the UI is already updated optimistically via settings.
       void refreshClasses();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Unable to update profile.");
@@ -625,6 +604,13 @@ export function useProfile(): UseProfileResult {
       setFormValues((current) => ({
         ...current,
         avatarUrl: avatarId,
+      }));
+      setIsEditing(true);
+    },
+    clearAvatar: () => {
+      setFormValues((current) => ({
+        ...current,
+        avatarUrl: null,
       }));
       setIsEditing(true);
     },

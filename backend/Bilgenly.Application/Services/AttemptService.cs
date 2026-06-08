@@ -21,12 +21,31 @@ public class AttemptService
     }
     public async Task<IEnumerable<MyAttemptDto>> GetMyAttemptsAsync(Guid userId)
     {
-        var attempts = await _attemptRepository.GetByUserIdAsync(userId);
+        var attempts = (await _attemptRepository.GetByUserIdAsync(userId)).ToList();
+
+        var completedByAssignment = attempts
+            .Where(a => a.AssignmentId.HasValue && a.IsCompleted)
+            .GroupBy(a => a.AssignmentId!.Value)
+            .ToDictionary(g => g.Key, g => g.Count());
+
+        var maxAttemptsByAssignment = new Dictionary<Guid, int?>();
+        foreach (var assignmentId in attempts
+                     .Where(a => a.AssignmentId.HasValue)
+                     .Select(a => a.AssignmentId!.Value)
+                     .Distinct())
+        {
+            var assignment = await _classRepository.GetAssignmentByIdAsync(assignmentId);
+            maxAttemptsByAssignment[assignmentId] = assignment?.MaxAttempts;
+        }
+
         return attempts
             .OrderByDescending(a => a.DateTaken)
             .Select(a =>
         {
-            var questionResults = a.IsCompleted
+            var revealAnswerKey = ShouldRevealAnswerKey(
+                a.AssignmentId, completedByAssignment, maxAttemptsByAssignment);
+
+            var questionResults = a.IsCompleted && revealAnswerKey
                 ? a.Quiz.Questions
                     .OrderBy(q => q.Position)
                     .Select(question =>
@@ -88,11 +107,6 @@ public class AttemptService
         if (quiz.IsHidden)
             return (null, "This quiz is not available.");
 
-        // Resolve which assignment (if any) this student is starting an attempt for.
-        // If the same quiz is assigned to multiple of the student's classes we pick the
-        // most-recently created active assignment — the one the student is most likely
-        // acting on. When there is no assignment the quiz is being taken freely (public
-        // library) and no cap enforcement applies.
         var classes = await _classRepository.GetByStudentIdAsync(userId);
         var targetAssignment = classes
             .SelectMany(c => c.Assignments ?? Enumerable.Empty<Assignment>())
@@ -105,8 +119,6 @@ public class AttemptService
             var cap = targetAssignment.MaxAttempts.Value;
             var userAttempts = (await _attemptRepository.GetByUserIdAsync(userId)).ToList();
 
-            // Only count attempts that belong to THIS assignment — not attempts from
-            // any previous assignment that was removed and recreated for the same quiz.
             var completedForAssignment = userAttempts
                 .Count(a => a.AssignmentId == targetAssignment.Id && a.IsCompleted);
 
@@ -114,12 +126,14 @@ public class AttemptService
                 return (null, "You have used all attempts for this assignment.");
         }
 
+        await _attemptRepository.DeleteIncompleteAsync(userId, quizId, targetAssignment?.Id);
+
         var attempt = new Attempt
         {
             Id = Guid.NewGuid(),
             UserId = userId,
             QuizId = quizId,
-            AssignmentId = targetAssignment?.Id,   // stamp so future counts are scoped
+            AssignmentId = targetAssignment?.Id,
             Score = 0,
             DateTaken = DateTime.UtcNow,
             IsCompleted = false
@@ -176,6 +190,20 @@ public class AttemptService
         if (attempt.IsCompleted)
             return (null, "Attempt already completed");
 
+        if (attempt.AssignmentId.HasValue)
+        {
+            var assignment = await _classRepository.GetAssignmentByIdAsync(attempt.AssignmentId.Value);
+            if (assignment?.MaxAttempts is int cap)
+            {
+                var alreadyCompleted = (await _attemptRepository.GetByUserIdAsync(userId))
+                    .Count(a => a.AssignmentId == attempt.AssignmentId
+                        && a.IsCompleted
+                        && a.Id != attempt.Id);
+                if (alreadyCompleted >= cap)
+                    return (null, "You have used all attempts for this assignment.");
+            }
+        }
+
         var quiz = attempt.Quiz;
         var questionResults = new List<QuestionResultDto>();
         var attemptAnswers = new List<AttemptAnswer>();
@@ -213,8 +241,6 @@ public class AttemptService
         }
 
         int totalQuestions = quiz.Questions.Count;
-        // Score is points-based (mirrors frontend logic): earnedPoints / totalPoints * 100.
-        // Each question contributes Math.Max(1, q.Points) so questions with Points=0 still count as 1.
         int totalPoints = quiz.Questions.Sum(q => Math.Max(1, q.Points));
         int earnedPoints = quiz.Questions.Sum(q =>
         {
@@ -234,6 +260,8 @@ public class AttemptService
         await _attemptRepository.AddAnswersAsync(attemptAnswers);
         await _attemptRepository.SaveChangesAsync();
 
+        var revealAnswerKey = await ShouldRevealAnswerKeyAsync(userId, attempt.AssignmentId);
+
         return (new AttemptResultDto
         {
             AttemptId = attempt.Id,
@@ -241,7 +269,39 @@ public class AttemptService
             Score = score,
             TotalQuestions = totalQuestions,
             CorrectAnswers = correctCount,
-            Questions = questionResults
+            Questions = revealAnswerKey ? questionResults : new List<QuestionResultDto>()
         }, null);
+    }
+
+    private static bool ShouldRevealAnswerKey(
+        Guid? assignmentId,
+        IReadOnlyDictionary<Guid, int> completedByAssignment,
+        IReadOnlyDictionary<Guid, int?> maxAttemptsByAssignment)
+    {
+        if (!assignmentId.HasValue)
+            return true;
+
+        if (!maxAttemptsByAssignment.TryGetValue(assignmentId.Value, out var maxAttempts)
+            || maxAttempts is not int cap || cap <= 0)
+            return true;
+
+        var completed = completedByAssignment.TryGetValue(assignmentId.Value, out var count)
+            ? count
+            : 0;
+        return completed >= cap;
+    }
+
+    private async Task<bool> ShouldRevealAnswerKeyAsync(Guid userId, Guid? assignmentId)
+    {
+        if (!assignmentId.HasValue)
+            return true;
+
+        var assignment = await _classRepository.GetAssignmentByIdAsync(assignmentId.Value);
+        if (assignment?.MaxAttempts is not int cap || cap <= 0)
+            return true;
+
+        var completedForAssignment = (await _attemptRepository.GetByUserIdAsync(userId))
+            .Count(a => a.AssignmentId == assignmentId.Value && a.IsCompleted);
+        return completedForAssignment >= cap;
     }
 }

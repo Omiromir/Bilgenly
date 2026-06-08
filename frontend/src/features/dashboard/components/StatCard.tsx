@@ -1,4 +1,4 @@
-import type { LucideIcon } from "../../../components/icons/AppIcons";
+﻿import type { LucideIcon } from "../../../components/icons/AppIcons";
 import { cn } from "../../../components/ui/utils";
 import {
   DashboardSurface,
@@ -10,13 +10,13 @@ interface StatCardProps {
   value: string;
   change: string;
   icon: LucideIcon;
-  /** Override the icon chip colour. Defaults to "brand". */
+  
   iconClassName?: string;
-  /** Optional tone for the change indicator: auto-detected from "+"/"-" prefix if omitted */
+  
   changeTone?: "positive" | "negative" | "neutral";
 }
 
-/** Detect tone from the change string prefix when not explicitly set */
+
 function resolveChangeTone(
   change: string,
   override?: "positive" | "negative" | "neutral",

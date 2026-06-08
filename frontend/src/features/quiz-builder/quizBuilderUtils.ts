@@ -1,4 +1,4 @@
-import type { QuizDifficulty } from "../dashboard/components/quiz-library/quizLibraryTypes";
+﻿import type { QuizDifficulty } from "../dashboard/components/quiz-library/quizLibraryTypes";
 import type { GeneratedQuestion, QuestionType, QuestionStatus } from "./quizBuilderTypes";
 
 export function createQuestionId() {
@@ -75,6 +75,7 @@ export function buildGeneratedQuestions(
     estimatedMinutes: 2,
     answerOrder: "fixed",
     required: true,
+    tags: [],
     status: index < 2 ? "unreviewed" : "needs attention",
   }));
 }

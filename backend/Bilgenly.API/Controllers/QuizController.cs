@@ -46,9 +46,13 @@ public class QuizController : ControllerBase
     }
 
     [HttpGet("{id}")]
+    [Authorize]
     public async Task<IActionResult> GetById(Guid id)
     {
-        var quiz = await _quizService.GetQuizAsync(id);
+        var userId = Guid.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+        var role = User.FindFirst(ClaimTypes.Role)?.Value;
+
+        var quiz = await _quizService.GetQuizAsync(id, userId, role);
         if (quiz is null) return NotFound(new { message = "Quiz not found" });
         return Ok(quiz);
     }

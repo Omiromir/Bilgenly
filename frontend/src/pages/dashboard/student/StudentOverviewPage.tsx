@@ -1,4 +1,4 @@
-import { BookOpen, Medal, Timer } from "../../../components/icons/AppIcons";
+﻿import { BookOpen, Medal, Timer, XIcon } from "../../../components/icons/AppIcons";
 import { useAchievementsQuery } from "../../../features/gamification/api";
 import { Link } from "react-router";
 import { useMemo } from "react";
@@ -24,6 +24,10 @@ import {
 import { EmptyAssignedQuizzesState } from "../../../features/dashboard/components/quiz-library/QuizLibraryComponents";
 import { buildStudentQuizLibrarySources } from "../../../features/dashboard/components/quiz-library/studentQuizLibrarySources";
 import { useQuizLauncher } from "../../../features/quiz-session/useQuizLauncher";
+import {
+  isDismissibleAssignment,
+  useDismissedAssignments,
+} from "../../../features/assignments/useDismissedAssignments";
 import { SectionCard } from "../../../features/dashboard/components/SectionCard";
 import { StatCard } from "../../../features/dashboard/components/StatCard";
 import {
@@ -44,6 +48,7 @@ export function StudentOverviewPage() {
   const { openQuiz } = useQuizLauncher();
   const completedSessions = getCompletedSessionsForRole("student");
   const studentViewer = currentUser?.role === "student" ? currentUser : null;
+  const { dismissed, dismiss } = useDismissedAssignments(studentViewer?.id);
   const studentIdentity = useMemo(
     () => ({
       userId: studentViewer?.id,
@@ -57,12 +62,8 @@ export function StudentOverviewPage() {
     error: attemptsError,
   } = useStudentAttempts();
 
-  // Shares the same React Query cache as StudentBadgesPage and useProfile —
-  // no extra network request when the user navigates between pages.
   const { data: achievementsData } = useAchievementsQuery();
 
-  // Completed attempts from backend, sorted newest first. This is the
-  // single source of truth for overview stats — no localStorage dependency.
   const completedAttempts = useMemo(
     () =>
       allAttempts
@@ -87,9 +88,6 @@ export function StudentOverviewPage() {
       ),
     [allAttempts, attemptsError, attemptsLoading, classes, quizzes, sessions, studentIdentity],
   );
-  // Map backendAttemptId → accurate points-based percentage from local session.
-  // Overrides the backend's (correctAnswers/totalQuestions) score with the
-  // correct (earnedPoints/totalPoints) value wherever a local session exists.
   const correctedScoreByAttemptId = useMemo(() => {
     const map = new Map<string, number>();
     for (const session of completedSessions) {
@@ -114,13 +112,21 @@ export function StudentOverviewPage() {
   const assignedPreview = useMemo(
     () =>
       [...studentSources.assigned]
+        .filter((item) => {
+          const state = item.assignmentState;
+          const isFullyDone = state.canReview && !state.canStart && !state.canResume;
+          if (isFullyDone) return false;
+          if (dismissed.has(item.assignmentContext.assignmentId)) return false;
+          return true;
+        })
         .sort(
           (left, right) =>
             new Date(right.assignmentContext.assignedAt).getTime() -
             new Date(left.assignmentContext.assignedAt).getTime(),
         )
         .slice(0, 3),
-    [studentSources.assigned],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [studentSources.assigned, dismissed],
   );
 
   const getAssignedStatusClassName = (status: string) => {
@@ -289,14 +295,28 @@ export function StudentOverviewPage() {
                           </span>
                         </div>
                       </div>
-                      <span
-                        className={cn(
-                          "text-sm font-medium",
-                          getAssignedStatusClassName(assignment.assignmentState.status),
+                      <div className="flex shrink-0 flex-col items-end gap-1.5">
+                        <span
+                          className={cn(
+                            "text-sm font-medium",
+                            getAssignedStatusClassName(assignment.assignmentState.status),
+                          )}
+                        >
+                          {assignment.assignmentState.displayStatusLabel}
+                        </span>
+                        {isDismissibleAssignment(assignment.assignmentState) && (
+                          <button
+                            type="button"
+                            onClick={() => dismiss(assignment.assignmentContext.assignmentId)}
+                            title="Remove from list"
+                            aria-label="Remove from list"
+                            className="flex items-center gap-1 text-xs text-[var(--dashboard-text-faint)] transition-colors hover:text-[var(--dashboard-text)]"
+                          >
+                            <XIcon className="h-3 w-3" />
+                            Remove
+                          </button>
                         )}
-                      >
-                        {assignment.assignmentState.displayStatusLabel}
-                      </span>
+                      </div>
                     </div>
                     <p className="mt-4 text-sm text-[var(--dashboard-text-soft)]">
                       {assignment.practiceProgressLabel}

@@ -1,15 +1,15 @@
-import type { ReactNode } from "react";
+﻿import type { ReactNode } from "react";
 import {
   BookOpen,
-  CalendarDays,
   Eye,
   RotateCcw,
   SearchX,
+  Trophy,
   UserRound,
+  XIcon,
 } from "../../../../components/icons/AppIcons";
 import {
   AttemptProgressIndicator,
-  AttemptsBadge,
   DeadlineBadge,
   QuizStatusBadge,
 } from "../../../assignments/AssignmentControls";
@@ -35,7 +35,6 @@ import {
   dashboardTabVariants,
 } from "../DashboardPrimitives";
 import type {
-  QuizAssignmentContext,
   QuizCardAction,
   QuizCardMetadataItem,
   QuizLibraryFilterDefinition,
@@ -44,7 +43,6 @@ import type {
 } from "./quizLibraryTypes";
 import type { StudentAssignedQuizLibraryItem } from "./studentQuizLibrarySources";
 import { getStatusLabel } from "./quizLibraryUtils";
-import { formatTeacherClassDate } from "../classes/teacherClassesUtils";
 import { formatCurrentDate } from "../../settings/settingsPreferences";
 
 const statusToneMap = {
@@ -55,6 +53,29 @@ const statusToneMap = {
   "published-public": "success",
   archived: "neutral",
 } as const;
+
+
+function getScoreToneClasses(percent: number) {
+  if (percent >= 70) {
+    return {
+      text: "text-[var(--dashboard-success)]",
+      surface:
+        "border-[var(--dashboard-success-soft)] bg-[var(--dashboard-success-soft)]/40",
+    };
+  }
+  if (percent >= 40) {
+    return {
+      text: "text-[var(--dashboard-warning)]",
+      surface:
+        "border-[var(--dashboard-warning-soft)] bg-[var(--dashboard-warning-soft)]/40",
+    };
+  }
+  return {
+    text: "text-[var(--dashboard-danger)]",
+    surface:
+      "border-[var(--dashboard-danger-soft)] bg-[var(--dashboard-danger-soft)]/40",
+  };
+}
 
 interface LibraryTabsProps<TTab extends string> {
   tabs: QuizLibraryTab<TTab>[];
@@ -223,43 +244,6 @@ export function QuizSourceBadge({ label }: QuizSourceBadgeProps) {
   return <DashboardBadge tone="brand">{label}</DashboardBadge>;
 }
 
-interface ClassAssignmentMetaProps {
-  assignmentContext: QuizAssignmentContext;
-}
-
-export function ClassAssignmentMeta({
-  assignmentContext,
-}: ClassAssignmentMetaProps) {
-  const assignedDate = formatTeacherClassDate(assignmentContext.assignedAt);
-
-  return (
-    <div className="rounded-[20px] bg-[var(--dashboard-surface-muted)] px-4 py-4">
-      <div className="grid gap-3 sm:grid-cols-2">
-        <div className={dashboardIconTextRowClassName}>
-          <BookOpen className="h-4 w-4" />
-          <span>{assignmentContext.className}</span>
-        </div>
-        <div className={dashboardIconTextRowClassName}>
-          <UserRound className="h-4 w-4" />
-          <span>{assignmentContext.assignedByName}</span>
-        </div>
-        <div className={dashboardIconTextRowClassName}>
-          <CalendarDays className="h-4 w-4" />
-          <span>Assigned quiz added {assignedDate}</span>
-        </div>
-        <div className={dashboardIconTextRowClassName}>
-          <Eye className="h-4 w-4" />
-          <span>Visible through your class membership</span>
-        </div>
-      </div>
-      <div className="mt-3 flex flex-wrap gap-2">
-        <DeadlineBadge deadline={assignmentContext.deadline} />
-        <AttemptsBadge maxAttempts={assignmentContext.maxAttempts} />
-      </div>
-    </div>
-  );
-}
-
 interface QuizMetadataRowProps {
   item: QuizCardMetadataItem;
 }
@@ -320,6 +304,9 @@ export function QuizCard({
   actions,
   badgeLabel,
 }: QuizCardProps) {
+  const primaryActions = actions.filter((a) => a.variant !== "ghost");
+  const destructiveActions = actions.filter((a) => a.variant === "ghost");
+
   return (
     <DashboardSurface asChild radius="xl" padding="md" className="h-full">
       <article className="flex h-full min-w-0 flex-col">
@@ -335,9 +322,12 @@ export function QuizCard({
         </div>
 
         <div className="mt-5">
-          <p className="break-words text-xs font-semibold uppercase tracking-[0.18em] text-[var(--dashboard-text-faint)] [overflow-wrap:anywhere]">
-            {item.topic}
-          </p>
+          
+          {item.topic && item.topic !== item.title ? (
+            <p className="break-words text-xs font-semibold uppercase tracking-[0.18em] text-[var(--dashboard-text-faint)] [overflow-wrap:anywhere]">
+              {item.topic}
+            </p>
+          ) : null}
           <h3 className="mt-3 break-words text-[1.2rem] font-semibold text-[var(--dashboard-text-strong)] [overflow-wrap:anywhere]">
             {item.title}
           </h3>
@@ -363,16 +353,27 @@ export function QuizCard({
           ))}
         </div>
 
-        <div className="mt-5 flex flex-wrap gap-2.5 border-t border-[var(--dashboard-border-soft)] pt-5">
-          {actions.map((action, index) => (
+        
+        <div className="mt-auto flex items-center gap-2 border-t border-[var(--dashboard-border-soft)] pt-5">
+          <div className="flex min-w-0 flex-1 items-center gap-2">
+            {primaryActions.map((action, index) => (
+              <QuizCardActionButton
+                key={`${item.id}-${action.label}`}
+                action={{
+                  ...action,
+                  variant: action.variant ?? (index === 0 ? "primary" : "secondary"),
+                }}
+                buttonKey={`${item.id}-${action.label}`}
+                isPrimaryStretch={index === 0}
+              />
+            ))}
+          </div>
+          {destructiveActions.map((action) => (
             <QuizCardActionButton
               key={`${item.id}-${action.label}`}
-              action={{
-                ...action,
-                variant: action.variant ?? (index === 0 ? "primary" : "secondary"),
-              }}
+              action={action}
               buttonKey={`${item.id}-${action.label}`}
-              isPrimaryStretch={index === 0 && actions.length < 3}
+              isPrimaryStretch={false}
             />
           ))}
         </div>
@@ -385,92 +386,114 @@ interface AssignedQuizCardProps {
   item: StudentAssignedQuizLibraryItem;
   actions: QuizCardAction[];
   badgeLabel?: string;
+  
+  onDismiss?: () => void;
 }
 
 export function AssignedQuizCard({
   item,
   actions,
   badgeLabel,
+  onDismiss,
 }: AssignedQuizCardProps) {
-  const assignedDate = formatTeacherClassDate(item.assignmentContext.assignedAt);
+  const state = item.assignmentState;
+  const isExpired = state.deadlinePassed;
 
   return (
     <DashboardSurface asChild radius="xl" padding="md" className="h-full">
       <article className="flex h-full min-w-0 flex-col">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="flex flex-wrap gap-2">
-            <QuizSourceBadge label="Assigned quiz" />
-            <QuizStatusBadge
-              status={item.assignmentState.status}
-              label={item.assignmentState.displayStatusLabel}
-            />
-            {badgeLabel ? (
-              <DashboardBadge tone="info">
-                {badgeLabel}
-              </DashboardBadge>
-            ) : null}
-          </div>
+        
+        <div className="flex flex-wrap items-center gap-2">
+          <QuizStatusBadge status={state.status} label={state.displayStatusLabel} />
+          {badgeLabel ? (
+            <DashboardBadge tone="info">{badgeLabel}</DashboardBadge>
+          ) : null}
+          {onDismiss ? (
+            <button
+              type="button"
+              onClick={onDismiss}
+              title="Remove this quiz from your assigned list"
+              aria-label="Remove from assigned list"
+              className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium text-[var(--dashboard-text-faint)] transition-colors hover:bg-[var(--dashboard-surface-muted)] hover:text-[var(--dashboard-text)]"
+            >
+              <XIcon className="h-3.5 w-3.5" />
+              Dismiss
+            </button>
+          ) : null}
         </div>
 
-        <div className="mt-5">
-          <p className="break-words text-xs font-semibold uppercase tracking-[0.18em] text-[var(--dashboard-text-faint)] [overflow-wrap:anywhere]">
-            {item.topic}
-          </p>
-          <h3 className="mt-3 break-words text-[1.2rem] font-semibold text-[var(--dashboard-text-strong)] [overflow-wrap:anywhere]">
+        
+        <div className="mt-4 flex-1">
+          
+          {item.topic && item.topic !== item.title ? (
+            <p className="break-words text-xs font-semibold uppercase tracking-[0.18em] text-[var(--dashboard-text-faint)] [overflow-wrap:anywhere]">
+              {item.topic}
+            </p>
+          ) : null}
+          <h3 className="mt-2 break-words text-[1.15rem] font-semibold leading-snug text-[var(--dashboard-text-strong)] [overflow-wrap:anywhere]">
             {item.title}
           </h3>
-          <p className="mt-3 overflow-hidden break-words text-sm leading-6 text-[var(--dashboard-text-soft)] [overflow-wrap:anywhere]">
+          <p className="mt-2 line-clamp-2 break-words text-sm leading-6 text-[var(--dashboard-text-soft)] [overflow-wrap:anywhere]">
             {item.description}
           </p>
         </div>
 
-        <div className="mt-5 grid gap-2.5 sm:grid-cols-2">
-          <QuizMetadataRow
-            item={{ icon: BookOpen, label: `${item.questionCount} questions` }}
-          />
-          <QuizMetadataRow
-            item={{ icon: CalendarDays, label: `Assigned quiz added ${assignedDate}` }}
-          />
-          <QuizMetadataRow item={{ icon: UserRound, label: item.assignmentContext.assignedByName }} />
-          <QuizMetadataRow
-            item={{
-              icon: RotateCcw,
-              label:
-                item.practiceProgressLabel ??
-                (item.practiceState === "in-progress"
-                  ? "In progress"
-                  : item.practiceState === "completed"
-                    ? "Completed"
-                    : "Ready to start"),
-            }}
+        
+        <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-[var(--dashboard-border-soft)] pt-4 text-sm text-[var(--dashboard-text-soft)]">
+          <span className="flex items-center gap-1.5">
+            <BookOpen className="h-3.5 w-3.5 shrink-0" />
+            {item.questionCount} questions
+          </span>
+          <span className="flex items-center gap-1.5">
+            <UserRound className="h-3.5 w-3.5 shrink-0" />
+            {item.assignmentContext.assignedByName}
+          </span>
+          <DeadlineBadge
+            deadline={item.assignmentContext.deadline}
+            expired={isExpired}
           />
         </div>
 
-        <div className="mt-5">
-          <ClassAssignmentMeta assignmentContext={item.assignmentContext} />
-        </div>
+        
+        {state.latestScorePercent !== null ? (
+          (() => {
+            const tone = getScoreToneClasses(state.latestScorePercent);
+            return (
+              <div
+                className={cn(
+                  "mt-4 flex items-center justify-between gap-3 rounded-[18px] border px-4 py-3",
+                  tone.surface,
+                )}
+              >
+                <span className="flex items-center gap-2 text-sm font-medium text-[var(--dashboard-text-soft)]">
+                  <Trophy className={cn("h-4 w-4 shrink-0", tone.text)} />
+                  {state.attemptsUsed > 1 ? "Latest score" : "Your score"}
+                </span>
+                <span
+                  className={cn(
+                    "text-[1.4rem] font-semibold leading-none tabular-nums",
+                    tone.text,
+                  )}
+                >
+                  {state.latestScorePercent}%
+                </span>
+              </div>
+            );
+          })()
+        ) : null}
 
-        <div className="mt-5 rounded-[20px] border border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-elevated)] px-4 py-4">
+        
+        <div className="mt-4">
           <AttemptProgressIndicator
-            attemptsUsed={item.assignmentState.attemptsUsed}
-            maxAttempts={item.assignmentState.maxAttempts}
-            status={item.assignmentState.status}
-            isLoading={item.assignmentState.isLoading}
+            attemptsUsed={state.attemptsUsed}
+            maxAttempts={state.maxAttempts}
+            status={state.status}
+            isLoading={state.isLoading}
           />
         </div>
 
-        <div className="mt-5 flex flex-wrap gap-2">
-          {item.tags.map((tag) => (
-            <span
-              key={`${item.assignmentContext.assignmentId}-${tag}`}
-              className="rounded-full bg-[var(--dashboard-surface-muted)] px-3 py-1 text-xs font-medium text-[var(--dashboard-text-soft)]"
-            >
-              {tag}
-            </span>
-          ))}
-        </div>
-
-        <div className="mt-5 flex flex-wrap gap-2.5 border-t border-[var(--dashboard-border-soft)] pt-5">
+        
+        <div className="mt-auto flex flex-wrap gap-2.5 border-t border-[var(--dashboard-border-soft)] pt-4">
           {actions.map((action, index) => (
             <QuizCardActionButton
               key={`${item.assignmentContext.assignmentId}-${action.label}`}

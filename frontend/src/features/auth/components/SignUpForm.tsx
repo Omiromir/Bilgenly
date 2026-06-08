@@ -1,6 +1,7 @@
-import { type ChangeEvent, type FormEvent, useState } from "react";
+﻿import { type ChangeEvent, type FormEvent, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { toast } from "sonner";
+import { checkEmailAvailability } from "../api";
 import { usePasswordVisibility } from "../hooks";
 import {
     buildRegistrationDraft,
@@ -9,6 +10,7 @@ import {
 } from "../registrationDraft";
 import type { SignUpFormErrors, SignUpFormValues } from "../types";
 import {
+    EMAIL_MAX_LENGTH,
     getPasswordStrength,
     normalizeEmail,
     validateEmail,
@@ -85,6 +87,7 @@ export function SignUpForm() {
 
         try {
             setIsSubmitting(true);
+            await checkEmailAvailability(normalizedValues.email);
             saveRegistrationDraft(buildRegistrationDraft(normalizedValues));
             navigate("/onboarding");
         } catch (error) {
@@ -143,6 +146,7 @@ export function SignUpForm() {
                     onChange={handleChange("email")}
                     autoComplete="email"
                     inputMode="email"
+                    maxLength={EMAIL_MAX_LENGTH}
                     aria-invalid={touched.email && Boolean(errors.email)}
                 />
                 {touched.email && errors.email && (
@@ -194,7 +198,7 @@ export function SignUpForm() {
             </div>
 
             <button className="auth-primary" type="submit" disabled={!canSubmit}>
-                {isSubmitting ? "Saving details..." : "Continue to onboarding"}
+                {isSubmitting ? "Checking…" : "Continue to onboarding"}
             </button>
 
             <div className="auth-center-row">

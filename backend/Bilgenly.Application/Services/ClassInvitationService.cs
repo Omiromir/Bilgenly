@@ -1,4 +1,4 @@
-using Bilgenly.Application.DTOs;
+﻿using Bilgenly.Application.DTOs;
 using Bilgenly.Application.Interfaces;
 using Bilgenly.Domain.Entities;
 using Microsoft.Extensions.Configuration;
@@ -35,6 +35,11 @@ public class ClassInvitationService
         var teacherName = classEntity.Teacher?.Username ?? "Your teacher";
         var frontendBaseUrl = _configuration["FrontendBaseUrl"] ?? "https://bilgenly.vercel.app";
 
+        var enrolledEmails = classEntity.ClassStudents
+            .Select(cs => cs.Student?.Email?.Trim().ToLower())
+            .Where(e => !string.IsNullOrEmpty(e))
+            .ToHashSet();
+
         var sent = new List<ClassInvitationDto>();
         var failed = new List<string>();
 
@@ -42,6 +47,8 @@ public class ClassInvitationService
         {
             var email = rawEmail.Trim().ToLower();
             if (string.IsNullOrWhiteSpace(email)) continue;
+
+            if (enrolledEmails.Contains(email)) continue;
 
             var existing = await _invitationRepository.GetPendingAsync(classId, email);
             if (existing is not null)
@@ -99,13 +106,29 @@ public class ClassInvitationService
         await _invitationRepository.SaveChangesAsync();
     }
 
+    public async Task<(bool Success, string? Error)> RevokePendingByEmailAsync(
+        Guid classId, string email, Guid teacherId)
+    {
+        var classEntity = await _classRepository.GetByIdAsync(classId);
+        if (classEntity is null) return (false, "Class not found");
+        if (classEntity.TeacherId != teacherId) return (false, "Access denied");
+
+        var invitation = await _invitationRepository.GetPendingAsync(classId, email);
+        if (invitation is not null)
+        {
+            await _invitationRepository.DeleteAsync(invitation);
+            await _invitationRepository.SaveChangesAsync();
+        }
+
+        return (true, null);
+    }
+
     private static ClassInvitationDto ToDto(ClassInvitation i, string className) => new()
     {
         Id = i.Id,
         ClassId = i.ClassId,
         ClassName = className,
         RecipientEmail = i.RecipientEmail,
-        InviteCode = i.InviteCode,
         Status = i.Status,
         CreatedAt = i.CreatedAt,
     };

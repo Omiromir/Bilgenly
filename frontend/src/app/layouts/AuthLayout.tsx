@@ -1,5 +1,4 @@
-import type { ReactNode } from "react";
-import { Link } from "react-router";
+﻿import type { ReactNode } from "react";
 import { BilgenlyLogo } from "../../components/shared/BilgenlyLogo";
 import { authStyles } from "../../features/auth/authStyles";
 
@@ -29,14 +28,6 @@ export function AuthLayout({ children, subtitle, title }: AuthLayoutProps) {
 
       <footer className="auth-footer">
         <span>Copyright 2026 Bilgenly</span>
-        <div className="auth-footer-links">
-          <Link className="auth-link" to="/">
-            Privacy Policy
-          </Link>
-          <Link className="auth-link" to="/">
-            Terms & Conditions
-          </Link>
-        </div>
       </footer>
     </div>
   );

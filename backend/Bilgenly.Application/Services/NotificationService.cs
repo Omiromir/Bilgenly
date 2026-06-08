@@ -1,4 +1,4 @@
-using Bilgenly.Application.DTOs;
+﻿using Bilgenly.Application.DTOs;
 using Bilgenly.Application.Interfaces;
 using Bilgenly.Domain.Entities;
 
@@ -32,7 +32,6 @@ public class NotificationService
             existing.Title = dto.Title;
             existing.Message = dto.Message;
             existing.RelatedClassName = dto.RelatedClassName;
-            existing.InviteCode = dto.InviteCode;
             existing.SenderName = dto.SenderName;
             existing.SenderEmail = dto.SenderEmail;
             existing.StudentName = dto.StudentName;
@@ -55,7 +54,6 @@ public class NotificationService
             ActionType = "class_invitation",
             RelatedClassId = dto.RelatedClassId,
             RelatedClassName = dto.RelatedClassName,
-            InviteCode = dto.InviteCode,
             SenderName = dto.SenderName,
             SenderEmail = dto.SenderEmail,
             StudentId = dto.StudentId,
@@ -188,7 +186,6 @@ public class NotificationService
         ActionType = n.ActionType,
         RelatedClassId = n.RelatedClassId,
         RelatedClassName = n.RelatedClassName,
-        InviteCode = n.InviteCode,
         SenderName = n.SenderName,
         SenderEmail = n.SenderEmail,
         StudentId = n.StudentId,

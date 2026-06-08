@@ -1,4 +1,4 @@
-import type {
+﻿import type {
   QuizAssignmentContext,
   QuizLibraryOwnerRole,
   QuizQuestionRecord,
@@ -62,7 +62,7 @@ export interface QuizSessionRecord {
   startedAt: string;
   updatedAt: string;
   finishedAt?: string;
-  completionReason?: "submitted" | "deadline-expired";
+  completionReason?: "submitted" | "deadline-expired" | "time-limit-reached";
   sourceType: QuizSessionSourceType;
   sourceLabel: string;
   assignmentContext?: QuizAssignmentContext;

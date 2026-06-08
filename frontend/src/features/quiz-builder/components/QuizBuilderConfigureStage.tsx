@@ -86,7 +86,7 @@ export function QuizBuilderConfigureStage({
               maxLength={QUIZ_BUILDER_LIMITS.quizTitle}
               placeholder={
                 mode === "student"
-                  ? "Auto-generate from my study topic"
+                  ? "e.g. Cell Biology Review"
                   : "Cell Structure Review Quiz"
               }
               className={dashboardInputVariants({ size: "lg" })}

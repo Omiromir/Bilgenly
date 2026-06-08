@@ -1,4 +1,4 @@
-import {
+﻿import {
   BarChart3,
   ClipboardList,
   FileText,
@@ -35,7 +35,7 @@ export interface RecentQuizOverviewItem {
   classLabel: string;
   subjectLabel: string;
   completionRate: number;
-  /** Average score across all completed attempts (0-100), or null when no data yet. */
+  
   avgGrade: number | null;
   assignedStudentsCount: number;
   completedCount: number;
@@ -70,8 +70,7 @@ interface TeacherOverviewInput {
   sharedAssignedSessions: SharedAssignedQuizSessionRecord[];
   currentTeacherName?: string | null;
   threshold?: number;
-  /** Backend analytics keyed by assignmentId. When provided, used as source of
-   *  truth for completion counts, average score, and completion rate. */
+  
   backendInsights?: Record<string, AssignmentInsightData>;
 }
 
@@ -93,9 +92,9 @@ interface RecentQuizAccumulator {
   notStartedCount: number;
   needsReviewStudents: Set<string>;
   assignmentCount: number;
-  /** Sum of per-assignment average scores (for computing overall avg). */
+  
   gradeScoreSum: number;
-  /** Number of assignments that contributed a score. */
+  
   gradeScoreCount: number;
   latestActivityAt: number;
   latestActivityLabel: string;
@@ -282,7 +281,6 @@ function buildOverviewStats(
     0,
   );
 
-  // Prefer backend analytics scores (source of truth) over local session scores.
   const latestScores = backendInsights
     ? Object.values(backendInsights)
         .map((insight) => insight.averageScore)
@@ -409,7 +407,6 @@ function buildRecentQuizzes(
       accumulator.questionCount,
       assignment.questionCount,
     );
-    // Prefer backend insight for this assignment when available.
     const insight = backendInsights?.[assignment.assignmentId];
     accumulator.assignmentCount += 1;
     if (insight) {
@@ -633,8 +630,6 @@ export function buildTeacherOverviewData({
 }: TeacherOverviewInput) {
   const activeClasses = classes.filter((teacherClass) => teacherClass.status === "active");
   const teacherOwnedQuizzes = getTeacherOwnedQuizzes(quizzes, currentTeacherName);
-  // Local session snapshots are still used for struggling-topic analysis (per-question tag data
-  // is not yet exposed by the backend). Completion/score fields are overridden by backendInsights.
   const assignmentSnapshots = buildAssignmentAnalyticsSnapshots(
     activeClasses,
     sharedAssignedSessions,

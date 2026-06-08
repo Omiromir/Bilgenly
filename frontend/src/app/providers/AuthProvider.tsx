@@ -1,4 +1,4 @@
-import {
+﻿import {
   createContext,
   type ReactNode,
   useContext,
@@ -289,16 +289,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
           return;
         }
 
-        // Only clear auth on genuine HTTP auth failures (401/403).
-        // Network errors (TypeError: Failed to fetch) and AbortErrors from
-        // page navigation must NOT clear auth — they are transient and would
-        // log the user out on every React Router navigate() call.
         const isHttpAuthFailure =
           error instanceof ApiError &&
           (error.status === 401 || error.status === 403);
 
         if (!isHttpAuthFailure) {
-          // Transient network error — keep the user signed in, just stop loading.
           setIsLoading(false);
           return;
         }
@@ -308,8 +303,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
           "We could not restore your account state from the server.",
         );
 
-        // Expired / invalid token — treat as a full sign-out so stale data
-        // doesn't bleed into the next session on this device.
         clearAllUserStorage({
           userId: authUser?.id,
           email: authUser?.email,
@@ -333,11 +326,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, [token]);
 
   const signOut = () => {
-    // Clear all user-specific localStorage data before resetting auth state
-    // so providers that subscribe to auth can't write stale data after this.
     clearAllUserStorage({
       userId: authUser?.id,
       email: authUser?.email,
+      role,
+      token,
     });
     localStorage.removeItem(AUTH_ROLE_KEY);
     localStorage.removeItem(AUTH_TOKEN_KEY);
@@ -351,14 +344,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
     clearOnboardingDraft();
   };
 
-  // Listen for cross-cutting 401 broadcasts from apiClient. If an authenticated
-  // request anywhere in the app gets a 401 the user has been suspended/deleted
-  // or their token expired — we boot them out and surface a clear toast so the
-  // navigation back to the sign-in screen feels deliberate.
   useEffect(() => {
     function onRevoked(event: Event) {
       const detail = (event as CustomEvent<AuthRevokedDetail>).detail;
-      if (!token) return; // already signed out — ignore stale events
+      if (!token) return;
       if (detail?.reason === "suspended") {
         toast.error(detail.message || "Your account has been suspended.");
       } else if (detail?.message) {
@@ -371,10 +360,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
     return () => window.removeEventListener(AUTH_REVOKED_EVENT, onRevoked);
   }, [token]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Liveness poll: every 30s while the tab is visible, hit /api/auth/me.
-  // The backend now returns 401 for suspended/deleted users, which our 401
-  // handler converts to a signOut. This catches admin actions that happen
-  // while the user is sitting idle on a page without making any other request.
   useEffect(() => {
     if (!token) return;
 
@@ -384,8 +369,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
       try {
         await getMe();
       } catch {
-        // 401 is handled globally by the auth-revoked listener; other errors
-        // are transient (offline, server hiccup) and intentionally ignored.
       }
     }
 

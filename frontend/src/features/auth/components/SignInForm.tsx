@@ -5,6 +5,7 @@ import { signIn } from "../api";
 import { usePasswordVisibility } from "../hooks";
 import type { SignInFormErrors, SignInFormValues } from "../types";
 import {
+  EMAIL_MAX_LENGTH,
   normalizeEmail,
   validateEmail,
   validatePassword,
@@ -133,6 +134,7 @@ export function SignInForm() {
           onChange={handleChange("email")}
           autoComplete="email"
           inputMode="email"
+          maxLength={EMAIL_MAX_LENGTH}
           aria-invalid={touched.email && Boolean(errors.email)}
           aria-describedby={errors.email ? "email-error" : undefined}
         />

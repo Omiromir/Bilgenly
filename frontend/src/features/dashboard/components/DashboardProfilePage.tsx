@@ -1,4 +1,4 @@
-import {
+﻿import {
   BookOpen,
   CalendarDays,
   Clock3,
@@ -55,6 +55,7 @@ export function DashboardProfilePage({
     saveProfile,
     updateField,
     selectStaticAvatar,
+    clearAvatar,
   } = useProfile();
 
   if (!profile) {
@@ -136,9 +137,7 @@ export function DashboardProfilePage({
                   <div className="flex flex-col gap-3 text-sm text-[var(--dashboard-text-soft)] md:flex-row md:flex-wrap md:gap-x-10">
                     {isEditing ? (
                       <>
-                        {/* Email is intentionally read-only — changing email
-                            would require re-verification flow that the backend
-                            doesn't support yet. */}
+                        
                         <InfoLine icon={Mail} text={profile.email} />
                         <InfoLine icon={CalendarDays} text={profile.joinedLabel} />
                         <EditableSelectInfoLine
@@ -196,7 +195,7 @@ export function DashboardProfilePage({
                   Choose your avatar
                 </h3>
                 <p className="mt-1 text-sm text-[var(--dashboard-text-soft)]">
-                  Pick one of the four preset avatars.
+                  Pick a preset avatar, or use your initials as the default.
                 </p>
                 <div className="mt-3 flex flex-wrap gap-3">
                   {STATIC_AVATAR_OPTIONS.map((option) => {
@@ -223,6 +222,22 @@ export function DashboardProfilePage({
                       </button>
                     );
                   })}
+
+                  
+                  <button
+                    type="button"
+                    onClick={clearAvatar}
+                    aria-pressed={!formValues.avatarUrl}
+                    aria-label="Use default avatar (your initials)"
+                    className={cn(
+                      "flex h-16 w-16 items-center justify-center rounded-full border-2 bg-[var(--dashboard-surface)] text-lg font-semibold text-[var(--dashboard-brand)] transition",
+                      !formValues.avatarUrl
+                        ? "border-[var(--dashboard-brand)] ring-2 ring-[var(--dashboard-brand)]/40"
+                        : "border-[var(--dashboard-border-soft)] hover:border-[var(--dashboard-border)]",
+                    )}
+                  >
+                    {displayInitials || profile.initials}
+                  </button>
                 </div>
               </div>
             ) : null}

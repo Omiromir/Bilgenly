@@ -1,7 +1,10 @@
 export type DashboardNotificationType =
   | "class_invitation"
   | "quiz_follow_up"
-  | "quiz_removed_by_admin";
+  | "quiz_removed_by_admin"
+  | "invitation_response"
+  | "achievement_alert"
+  | "deadline_reminder";
 export type ClassInvitationNotificationStatus =
   | "pending"
   | "accepted"
@@ -57,10 +60,39 @@ export interface QuizRemovedByAdminNotification extends DashboardNotificationBas
   quizTitle: string;
 }
 
+export interface InvitationResponseNotification extends DashboardNotificationBase {
+  type: "invitation_response";
+  actionType: "";
+  status: "accepted" | "declined";
+}
+
+export interface AchievementAlertNotification extends DashboardNotificationBase {
+  type: "achievement_alert";
+  actionType: "";
+  status: "sent";
+  quizTitle: string;
+  score: number;
+  totalQuestions: number;
+  correctAnswers: number;
+}
+
+export interface DeadlineReminderNotification extends DashboardNotificationBase {
+  type: "deadline_reminder";
+  actionType: "";
+  status: "sent";
+  quizTitle: string;
+  assignmentId: string;
+  deadline: string;
+  hoursUntilDeadline: number;
+}
+
 export type DashboardNotification =
   | ClassInvitationNotification
   | QuizFollowUpNotification
-  | QuizRemovedByAdminNotification;
+  | QuizRemovedByAdminNotification
+  | InvitationResponseNotification
+  | AchievementAlertNotification
+  | DeadlineReminderNotification;
 
 export interface ClassInvitationNotificationInput {
   recipientUserId: string;
@@ -90,4 +122,24 @@ export interface QuizFollowUpNotificationInput {
   assignmentId: string;
   attemptId?: string;
   followUpKind: QuizFollowUpKind;
+}
+
+export interface AchievementAlertNotificationInput {
+  recipientUserId: string;
+  recipientEmail: string;
+  quizTitle: string;
+  score: number;
+  totalQuestions: number;
+  correctAnswers: number;
+}
+
+export interface DeadlineReminderNotificationInput {
+  recipientUserId: string;
+  recipientEmail: string;
+  relatedClassId: string;
+  relatedClassName: string;
+  quizTitle: string;
+  assignmentId: string;
+  deadline: string;
+  hoursUntilDeadline: number;
 }

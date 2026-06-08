@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo } from "react";
+﻿import { createContext, useCallback, useContext, useEffect, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getMyAttempts, type MyAttemptDto } from "../../features/quiz-session/api/attemptsApi";
 import { useAuth } from "./AuthProvider";
@@ -21,9 +21,6 @@ export function StudentAttemptsProvider({ children }: StudentAttemptsProviderPro
   const userId = currentUser?.id ?? null;
   const queryClient = useQueryClient();
 
-  // The query key includes userId so different accounts never share cached data.
-  // staleTime is intentionally short (30 s) since attempt history changes after
-  // each quiz completion — refreshAttempts() force-invalidates the cache anyway.
   const queryKey = useMemo(() => ["myAttempts", userId] as const, [userId]);
 
   const { data, isLoading, error } = useQuery({
@@ -34,17 +31,10 @@ export function StudentAttemptsProvider({ children }: StudentAttemptsProviderPro
     retry: 1,
   });
 
-  // Invalidating the query triggers an immediate background re-fetch.
-  // Callers (e.g. QuizSessionPage after quiz completion) no longer need to wait
-  // for a 500 ms debounce — the data updates as soon as the API responds.
   const refreshAttempts = useCallback(async () => {
     await queryClient.invalidateQueries({ queryKey });
   }, [queryClient, queryKey]);
 
-  // When a quiz is deleted (by admin or anywhere else in the app), every
-  // attempt referencing that quiz is also gone on the backend — invalidate
-  // so the student's results list updates live instead of showing ghost
-  // entries that 404 on click.
   useEffect(() => {
     function onQuizDeleted() {
       void queryClient.invalidateQueries({ queryKey });
@@ -64,7 +54,7 @@ export function StudentAttemptsProvider({ children }: StudentAttemptsProviderPro
   const value: StudentAttemptsContextType = useMemo(
     () => ({
       attempts: data ?? [],
-      isLoading: isLoading && !data, // don't flash loading when stale data is shown
+      isLoading: isLoading && !data,
       error: error ? (error instanceof Error ? error.message : String(error)) : null,
       refreshAttempts,
     }),

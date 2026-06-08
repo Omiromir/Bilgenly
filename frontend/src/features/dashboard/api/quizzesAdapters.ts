@@ -1,4 +1,4 @@
-import type {
+﻿import type {
   QuizDifficulty,
   QuizQuestionRecord,
   QuizRecord,
@@ -56,6 +56,7 @@ function mapQuizQuestionDto(question: QuizDto["questions"][number]): QuizQuestio
     questionType: normalizeQuestionType(question.questionType),
     selectionMode: normalizeSelectionMode(question.answers),
     explanation: question.explanation,
+    tags: question.tags ?? [],
     imageEnabled: Boolean(question.imageUrl),
     imageUrl: question.imageUrl ?? undefined,
     points: question.points ?? 1,
@@ -73,9 +74,6 @@ export function mapQuizDtoToQuizRecord(
     .slice()
     .sort((left, right) => left.position - right.position)
     .map(mapQuizQuestionDto);
-  // Public discovery is removed from the UI until backend-backed discovery
-  // exists. Treat every fetched quiz as private regardless of legacy
-  // `isPublic` flags so the UI stays honest.
   const visibility = overrides.visibility ?? "private";
   const status = overrides.status ?? "published-private";
 

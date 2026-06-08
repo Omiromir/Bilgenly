@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+﻿import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import { toast } from "sonner";
 import {
@@ -54,14 +54,6 @@ function escapeCsvValue(value: string | number) {
   return `"${String(value).replace(/"/g, '""')}"`;
 }
 
-// ─── Action cooldown helpers ──────────────────────────────────────────────────
-//
-// Prevents teachers from hammering the same follow-up action repeatedly.
-// State is persisted in localStorage so a page refresh doesn't reset it.
-//
-// Cooldown windows (intentionally different per action severity):
-//   • Notification nudges  — 10 min per student × assignment × kind
-//   • Grant extra attempt  —  3 min per assignment (mutates DB for all students)
 
 const COOLDOWN_MS: Record<string, number> = {
   needs_review: 10 * 60_000,
@@ -81,7 +73,7 @@ function buildCooldownKey(
     : `${COOLDOWN_STORAGE_PREFIX}${kind}:${assignmentId}`;
 }
 
-/** Returns milliseconds remaining on a cooldown, or 0 if the action is allowed. */
+
 function getCooldownRemaining(key: string, cooldownMs: number): number {
   try {
     const raw = localStorage.getItem(key);
@@ -97,7 +89,6 @@ function stampCooldown(key: string): void {
   try {
     localStorage.setItem(key, String(Date.now()));
   } catch {
-    // localStorage unavailable — just allow the action
   }
 }
 
@@ -108,31 +99,45 @@ function formatCooldownRemaining(ms: number): string {
   return `${minutes} min`;
 }
 
+type ScoreMode = "latest" | "best" | "average";
+
+function getScoreForMode(
+  row: TeacherStudentQuizResultRowData,
+  mode: ScoreMode,
+): number | null {
+  if (mode === "best") return row.bestScore;
+  if (mode === "average") return row.averageScore;
+  return row.latestScore;
+}
+
 function matchesScoreRange(
   row: TeacherStudentQuizResultRowData,
   scoreRange: string,
+  mode: ScoreMode = "latest",
 ) {
+  const score = getScoreForMode(row, mode);
+
   if (scoreRange === "all") {
     return true;
   }
 
   if (scoreRange === "missing") {
-    return row.latestScore === null;
+    return score === null;
   }
 
-  if (row.latestScore === null) {
+  if (score === null) {
     return false;
   }
 
   if (scoreRange === "85-100") {
-    return row.latestScore >= 85;
+    return score >= 85;
   }
 
   if (scoreRange === "70-84") {
-    return row.latestScore >= 70 && row.latestScore <= 84;
+    return score >= 70 && score <= 84;
   }
 
-  return row.latestScore < 70;
+  return score < 70;
 }
 
 function getFollowUpToastCopy(
@@ -163,7 +168,6 @@ function getFollowUpToastCopy(
   }
 }
 
-// ─── Skeleton helpers ────────────────────────────────────────────────────────
 
 function StatCardSkeleton() {
   return (
@@ -261,13 +265,12 @@ function InsightsPanelSkeleton() {
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 
 export function TeacherAnalyticsPage() {
   const meta = useDashboardPageMeta();
   const [searchParams, setSearchParams] = useSearchParams();
   const { currentUser } = useAuth();
-  const { classes, error: classesError, isLoading: isClassesLoading } = useTeacherClasses();
+  const { classes, error: classesError, isLoading: isClassesLoading, refreshClasses } = useTeacherClasses();
   const { sendQuizFollowUpNotification } = useNotifications();
   const [studentSearch, setStudentSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<
@@ -279,7 +282,9 @@ export function TeacherAnalyticsPage() {
   const [analyticsView, setAnalyticsView] = useState<
     "summary" | "questions" | "distribution" | "interventions"
   >("summary");
+  const [scoreMode, setScoreMode] = useState<ScoreMode>("latest");
   const [selectedStudentRowId, setSelectedStudentRowId] = useState<string | null>(null);
+  const [analyticsRefetchKey, setAnalyticsRefetchKey] = useState(0);
 
   const classOptions = useMemo(
     () =>
@@ -302,6 +307,7 @@ export function TeacherAnalyticsPage() {
     selectedClass,
     selectedAssignment,
     DEFAULT_INTERVENTION_THRESHOLD,
+    analyticsRefetchKey,
   );
 
   useEffect(() => {
@@ -330,20 +336,9 @@ export function TeacherAnalyticsPage() {
 
   const analytics = assignmentAnalyticsState.data;
 
-  // Track which assignment's data is currently rendered so we can detect when
-  // the selection has moved ahead of the loaded data.
-  //
-  // IMPORTANT: selectedAssignment?.assignmentId is intentionally NOT in the
-  // deps array. If it were included, the effect would fire the moment the user
-  // switches selection — at that instant isLoading is still false and data is
-  // still the old payload, so the ref would jump to the new ID before loading
-  // even starts, making isSwitchingAnalytics always evaluate to false.
-  // We only want the ref to advance when a fetch actually completes.
   const loadedAssignmentIdRef = useRef<string | null>(null);
   useEffect(() => {
     if (assignmentAnalyticsState.data && !assignmentAnalyticsState.isLoading) {
-      // At this point selectedAssignment?.assignmentId is the assignment whose
-      // data just arrived — correct to record as "loaded".
       loadedAssignmentIdRef.current = selectedAssignment?.assignmentId ?? null;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -367,9 +362,19 @@ export function TeacherAnalyticsPage() {
       const matchesStatus =
         statusFilter === "all" ? true : row.status === statusFilter;
 
-      return matchesSearch && matchesStatus && matchesScoreRange(row, scoreRange);
+      return matchesSearch && matchesStatus && matchesScoreRange(row, scoreRange, scoreMode);
     });
-  }, [analytics, scoreRange, statusFilter, studentSearch]);
+  }, [analytics, scoreMode, scoreRange, statusFilter, studentSearch]);
+
+  const modeClassAverage = useMemo(() => {
+    if (!analytics) return null;
+    const scores = analytics.rows
+      .map((row) => getScoreForMode(row, scoreMode))
+      .filter((s): s is number => s !== null);
+    return scores.length
+      ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length)
+      : null;
+  }, [analytics, scoreMode]);
 
   useEffect(() => {
     if (!filteredRows.length) {
@@ -465,24 +470,15 @@ export function TeacherAnalyticsPage() {
       return;
     }
 
-    // Even when the student has notifications disabled we still stamp the
-    // cooldown — the teacher has "acted" and we shouldn't let them try again
-    // immediately in case the student re-enables notifications.
     stampCooldown(cooldownKey);
     toast(toastMessage);
   };
 
-  // Grants one extra attempt on the assignment (increments MaxAttempts by 1
-  // server-side so the student can actually start a new attempt), then also
-  // sends them an in-app notification so they know the door is open again.
   const handleGrantAttempt = async (row: TeacherStudentQuizResultRowData) => {
     if (!selectedClass || !selectedAssignment || !currentUser) {
       return;
     }
 
-    // Cooldown is per-assignment (not per-student) because this action changes
-    // the DB cap for ALL students — rapid re-clicks would increment it multiple
-    // times unintentionally.
     const cooldownKey = buildCooldownKey("grant_attempt", selectedAssignment.assignmentId);
     const remaining = getCooldownRemaining(cooldownKey, COOLDOWN_MS.grant_attempt);
     if (remaining > 0) {
@@ -517,6 +513,9 @@ export function TeacherAnalyticsPage() {
       }
 
       stampCooldown(cooldownKey);
+
+      setAnalyticsRefetchKey((k) => k + 1);
+      void refreshClasses();
 
       if (result.unlimited) {
         toast.success(`Attempts are already unlimited for "${selectedAssignment.title}" — ${row.student.fullName} can retake anytime.`);
@@ -842,6 +841,29 @@ export function TeacherAnalyticsPage() {
                 </select>
               </label>
             </div>
+
+            
+            <div className="mt-3 space-y-2">
+              <span className="block text-sm font-medium text-white/88">Score mode</span>
+              <div className="flex overflow-hidden rounded-[10px] border border-white/20 shadow-[0_14px_28px_rgba(11,15,38,0.12)]">
+                {(["latest", "best", "average"] as const).map((mode, i) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => setScoreMode(mode)}
+                    className={cn(
+                      "flex-1 py-2.5 text-sm font-medium transition-colors",
+                      i > 0 && "border-l border-white/20",
+                      scoreMode === mode
+                        ? "bg-[var(--dashboard-brand)] text-white"
+                        : "bg-[var(--dashboard-surface-elevated)] text-[var(--dashboard-text-soft)] hover:bg-[var(--dashboard-surface-muted)] hover:text-[var(--dashboard-text)]",
+                    )}
+                  >
+                    {mode === "latest" ? "Latest attempt" : mode === "best" ? "Best attempt" : "Average"}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       </DashboardSurface>
@@ -864,9 +886,15 @@ export function TeacherAnalyticsPage() {
               tone="success"
             />
             <ClassQuizAnalyticsCard
-              title="Average Score"
-              value={analytics.averageScore === null ? "--" : `${analytics.averageScore}%`}
-              helper="Based on each student's latest completed attempt."
+              title={`Average Score (${scoreMode === "latest" ? "Latest" : scoreMode === "best" ? "Best" : "Avg."})`}
+              value={modeClassAverage === null ? "--" : `${modeClassAverage}%`}
+              helper={
+                scoreMode === "latest"
+                  ? "Based on each student's latest completed attempt."
+                  : scoreMode === "best"
+                  ? "Based on each student's best score across all attempts."
+                  : "Based on the mean score across all of each student's attempts."
+              }
               icon={TrendingUp}
               tone="brand"
             />
@@ -940,7 +968,10 @@ export function TeacherAnalyticsPage() {
                             Status
                           </TableHead>
                           <TableHead className="px-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--dashboard-text-faint)]">
-                            Score
+                            Score{" "}
+                            <span className="normal-case tracking-normal opacity-60">
+                              ({scoreMode === "latest" ? "latest" : scoreMode === "best" ? "best" : "avg."})
+                            </span>
                           </TableHead>
                           <TableHead className="px-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--dashboard-text-faint)]">
                             Accuracy
@@ -966,6 +997,8 @@ export function TeacherAnalyticsPage() {
                               row={row}
                               isSelected={row.rowId === selectedStudentRowId}
                               onSelect={() => setSelectedStudentRowId(row.rowId)}
+                              scoreMode={scoreMode}
+                              displayScore={getScoreForMode(row, scoreMode)}
                               actionMenu={
                                 <ActionMenu
                                   studentName={row.student.fullName}

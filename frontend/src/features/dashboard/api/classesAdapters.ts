@@ -1,4 +1,4 @@
-import {
+﻿import {
   buildTeacherStudentNameFromEmail,
   createTeacherClassAssignmentId,
   isTeacherStudentPlaceholderName,
@@ -121,16 +121,34 @@ function mergeStudents(
   remoteStudents: TeacherClassStudent[],
   existingStudents: TeacherClassStudent[],
 ) {
-  const merged = new Map<string, TeacherClassStudent>();
+  const seenUserIds = new Set<string>();
+  const seenEmails = new Set<string>();
+  const merged: TeacherClassStudent[] = [];
+
+  const remember = (student: TeacherClassStudent) => {
+    if (student.linkedUserId) seenUserIds.add(student.linkedUserId);
+    const email = normalizeEmail(student.email);
+    if (email) seenEmails.add(email);
+  };
+
+  const alreadySeen = (student: TeacherClassStudent) => {
+    const email = normalizeEmail(student.email);
+    return (
+      (Boolean(student.linkedUserId) && seenUserIds.has(student.linkedUserId!)) ||
+      (Boolean(email) && seenEmails.has(email))
+    );
+  };
 
   remoteStudents.forEach((student) => {
-    const key = student.linkedUserId || normalizeEmail(student.email);
-    merged.set(key, student);
+    if (alreadySeen(student)) {
+      return;
+    }
+    merged.push(student);
+    remember(student);
   });
 
   existingStudents.forEach((student) => {
-    const key = student.linkedUserId || normalizeEmail(student.email);
-    if (merged.has(key)) {
+    if (alreadySeen(student)) {
       return;
     }
 
@@ -138,10 +156,11 @@ function mergeStudents(
       return;
     }
 
-    merged.set(key, student);
+    merged.push(student);
+    remember(student);
   });
 
-  return sortTeacherClassStudents(Array.from(merged.values()));
+  return sortTeacherClassStudents(merged);
 }
 
 function mergeAssignments(
@@ -189,7 +208,6 @@ export function mapClassDtoToTeacherClassRecord(
     return mapStudentDto(student, existingStudent);
   });
 
-  // Map pending invitations from backend — these survive page refresh
   const joinedEmails = new Set(remoteStudents.map((s) => normalizeEmail(s.email)));
   const remotePending = (teacherClass.pendingInvitations ?? [])
     .filter((inv) => !joinedEmails.has(normalizeEmail(inv.recipientEmail)))

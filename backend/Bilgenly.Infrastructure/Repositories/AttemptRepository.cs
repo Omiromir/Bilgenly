@@ -47,9 +47,23 @@ public class AttemptRepository : IAttemptRepository
 
     public async Task DeleteByQuizIdAsync(Guid quizId)
     {
-        // AttemptAnswers are cascade-deleted by the DB when the parent Attempt row
-        // is removed (configured via EF Core's HasMany/WithOne in AppDbContext).
         await _context.Database.ExecuteSqlRawAsync(
             "DELETE FROM \"Attempts\" WHERE \"QuizId\" = {0}", quizId);
+    }
+
+    public async Task DeleteIncompleteAsync(Guid userId, Guid quizId, Guid? assignmentId)
+    {
+        if (assignmentId.HasValue)
+        {
+            await _context.Database.ExecuteSqlRawAsync(
+                "DELETE FROM \"Attempts\" WHERE \"UserId\" = {0} AND \"QuizId\" = {1} AND \"AssignmentId\" = {2} AND \"IsCompleted\" = false",
+                userId, quizId, assignmentId.Value);
+        }
+        else
+        {
+            await _context.Database.ExecuteSqlRawAsync(
+                "DELETE FROM \"Attempts\" WHERE \"UserId\" = {0} AND \"QuizId\" = {1} AND \"AssignmentId\" IS NULL AND \"IsCompleted\" = false",
+                userId, quizId);
+        }
     }
 }

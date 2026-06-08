@@ -11,6 +11,8 @@ import { Toaster } from "../components/ui/sonner";
 import { useSettings } from "./providers/SettingsProvider";
 import { SplashScreen } from "../components/shared/SplashScreen";
 import { useStudyReminder } from "./hooks/useStudyReminder";
+import { useAchievementAlerts } from "./hooks/useAchievementAlerts";
+import { useDeadlineReminders } from "./hooks/useDeadlineReminders";
 
 function AppToaster() {
   const { resolvedTheme } = useSettings();
@@ -21,6 +23,8 @@ function AppInner() {
   const { isLoading, currentUser } = useAuth();
   const { studyReminderTime } = useSettings();
   useStudyReminder(studyReminderTime, currentUser?.id);
+  useAchievementAlerts();
+  useDeadlineReminders();
   return (
     <>
       <SplashScreen visible={isLoading} />

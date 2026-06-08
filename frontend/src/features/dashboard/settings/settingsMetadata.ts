@@ -78,12 +78,12 @@ export const dashboardSettingsMetadata: SettingsScreenMetadata = {
       {
         id: "achievementAlerts",
         label: "Achievement alerts",
-        description: "Saved preference for future badge and achievement notifications.",
+        description: "Get notified when you score 80% or higher on a quiz.",
       },
       {
         id: "deadlineReminders",
         label: "Deadline reminders",
-        description: "Saved preference for future assignment and deadline reminder notifications.",
+        description: "Receive an in-app alert when an assigned quiz deadline is within 24 hours.",
       },
     ],
     push: [
@@ -91,11 +91,6 @@ export const dashboardSettingsMetadata: SettingsScreenMetadata = {
         id: "realTimeUpdates",
         label: "In-app notification delivery",
         description: "Controls whether supported notification events appear in the dashboard inbox and header.",
-      },
-      {
-        id: "weeklySummaries",
-        label: "Weekly summaries",
-        description: "Saved preference for future weekly digest notifications.",
       },
     ],
   },

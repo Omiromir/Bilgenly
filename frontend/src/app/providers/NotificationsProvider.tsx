@@ -1,4 +1,4 @@
-import {
+﻿import {
   createContext,
   type ReactNode,
   useCallback,
@@ -10,14 +10,18 @@ import {
 import { useAuth } from "./AuthProvider";
 import { getUserScopedStorageKey } from "./userScopedStorage";
 import {
+  buildAchievementAlertNotification,
   buildClassInvitationNotification,
+  buildDeadlineReminderNotification,
   buildQuizFollowUpNotification,
   sortDashboardNotifications,
 } from "../../features/dashboard/components/notifications/notificationUtils";
 import type {
+  AchievementAlertNotificationInput,
   ClassInvitationNotificationInput,
   ClassInvitationNotificationStatus,
   DashboardNotification,
+  DeadlineReminderNotificationInput,
   QuizFollowUpKind,
   QuizFollowUpNotificationInput,
 } from "../../features/dashboard/components/notifications/notificationTypes";
@@ -45,7 +49,7 @@ function hasAuthToken() {
   return Boolean(localStorage.getItem(AUTH_TOKEN_KEY));
 }
 
-/** Returns a user-scoped cache key, or the base key for anonymous sessions. */
+
 function getNotificationsStorageKey(userId?: string | null): string {
   return userId
     ? getUserScopedStorageKey(
@@ -111,6 +115,15 @@ function fromBackendDto(dto: BackendNotificationDto): DashboardNotification | nu
     };
   }
 
+  if (dto.type === "invitation_response") {
+    return {
+      ...base,
+      type: "invitation_response",
+      actionType: "",
+      status: dto.status === "declined" ? "declined" : "accepted",
+    };
+  }
+
   return null;
 }
 
@@ -131,6 +144,12 @@ interface NotificationsContextValue {
   ) => DashboardNotification | null;
   sendQuizFollowUpNotification: (
     input: QuizFollowUpNotificationInput,
+  ) => DashboardNotification | null;
+  sendAchievementAlert: (
+    input: AchievementAlertNotificationInput,
+  ) => DashboardNotification | null;
+  sendDeadlineReminder: (
+    input: DeadlineReminderNotificationInput,
   ) => DashboardNotification | null;
   markNotificationRead: (notificationId: string) => void;
   markAllNotificationsRead: (recipientUserId: string) => void;
@@ -168,9 +187,61 @@ function sanitizeNotificationRecord(
     typeof notification.id !== "string" ||
     (notification.type !== "class_invitation" &&
       notification.type !== "quiz_follow_up" &&
-      notification.type !== "quiz_removed_by_admin") ||
+      notification.type !== "quiz_removed_by_admin" &&
+      notification.type !== "invitation_response" &&
+      notification.type !== "achievement_alert" &&
+      notification.type !== "deadline_reminder") ||
     typeof notification.recipientUserId !== "string" ||
-    typeof notification.recipientEmail !== "string" ||
+    typeof notification.recipientEmail !== "string"
+  ) {
+    return null;
+  }
+
+  if (notification.type === "achievement_alert") {
+    if (typeof (notification as { quizTitle?: unknown }).quizTitle !== "string") return null;
+    const n = notification as Partial<DashboardNotification>;
+    return buildAchievementAlertNotification(
+      {
+        recipientUserId: notification.recipientUserId,
+        recipientEmail: notification.recipientEmail,
+        quizTitle: (n as { quizTitle: string }).quizTitle,
+        score: typeof (n as { score?: unknown }).score === "number" ? (n as { score: number }).score : 0,
+        totalQuestions: typeof (n as { totalQuestions?: unknown }).totalQuestions === "number" ? (n as { totalQuestions: number }).totalQuestions : 0,
+        correctAnswers: typeof (n as { correctAnswers?: unknown }).correctAnswers === "number" ? (n as { correctAnswers: number }).correctAnswers : 0,
+      },
+      {
+        existingId: notification.id,
+        createdAt: typeof notification.createdAt === "string" ? notification.createdAt : undefined,
+        updatedAt: typeof notification.updatedAt === "string" ? notification.updatedAt : undefined,
+        read: Boolean(notification.read),
+      },
+    );
+  }
+
+  if (notification.type === "deadline_reminder") {
+    if (typeof (notification as { quizTitle?: unknown }).quizTitle !== "string") return null;
+    const n = notification as Partial<DashboardNotification>;
+    return buildDeadlineReminderNotification(
+      {
+        recipientUserId: notification.recipientUserId,
+        recipientEmail: notification.recipientEmail,
+        relatedClassId: typeof (n as { relatedClassId?: unknown }).relatedClassId === "string" ? (n as { relatedClassId: string }).relatedClassId : "",
+        relatedClassName: typeof (n as { relatedClassName?: unknown }).relatedClassName === "string" ? (n as { relatedClassName: string }).relatedClassName : "",
+        quizTitle: (n as { quizTitle: string }).quizTitle,
+        assignmentId: typeof (n as { assignmentId?: unknown }).assignmentId === "string" ? (n as { assignmentId: string }).assignmentId : "",
+        deadline: typeof (n as { deadline?: unknown }).deadline === "string" ? (n as { deadline: string }).deadline : "",
+        hoursUntilDeadline: typeof (n as { hoursUntilDeadline?: unknown }).hoursUntilDeadline === "number" ? (n as { hoursUntilDeadline: number }).hoursUntilDeadline : 0,
+      },
+      {
+        existingId: notification.id,
+        createdAt: typeof notification.createdAt === "string" ? notification.createdAt : undefined,
+        updatedAt: typeof notification.updatedAt === "string" ? notification.updatedAt : undefined,
+        read: Boolean(notification.read),
+      },
+    );
+  }
+
+  if (
     typeof notification.relatedClassId !== "string" ||
     typeof notification.relatedClassName !== "string" ||
     (notification.type === "class_invitation" &&
@@ -244,6 +315,75 @@ function sanitizeNotificationRecord(
       attemptId:
         typeof notification.attemptId === "string" ? notification.attemptId : undefined,
       followUpKind: notification.followUpKind,
+    };
+  }
+
+  if (notification.type === "quiz_removed_by_admin") {
+    if (
+      typeof notification.quizId !== "string" ||
+      typeof notification.quizTitle !== "string"
+    ) {
+      return null;
+    }
+
+    return {
+      id: notification.id,
+      type: "quiz_removed_by_admin",
+      recipientUserId: notification.recipientUserId,
+      recipientEmail: notification.recipientEmail,
+      title:
+        typeof notification.title === "string" && notification.title.trim()
+          ? notification.title
+          : `Quiz removed: ${notification.quizTitle}`,
+      message:
+        typeof notification.message === "string" && notification.message.trim()
+          ? notification.message
+          : `${notification.quizTitle} was removed by an administrator.`,
+      createdAt: timestamp,
+      updatedAt,
+      read: Boolean(notification.read),
+      actionType: "",
+      relatedClassId: notification.relatedClassId,
+      relatedClassName: notification.relatedClassName,
+      senderName: notification.senderName,
+      senderEmail: notification.senderEmail,
+      studentId: notification.studentId,
+      studentName: notification.studentName,
+      studentEmail: notification.studentEmail,
+      status: "sent",
+      quizId: notification.quizId,
+      quizTitle: notification.quizTitle,
+    };
+  }
+
+  if (notification.type === "invitation_response") {
+    return {
+      id: notification.id,
+      type: "invitation_response",
+      recipientUserId: notification.recipientUserId,
+      recipientEmail: notification.recipientEmail,
+      title:
+        typeof notification.title === "string" && notification.title.trim()
+          ? notification.title
+          : `Invitation ${notification.status === "declined" ? "declined" : "accepted"}`,
+      message:
+        typeof notification.message === "string" && notification.message.trim()
+          ? notification.message
+          : `${notification.studentName || notification.studentEmail} ${
+              notification.status === "declined" ? "declined" : "accepted"
+            } your invitation to join ${notification.relatedClassName}.`,
+      createdAt: timestamp,
+      updatedAt,
+      read: Boolean(notification.read),
+      actionType: "",
+      relatedClassId: notification.relatedClassId,
+      relatedClassName: notification.relatedClassName,
+      senderName: notification.senderName,
+      senderEmail: notification.senderEmail,
+      studentId: notification.studentId,
+      studentName: notification.studentName,
+      studentEmail: notification.studentEmail,
+      status: notification.status === "declined" ? "declined" : "accepted",
     };
   }
 
@@ -344,11 +484,19 @@ function isNotificationEnabled(
     return false;
   }
 
+  if (notification.type === "achievement_alert") {
+    return recipientSettings.notifications.email.achievementAlerts;
+  }
+
+  if (notification.type === "deadline_reminder") {
+    return recipientSettings.notifications.email.deadlineReminders;
+  }
+
   if (notification.type === "class_invitation") {
     return recipientSettings.notifications.email.quizAssignments;
   }
 
-  if (notification.followUpKind === "needs_review") {
+  if (notification.type === "quiz_follow_up" && notification.followUpKind === "needs_review") {
     return recipientSettings.notifications.email.gradingUpdates;
   }
 
@@ -376,7 +524,6 @@ export function NotificationsProvider({
       .catch(() => {});
   }, []);
 
-  // Re-hydrate whenever the authenticated user changes (login / logout / switch)
   useEffect(() => {
     setIsHydrated(false);
     setNotifications([]);
@@ -401,7 +548,6 @@ export function NotificationsProvider({
     }
 
     function hydrateFromLocalStorage() {
-      // Try user-scoped key first, then fall back to legacy global key
       const scopedKey = getNotificationsStorageKey(userId);
       const savedValue =
         localStorage.getItem(scopedKey) ??
@@ -445,7 +591,6 @@ export function NotificationsProvider({
     };
   }, [isHydrated, fetchFromBackend]);
 
-  // Persist to user-scoped key so each user's cache is isolated
   useEffect(() => {
     if (!isHydrated) {
       return;
@@ -597,11 +742,6 @@ export function NotificationsProvider({
           return null;
         }
 
-        // Spam guard: throttle identical follow-up notifications to the
-        // same student/quiz/kind to once every 60 seconds. Without this,
-        // a teacher rapidly clicking "Ask for another attempt" would flood
-        // the student's inbox with duplicate nudges (and pump duplicate
-        // backend writes).
         const SPAM_COOLDOWN_MS = 60_000;
         const now = Date.now();
         const isDuplicateBurst = notifications.some((existing) => {
@@ -645,6 +785,57 @@ export function NotificationsProvider({
             createdAt: nextNotification.createdAt,
           }).catch(() => {});
         }
+
+        return nextNotification;
+      },
+      sendAchievementAlert: (input) => {
+        const nextNotification = buildAchievementAlertNotification(input, {
+          updatedAt: new Date().toISOString(),
+          read: false,
+        });
+
+        if (
+          !isNotificationEnabled(
+            nextNotification,
+            input.recipientUserId,
+            input.recipientEmail,
+          )
+        ) {
+          return null;
+        }
+
+        setNotifications((current) =>
+          sortDashboardNotifications([nextNotification, ...current]),
+        );
+
+        return nextNotification;
+      },
+      sendDeadlineReminder: (input) => {
+        const nextNotification = buildDeadlineReminderNotification(input, {
+          updatedAt: new Date().toISOString(),
+          read: false,
+        });
+
+        if (
+          !isNotificationEnabled(
+            nextNotification,
+            input.recipientUserId,
+            input.recipientEmail,
+          )
+        ) {
+          return null;
+        }
+
+        const alreadyExists = notifications.some(
+          (n) =>
+            n.type === "deadline_reminder" &&
+            n.assignmentId === input.assignmentId,
+        );
+        if (alreadyExists) return null;
+
+        setNotifications((current) =>
+          sortDashboardNotifications([nextNotification, ...current]),
+        );
 
         return nextNotification;
       },

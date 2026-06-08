@@ -18,6 +18,9 @@ public class AuthService
     {
         "avatar_1", "avatar_2", "avatar_3", "avatar_4"
     };
+
+    private static readonly string DummyPasswordHash =
+        BCrypt.Net.BCrypt.HashPassword("timing-equalization-placeholder");
     public AuthService(IUserRepository userRepository, IConfiguration configuration)
     {
         _userRepository = userRepository;
@@ -32,13 +35,20 @@ public class AuthService
             return (null, $"Role '{dto.Role}' does not exist. Available roles: Student, Teacher, Moderator");
         if (role == UserRole.Moderator)
             return (null, "You cannot register as moderator");
-        if (await _userRepository.ExistsByEmailAsync(dto.Email))
+
+        var email = (dto.Email ?? string.Empty).Trim();
+        if (string.IsNullOrEmpty(email))
+            return (null, "Email address is required");
+        if (email.Length > 254)
+            return (null, "Email must be 254 characters or fewer");
+
+        if (await _userRepository.ExistsByEmailAsync(email))
             return (null, "Email is already taken");
         var user = new User
         {
             Id = Guid.NewGuid(),
             Username = dto.Username,
-            Email = dto.Email,
+            Email = email,
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password),
             Role = role,
             CreatedAt = DateTime.UtcNow,
@@ -61,10 +71,13 @@ public class AuthService
     public async Task<(AuthResponseDto? Response, string? Error)> LoginAsync(LoginDto dto)
     {
         var user = await _userRepository.GetByEmailAsync(dto.Email);
-        if (user is null)
-            return (null, "No account found with this email");
-        if (!BCrypt.Net.BCrypt.Verify(dto.Password, user.PasswordHash))
-            return (null, "Incorrect password");
+
+        var passwordIsValid =
+            BCrypt.Net.BCrypt.Verify(dto.Password, user?.PasswordHash ?? DummyPasswordHash);
+
+        if (user is null || !passwordIsValid)
+            return (null, "Invalid email or password");
+
         if (user.IsSuspended)
             return (null, "Your account has been suspended. Please contact support.");
 

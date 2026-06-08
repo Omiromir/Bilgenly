@@ -1,4 +1,4 @@
-import {
+﻿import {
   Bell,
   Check,
   CircleAlert,
@@ -48,7 +48,8 @@ export function DashboardHeader({ onOpenSidebar }: DashboardHeaderProps) {
     markNotificationRead,
     updateClassInvitationStatus,
   } = useNotifications();
-  const { joinClassByInviteCode, respondToClassInvitation } = useTeacherClasses();
+  const { acceptClassInvitation, declineClassInvitation, respondToClassInvitation } =
+    useTeacherClasses();
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [pendingActionId, setPendingActionId] = useState<string | null>(null);
@@ -135,7 +136,7 @@ export function DashboardHeader({ onOpenSidebar }: DashboardHeaderProps) {
     if (pendingActionId) return;
     setPendingActionId(notification.id);
     try {
-      await joinClassByInviteCode(notification.inviteCode);
+      await acceptClassInvitation(notification.relatedClassId);
       updateClassInvitationStatus(notification.id, "accepted");
       respondToClassInvitation(
         notification.relatedClassId,
@@ -144,14 +145,14 @@ export function DashboardHeader({ onOpenSidebar }: DashboardHeaderProps) {
         studentIdentity,
       );
     } catch {
-      // swallow — full feedback is on the notifications page
     } finally {
       setPendingActionId(null);
     }
   };
 
-  const handleDeclineInvitation = (notification: ClassInvitationNotification) => {
+  const handleDeclineInvitation = async (notification: ClassInvitationNotification) => {
     if (pendingActionId) return;
+    setPendingActionId(notification.id);
     updateClassInvitationStatus(notification.id, "declined");
     respondToClassInvitation(
       notification.relatedClassId,
@@ -159,6 +160,12 @@ export function DashboardHeader({ onOpenSidebar }: DashboardHeaderProps) {
       "declined",
       studentIdentity,
     );
+    try {
+      await declineClassInvitation(notification.relatedClassId);
+    } catch {
+    } finally {
+      setPendingActionId(null);
+    }
   };
 
   const initials = userMeta.name
@@ -342,7 +349,7 @@ export function DashboardHeader({ onOpenSidebar }: DashboardHeaderProps) {
                                     variant="secondary"
                                     disabled={pendingActionId === notification.id}
                                     onClick={() => {
-                                      handleDeclineInvitation(
+                                      void handleDeclineInvitation(
                                         notification as ClassInvitationNotification,
                                       );
                                     }}
@@ -405,7 +412,7 @@ export function DashboardHeader({ onOpenSidebar }: DashboardHeaderProps) {
               padding="none"
             >
               <div className="flex items-center gap-3 px-4 py-4">
-                <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-[var(--dashboard-brand)] text-lg font-semibold text-white">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--dashboard-brand)] text-lg font-semibold text-white">
                   {avatarUrl ? (
                     <img
                       src={avatarUrl}

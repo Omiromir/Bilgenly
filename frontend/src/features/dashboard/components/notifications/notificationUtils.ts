@@ -1,8 +1,12 @@
 import type {
+  AchievementAlertNotification,
+  AchievementAlertNotificationInput,
   ClassInvitationNotification,
   ClassInvitationNotificationInput,
   ClassInvitationNotificationStatus,
   DashboardNotification,
+  DeadlineReminderNotification,
+  DeadlineReminderNotificationInput,
   QuizFollowUpKind,
   QuizFollowUpNotification,
   QuizFollowUpNotificationInput,
@@ -117,6 +121,84 @@ export function buildQuizFollowUpNotification(
   };
 }
 
+export function buildAchievementAlertNotification(
+  input: AchievementAlertNotificationInput,
+  options?: {
+    existingId?: string;
+    createdAt?: string;
+    updatedAt?: string;
+    read?: boolean;
+  },
+): AchievementAlertNotification {
+  const timestamp = options?.updatedAt ?? new Date().toISOString();
+  const pct = input.totalQuestions > 0 ? Math.round((input.correctAnswers / input.totalQuestions) * 100) : input.score;
+  const label = pct === 100 ? "Perfect score" : pct >= 90 ? "Excellent work" : "Great job";
+
+  return {
+    id: options?.existingId ?? createDashboardNotificationId(),
+    type: "achievement_alert",
+    recipientUserId: input.recipientUserId,
+    recipientEmail: input.recipientEmail,
+    title: `${label} on "${input.quizTitle}"`,
+    message: `You scored ${input.correctAnswers}/${input.totalQuestions} (${pct}%) on ${input.quizTitle}. Keep it up!`,
+    createdAt: options?.createdAt ?? timestamp,
+    updatedAt: timestamp,
+    read: options?.read ?? false,
+    actionType: "",
+    relatedClassId: "",
+    relatedClassName: "",
+    senderName: "",
+    senderEmail: "",
+    studentId: "",
+    studentName: "",
+    studentEmail: "",
+    status: "sent",
+    quizTitle: input.quizTitle,
+    score: input.score,
+    totalQuestions: input.totalQuestions,
+    correctAnswers: input.correctAnswers,
+  };
+}
+
+export function buildDeadlineReminderNotification(
+  input: DeadlineReminderNotificationInput,
+  options?: {
+    existingId?: string;
+    createdAt?: string;
+    updatedAt?: string;
+    read?: boolean;
+  },
+): DeadlineReminderNotification {
+  const timestamp = options?.updatedAt ?? new Date().toISOString();
+  const hours = input.hoursUntilDeadline;
+  const timeLabel = hours < 1 ? "less than 1 hour" : hours < 2 ? "about 1 hour" : `${Math.round(hours)} hours`;
+
+  return {
+    id: options?.existingId ?? createDashboardNotificationId(),
+    type: "deadline_reminder",
+    recipientUserId: input.recipientUserId,
+    recipientEmail: input.recipientEmail,
+    title: `Deadline approaching: "${input.quizTitle}"`,
+    message: `Your assignment "${input.quizTitle}" in ${input.relatedClassName} is due in ${timeLabel}.`,
+    createdAt: options?.createdAt ?? timestamp,
+    updatedAt: timestamp,
+    read: options?.read ?? false,
+    actionType: "",
+    relatedClassId: input.relatedClassId,
+    relatedClassName: input.relatedClassName,
+    senderName: "",
+    senderEmail: "",
+    studentId: "",
+    studentName: "",
+    studentEmail: "",
+    status: "sent",
+    quizTitle: input.quizTitle,
+    assignmentId: input.assignmentId,
+    deadline: input.deadline,
+    hoursUntilDeadline: input.hoursUntilDeadline,
+  };
+}
+
 export function sortDashboardNotifications(
   notifications: DashboardNotification[],
 ) {
@@ -138,6 +220,12 @@ export function getNotificationStatusLabel(notification: DashboardNotification) 
   if (notification.type === "quiz_removed_by_admin") {
     return "Admin action";
   }
+  if (notification.type === "achievement_alert") {
+    return "Achievement";
+  }
+  if (notification.type === "deadline_reminder") {
+    return "Deadline";
+  }
 
   switch (notification.status) {
     case "accepted":
@@ -158,6 +246,12 @@ export function getNotificationStatusTone(notification: DashboardNotification) {
   }
   if (notification.type === "quiz_removed_by_admin") {
     return "danger" as const;
+  }
+  if (notification.type === "achievement_alert") {
+    return "success" as const;
+  }
+  if (notification.type === "deadline_reminder") {
+    return "warning" as const;
   }
 
   switch (notification.status) {

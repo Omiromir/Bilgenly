@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   getAssignmentAnalytics,
@@ -16,6 +16,8 @@ import type {
 import type { TeacherClassAssignedQuiz, TeacherClassRecord, TeacherClassStudent } from "../components/classes/teacherClassesTypes";
 import {
   DEFAULT_INTERVENTION_THRESHOLD,
+  buildTopicPerformanceFromResponses,
+  selectWeakTopics,
   type TeacherAssignedQuizAnalytics,
   type TeacherAttemptQuestionResponse,
   type TeacherQuestionAnalyticsItem,
@@ -104,12 +106,17 @@ function buildFlags(
     return flags;
   }
 
-  if (row.missedDeadline || row.exhaustedAttempts) {
+  if (row.missedDeadline) {
     flags.push("Needs Review");
     return flags;
   }
 
   if (row.latestScore !== null && row.latestScore < threshold) {
+    flags.push("Needs Review");
+    return flags;
+  }
+
+  if (row.exhaustedAttempts && row.latestScore === null) {
     flags.push("Needs Review");
   }
 
@@ -134,6 +141,7 @@ function mapStudentResultStatus(status: string): TeacherStudentQuizResultRowData
 function buildQuestionAnalyticsItems(
   assignmentAnalytics: AssignmentAnalyticsDto,
   quizAnalytics: QuizAnalyticsDto | null,
+  questionTagsById: Map<string, string[]>,
 ) {
   const quizQuestionsById = new Map(
     (quizAnalytics?.questions ?? []).map((question, index) => [
@@ -159,7 +167,7 @@ function buildQuestionAnalyticsItems(
       missCount,
       attemptCount: totalAnswered,
       studentNamesMissed: [],
-      tags: [],
+      tags: questionTagsById.get(question.questionId) ?? [],
     } satisfies TeacherQuestionAnalyticsItem;
   });
 }
@@ -229,6 +237,7 @@ function mapQuestionResponses(
       correctAnswerId: question.correctAnswerId,
       correctAnswerText: question.correctAnswerText,
       isCorrect: question.isCorrect,
+      tags: question.tags ?? [],
       answerOptions: question.answerOptions.map((option) => ({
         id: option.id,
         text: option.text,
@@ -284,6 +293,8 @@ function toTeacherAssignmentAnalytics(
     const latestAttemptQuestions = mapQuestionResponses(
       studentResult.latestAttemptQuestions ?? [],
     );
+    const topicPerformance = buildTopicPerformanceFromResponses(latestAttemptQuestions);
+    const weakTopics = selectWeakTopics(topicPerformance, threshold);
     const hasCompletedAttempt = studentResult.attemptsUsed > 0 && latestScore !== null;
     const responseCount =
       hasCompletedAttempt
@@ -312,8 +323,8 @@ function toTeacherAssignmentAnalytics(
       latestAttemptQuestions,
       completionTimestamp: studentResult.lastAttemptAt ?? undefined,
       recentCompletionTimestamp: studentResult.lastAttemptAt ?? undefined,
-      weakTopics: [],
-      topicPerformance: [],
+      weakTopics,
+      topicPerformance,
       flags: [] as TeacherInsightFlag[],
       exhaustedAttempts,
       missedDeadline,
@@ -324,7 +335,19 @@ function toTeacherAssignmentAnalytics(
       flags: buildFlags(rowBase, threshold),
     } satisfies TeacherStudentQuizResultRowData;
   });
-  const questionAnalytics = buildQuestionAnalyticsItems(assignmentAnalytics, quizAnalytics);
+  const questionTagsById = new Map<string, string[]>();
+  rows.forEach((row) => {
+    row.latestAttemptQuestions.forEach((question) => {
+      if (question.tags.length && !questionTagsById.has(question.questionId)) {
+        questionTagsById.set(question.questionId, question.tags);
+      }
+    });
+  });
+  const questionAnalytics = buildQuestionAnalyticsItems(
+    assignmentAnalytics,
+    quizAnalytics,
+    questionTagsById,
+  );
   const completedStudentsCount = assignmentAnalytics.completedCount;
   const assignedStudentsCount = assignmentAnalytics.totalStudents;
   const studentsWithAttemptsCount = rows.filter((row) => row.attemptsUsed > 0).length;
@@ -332,21 +355,10 @@ function toTeacherAssignmentAnalytics(
     .map((row) => row.completionTimestamp)
     .filter((timestamp): timestamp is string => Boolean(timestamp))
     .sort((left, right) => new Date(right).getTime() - new Date(left).getTime())[0];
-  // Only surface students who genuinely need teacher action:
-  //   • expired          — deadline passed, student never submitted
-  //   • attempts_exhausted — used every allowed attempt (possibly still failing)
-  //   • At Risk flag     — latest score < 50 %
-  //   • Needs Review flag — missed deadline / exhausted / score below threshold
-  //   • completed but still below threshold (edge case: threshold changed after submit)
-  //
-  // "active" (hasn't started) and "in_progress" (still taking) are normal
-  // operational states and must NOT appear here — showing them confused teachers
-  // into thinking students who were simply working were in trouble.
   const interventionStudents = rows
     .filter(
       (row) =>
         row.status === "expired" ||
-        row.status === "attempts_exhausted" ||
         row.flags.length > 0 ||
         (row.status === "completed" && (row.latestScore ?? 100) < threshold),
     )
@@ -393,10 +405,12 @@ export function useAssignmentAnalytics(
   teacherClass: TeacherClassRecord | null,
   assignment: TeacherClassAssignedQuiz | null,
   threshold = DEFAULT_INTERVENTION_THRESHOLD,
+  
+  refetchKey = 0,
 ) {
   const assignmentState = useAsyncResource<AssignmentAnalyticsDto>(
     Boolean(assignment?.assignmentId),
-    [assignment?.assignmentId],
+    [assignment?.assignmentId, refetchKey],
     () => getAssignmentAnalytics(assignment!.assignmentId),
     "Unable to load assignment analytics.",
   );
@@ -439,10 +453,6 @@ export function useQuizAnalytics(quizId: string | null) {
   );
 }
 
-// useMyAnalytics uses React Query so the result is shared across all consumers
-// (StudentResultsPage + useProfile) — navigating between them hits the cache
-// rather than issuing a second network request.
-// The userId is included in the cache key so switching accounts never leaks data.
 export function useMyAnalytics(enabled = true) {
   const { currentUser, token } = useAuth();
   const userId = currentUser?.id ?? null;

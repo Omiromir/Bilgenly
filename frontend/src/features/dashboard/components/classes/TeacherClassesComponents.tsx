@@ -1,4 +1,4 @@
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+﻿import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { Link } from "react-router";
 import {
@@ -9,6 +9,7 @@ import {
   Mail,
   MoreVertical,
   PencilLine,
+  RefreshCw,
   Rocket,
   SearchX,
   Trash2,
@@ -69,7 +70,7 @@ import {
   formatTeacherClassDate,
   getTeacherClassStudentActivityDate,
 } from "./teacherClassesUtils";
-import { normalizeEmail } from "../../../auth/validation";
+import { EMAIL_MAX_LENGTH, normalizeEmail } from "../../../auth/validation";
 import { searchStudents, type StudentSearchResult } from "../../api/classesApi";
 import type { QuizLibraryItem } from "../quiz-library/quizLibraryTypes";
 import {
@@ -601,7 +602,6 @@ export function AddStudentsDialog({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Existing student emails in the class (to prevent re-inviting)
   const existingEmails = useMemo(
     () =>
       new Set(
@@ -612,7 +612,6 @@ export function AddStudentsDialog({
     [teacherClass?.students],
   );
 
-  // Reset on open/class change
   useEffect(() => {
     if (!open) return;
     setQuery("");
@@ -622,7 +621,6 @@ export function AddStudentsDialog({
     setIsSearching(false);
   }, [open, teacherClass?.id]);
 
-  // Debounced search
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     if (query.trim().length < 2) {
@@ -634,7 +632,6 @@ export function AddStudentsDialog({
     debounceRef.current = setTimeout(async () => {
       try {
         const data = await searchStudents(query.trim());
-        // Filter out already-selected and already-in-class students
         const selectedIds = new Set(selected.map((s) => s.id));
         setResults(
           data.filter(
@@ -687,7 +684,8 @@ export function AddStudentsDialog({
             }
           />
 
-          <DashboardModalBody className="space-y-4 min-h-[420px]">
+          
+          <DashboardModalBody className="space-y-4 min-h-[min(420px,40vh)]">
             {availableClasses && availableClasses.length > 1 && onSelectedClassChange ? (
               <label className="block space-y-2">
                 <span className="text-sm font-medium text-[var(--dashboard-text-strong)]">Class</span>
@@ -706,7 +704,7 @@ export function AddStudentsDialog({
               </label>
             ) : null}
 
-            {/* Search input */}
+            
             <div className="space-y-2">
               <span className="text-sm font-medium text-[var(--dashboard-text-strong)]">
                 Search by name or email
@@ -715,6 +713,7 @@ export function AddStudentsDialog({
                 <input
                   type="text"
                   value={query}
+                  maxLength={EMAIL_MAX_LENGTH}
                   onChange={(e) => setQuery(e.target.value)}
                   placeholder="Type a name or email..."
                   className={cn(
@@ -723,7 +722,7 @@ export function AddStudentsDialog({
                   )}
                   autoComplete="off"
                 />
-                {/* Results dropdown */}
+                
                 {query.trim().length >= 2 && (
                   <div className="no-scrollbar absolute left-0 right-0 top-full z-50 mt-1 overflow-hidden overflow-y-auto rounded-[14px] border border-[var(--dashboard-border)] bg-[var(--dashboard-surface-elevated)] shadow-lg max-h-[280px]">
                     {isSearching ? (
@@ -763,7 +762,7 @@ export function AddStudentsDialog({
               </div>
             </div>
 
-            {/* Selected students chips */}
+            
             {selected.length > 0 && (
               <div className="space-y-2">
                 <span className="text-sm font-medium text-[var(--dashboard-text-strong)]">
@@ -893,6 +892,8 @@ interface TeacherClassDetailsPanelProps {
   >;
   onOpenAddStudents?: () => void;
   onOpenAssignQuiz?: () => void;
+  onRegenerateInviteCode?: () => void;
+  isRegeneratingInviteCode?: boolean;
   onRemoveAssignedQuiz?: (quiz: TeacherClassAssignedQuiz) => void;
   onRemoveStudent?: (student: TeacherClassStudent) => void;
   onResendStudentInvite?: (student: TeacherClassStudent) => void;
@@ -905,6 +906,8 @@ export function TeacherClassDetailsPanel({
   assignmentInsights = {},
   onOpenAddStudents,
   onOpenAssignQuiz,
+  onRegenerateInviteCode,
+  isRegeneratingInviteCode = false,
   onRemoveAssignedQuiz,
   onRemoveStudent,
   onResendStudentInvite,
@@ -927,17 +930,20 @@ export function TeacherClassDetailsPanel({
 
   const quickStats = [
     {
+      id: "inviteCode",
       label: "Invite code",
       value: teacherClass.inviteCode,
       emphasizeWideTracking: true,
     },
     {
+      id: "joined",
       label: "Joined",
       value: String(
         teacherClass.students.filter((student) => student.status === "joined").length,
       ),
     },
     {
+      id: "pendingInvites",
       label: "Pending invites",
       value: String(
         teacherClass.students.filter(
@@ -947,10 +953,13 @@ export function TeacherClassDetailsPanel({
       ),
     },
     {
+      id: "lastUpdated",
       label: "Last updated",
       value: formatTeacherClassDate(teacherClass.updatedAt),
     },
   ];
+  const canRotateInviteCode =
+    Boolean(onRegenerateInviteCode) && teacherClass.status === "active";
   const studentPreview = teacherClass.students.slice(0, 4);
 
   return (
@@ -996,7 +1005,29 @@ export function TeacherClassDetailsPanel({
       <div className="grid gap-3 sm:grid-cols-2">
         {quickStats.map((item) => (
           <div key={`${teacherClass.id}-${item.label}`} className={dashboardInsetBlockClassName}>
-            <p className={dashboardMetaTextClassName}>{item.label}</p>
+            <div className="flex items-start justify-between gap-2">
+              <p className={dashboardMetaTextClassName}>{item.label}</p>
+              {item.id === "inviteCode" && canRotateInviteCode ? (
+                <button
+                  type="button"
+                  onClick={onRegenerateInviteCode}
+                  disabled={isRegeneratingInviteCode}
+                  className={cn(
+                    dashboardButtonVariants({ variant: "ghost", size: "iconSm" }),
+                    "-mr-1 -mt-1 shrink-0",
+                  )}
+                  aria-label="Regenerate invite code"
+                  title="Generate a new invite code. The current code stops working immediately."
+                >
+                  <RefreshCw
+                    className={cn(
+                      "h-4 w-4",
+                      isRegeneratingInviteCode ? "animate-spin" : undefined,
+                    )}
+                  />
+                </button>
+              ) : null}
+            </div>
             <p
               className={cn(
                 "mt-2 text-lg font-semibold text-[var(--dashboard-text-strong)]",
@@ -1183,7 +1214,7 @@ export function TeacherClassDetailsPanel({
                   <DashboardBadge tone="info">
                     {assignmentInsights[quiz.assignmentId]?.missedDeadlineCount ?? 0} missed deadline
                   </DashboardBadge>
-                  {/* Hide "used all attempts" when attempts are unlimited (maxAttempts === null) */}
+                  
                   {quiz.maxAttempts != null && (
                     <DashboardBadge tone="warning">
                       {assignmentInsights[quiz.assignmentId]?.exhaustedStudentsCount ?? 0} used all attempts
@@ -1228,7 +1259,6 @@ export function AssignQuizDialog({
   onOpenChange,
   onAssignQuiz,
 }: AssignQuizDialogProps) {
-  // Two-step wizard: "select" → "configure"
   const [step, setStep] = useState<"select" | "configure">("select");
   const [search, setSearch] = useState("");
   const [selectedQuizId, setSelectedQuizId] = useState<string | null>(null);
@@ -1300,7 +1330,7 @@ export function AssignQuizDialog({
       <DashboardModalContent className="max-w-[680px]">
         <div className="flex min-h-0 flex-1 flex-col">
 
-          {/* ── Step indicator ── */}
+          
           <div className="flex items-center gap-3 px-6 pt-8 pr-14 pb-2">
             <div className="flex items-center gap-2">
               <span
@@ -1349,7 +1379,7 @@ export function AssignQuizDialog({
             </div>
           </div>
 
-          {/* ── Step 1: Select quiz ── */}
+          
           {step === "select" && (
             <>
               <DashboardModalHeader
@@ -1420,7 +1450,7 @@ export function AssignQuizDialog({
                                 {quiz.questionCount === 1 ? "question" : "questions"} · {quiz.updatedAt}
                               </p>
                             </div>
-                            {/* Selection indicator */}
+                            
                             <span
                               className={cn(
                                 "mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 text-xs font-bold transition",
@@ -1478,7 +1508,7 @@ export function AssignQuizDialog({
             </>
           )}
 
-          {/* ── Step 2: Configure settings ── */}
+          
           {step === "configure" && selectedQuiz && (
             <>
               <DashboardModalHeader
@@ -1486,7 +1516,7 @@ export function AssignQuizDialog({
                 description="Set a deadline and attempt limit for this assignment."
               />
               <DashboardModalBody>
-                {/* Selected quiz summary */}
+                
                 <div className="flex items-center justify-between gap-4 rounded-[18px] border border-[var(--dashboard-brand-soft)] bg-[var(--dashboard-brand-soft-alt)] px-5 py-4">
                   <div className="min-w-0">
                     <div className="flex flex-wrap gap-2">
@@ -1513,7 +1543,7 @@ export function AssignQuizDialog({
                   </DashboardButton>
                 </div>
 
-                {/* Settings form */}
+                
                 <AssignmentSettingsForm
                   values={settings}
                   deadlineError={deadlineError}

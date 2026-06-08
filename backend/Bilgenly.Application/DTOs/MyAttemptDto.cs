@@ -1,10 +1,9 @@
-namespace Bilgenly.Application.DTOs;
+﻿namespace Bilgenly.Application.DTOs;
 
 public class MyAttemptDto
 {
     public Guid Id { get; set; }
     public Guid QuizId { get; set; }
-    /// <summary>Populated when the attempt belongs to a class assignment.</summary>
     public Guid? AssignmentId { get; set; }
     public string QuizTitle { get; set; } = string.Empty;
     public int Score { get; set; }
@@ -29,6 +28,7 @@ public class MyAttemptQuestionReviewDto
     public Guid? CorrectAnswerId { get; set; }
     public string? CorrectAnswerText { get; set; }
     public bool IsCorrect { get; set; }
+    public List<string> Tags { get; set; } = new();
     public List<MyAttemptAnswerOptionDto> AnswerOptions { get; set; } = new();
 }
 

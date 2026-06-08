@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { useAuth } from "../../../app/providers/AuthProvider";
 import { saveMyPreferences } from "../../dashboard/api/preferencesApi";
 import {
   buildOnboardingDraftOwnerKey,
   clearOnboardingDraft,
+  clearRegistrationDraft,
   getOnboardingDraft,
   getRegistrationDraft,
   saveOnboardingDraft,
@@ -190,7 +191,6 @@ export function BilgenlyOnboarding() {
 
       clearOnboardingDraft();
 
-      // Persist study reminder time to user preferences if set
       if (finalAnswers.reminderTime) {
         saveMyPreferences({
           themeMode: "system",
@@ -204,7 +204,7 @@ export function BilgenlyOnboarding() {
           notifyPushRealTimeUpdates: true,
           notifyPushWeeklySummaries: true,
           studyReminderTime: finalAnswers.reminderTime,
-        }).catch(() => {/* non-critical */});
+        }).catch(() => {});
       }
 
       navigate(getDashboardPathByRole(finalAnswers.role), { replace: true });
@@ -214,22 +214,28 @@ export function BilgenlyOnboarding() {
     }
   };
 
+  const handleExitToSignIn = () => {
+    clearOnboardingDraft();
+    clearRegistrationDraft();
+    navigate("/signin", { replace: true });
+  };
+
   const progress = progressMap[step] || 0;
 
   return (
     <div className="ob-page">
       <style>{onboardingStyles}</style>
 
-      {/* Loading is full-screen standalone */}
+      
       {step === "loading" && <LoadingStep loadingPct={loadingPct} />}
 
-      {/* Welcome is full-screen standalone */}
+      
       {step === "welcome" && <WelcomeStep go={go} />}
 
-      {/* All other steps use the progress bar layout */}
+      
       {step !== "welcome" && step !== "loading" && (
         <>
-          {/* Full-width top bar */}
+          
           <div className="ob-topbar">
             {backMap[step] && (
               <button
@@ -271,6 +277,7 @@ export function BilgenlyOnboarding() {
               {step === "recommendations" && (
                 <RecommendationsStep
                   onContinue={handleFinishOnboarding}
+                  onExit={handleExitToSignIn}
                   isLoading={isSubmitting}
                   error={submitError}
                 />

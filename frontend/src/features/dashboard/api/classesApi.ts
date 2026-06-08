@@ -1,4 +1,4 @@
-import { apiRequest } from "../../../lib/apiClient";
+﻿import { apiRequest } from "../../../lib/apiClient";
 import type {
   AssignmentDto,
   AssignQuizToClassRequest,
@@ -34,6 +34,14 @@ export function archiveClass(classId: string) {
   return apiRequest<{ message: string }>(`/api/classes/${classId}/archive`, {
     method: "PATCH",
     fallbackErrorMessage: "Unable to update class archive status.",
+  });
+}
+
+
+export function regenerateInviteCode(classId: string) {
+  return apiRequest<ClassDto>(`/api/classes/${classId}/regenerate-invite-code`, {
+    method: "POST",
+    fallbackErrorMessage: "Unable to regenerate the invite code.",
   });
 }
 
@@ -104,6 +112,22 @@ export function joinClassByInviteCode(payload: JoinClassRequest | string) {
     method: "POST",
     body: request,
     fallbackErrorMessage: "Unable to join class.",
+  });
+}
+
+
+export function acceptClassInvitation(classId: string) {
+  return apiRequest<ClassDto>(`/api/classes/${classId}/accept-invitation`, {
+    method: "POST",
+    fallbackErrorMessage: "Unable to accept class invitation.",
+  });
+}
+
+
+export function declineClassInvitation(classId: string) {
+  return apiRequest<{ message: string }>(`/api/classes/${classId}/decline-invitation`, {
+    method: "POST",
+    fallbackErrorMessage: "Unable to decline class invitation.",
   });
 }
 

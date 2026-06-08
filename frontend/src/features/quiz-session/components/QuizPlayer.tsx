@@ -1,10 +1,11 @@
-import { useMemo, useState } from "react";
+﻿import { useCallback, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useQuizSessions } from "../../../app/providers/QuizSessionProvider";
 import { toAssignmentConstraintSource } from "../../assignments/assignmentConstraints";
 import { useAssignmentConstraints } from "../../assignments/useAssignmentConstraints";
 import { getQuizFeedbackPolicy } from "../feedbackPolicy";
 import { useQuizSession } from "../useQuizSession";
+import { useQuizTimer } from "../useQuizTimer";
 import { QuizQuestionCard } from "./QuizQuestionCard";
 import { QuizSessionSidebar } from "./QuizSessionSidebar";
 
@@ -42,10 +43,6 @@ export function QuizPlayer({ sessionId }: QuizPlayerProps) {
         sourceType: session?.sourceType,
         viewerRole: session?.viewerRole,
         isAssigned: Boolean(session?.assignmentContext),
-        // attemptsUsed counts ONLY completed attempts, so during an in-progress
-        // attempt the count is one less than what it'll be after submit. That's
-        // exactly what we want: the current attempt's answers stay hidden until
-        // it's actually finished AND counted.
         attemptsUsed: assignmentConstraints?.attemptsUsed ?? 0,
         maxAttempts: assignmentConstraints?.maxAttempts ?? null,
         hasInProgressAttempt: true,
@@ -60,6 +57,32 @@ export function QuizPlayer({ sessionId }: QuizPlayerProps) {
   );
 
   const [isFinishing, setIsFinishing] = useState(false);
+  const isFinishingRef = useRef(false);
+
+  const getAdjustedFinishedAtRef = useRef<() => string>(() => new Date().toISOString());
+
+  const handleTimerExpired = useCallback(() => {
+    if (isFinishingRef.current) return;
+    isFinishingRef.current = true;
+    setIsFinishing(true);
+    toast.error("Time's up! Your answers have been submitted automatically.", {
+      duration: 6000,
+    });
+    void completeSession({
+      completionReason: "time-limit-reached",
+      finishedAt: getAdjustedFinishedAtRef.current(),
+    }).catch(() => {
+      isFinishingRef.current = false;
+      setIsFinishing(false);
+    });
+  }, [completeSession]);
+
+  const timer = useQuizTimer(
+    session ?? { id: "", startedAt: new Date().toISOString(), status: "in-progress", quiz: { durationMinutes: 0 } },
+    handleTimerExpired,
+  );
+
+  getAdjustedFinishedAtRef.current = timer.getAdjustedFinishedAt;
 
   const canGoPrevious = useMemo(
     () => Boolean(session && session.currentQuestionIndex > 0),
@@ -85,6 +108,11 @@ export function QuizPlayer({ sessionId }: QuizPlayerProps) {
         answeredCount={submittedCount}
         currentQuestionIndex={session.currentQuestionIndex}
         onJumpToQuestion={setCurrentQuestion}
+        revealAnswerKey={feedbackPolicy.showImmediateCorrectAnswer}
+        timeRemainingSeconds={timer.totalDurationSeconds > 0 ? timer.timeRemainingSeconds : undefined}
+        totalDurationSeconds={timer.totalDurationSeconds > 0 ? timer.totalDurationSeconds : undefined}
+        isTimerWarning={timer.isWarning}
+        isTimerDanger={timer.isDanger}
       />
 
       <div className="space-y-5">
@@ -102,7 +130,9 @@ export function QuizPlayer({ sessionId }: QuizPlayerProps) {
           onContinue={() => {
             if (isLastQuestion) {
               setIsFinishing(true);
-              void completeSession().catch((error: unknown) => {
+              void completeSession({
+                finishedAt: timer.getAdjustedFinishedAt(),
+              }).catch((error: unknown) => {
                 setIsFinishing(false);
                 toast.error(
                   error instanceof Error

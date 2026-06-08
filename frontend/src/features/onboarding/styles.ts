@@ -1,4 +1,4 @@
-export const onboardingStyles = `
+﻿export const onboardingStyles = `
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
   * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -7,7 +7,7 @@ export const onboardingStyles = `
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   }
 
-  /* ── Top bar (back + progress) ── */
+  
   .ob-topbar {
     width: 100%; padding: 22px 28px 0; display: flex; align-items: center; gap: 16px;
   }
@@ -25,7 +25,7 @@ export const onboardingStyles = `
     height: 100%; background: #4F46E5; border-radius: 99px; transition: width 0.4s ease;
   }
 
-  /* ── Content ── */
+  
   .ob-content {
     flex: 1; display: flex; flex-direction: column; align-items: center;
     padding: 48px 24px 60px;
@@ -34,7 +34,7 @@ export const onboardingStyles = `
   .ob-fade { animation: obFadeUp 0.25s ease forwards; }
   @keyframes obFadeUp { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
 
-  /* ── Step titles ── */
+  
   .ob-step-title {
     font-size: 22px; font-weight: 700; color: #111827; text-align: center;
     letter-spacing: -0.02em; line-height: 1.3; margin-bottom: 6px;
@@ -43,7 +43,7 @@ export const onboardingStyles = `
     font-size: 14px; color: #6B7280; text-align: center; line-height: 1.6; margin-bottom: 28px;
   }
 
-  /* ── Option rows ── */
+  
   .ob-options { display: flex; flex-direction: column; gap: 10px; }
   .ob-option {
     width: 100%; display: flex; align-items: center; gap: 14px; padding: 14px 16px;
@@ -74,7 +74,7 @@ export const onboardingStyles = `
   }
   .ob-option.selected .ob-option-badge { background: #4F46E5; color: #fff; }
 
-  /* ── Primary button ── */
+  
   .ob-btn-primary {
     width: 100%; height: 52px; border-radius: 12px; background: #4F46E5; color: #fff;
     border: none; font-size: 15px; font-weight: 600; cursor: pointer; font-family: inherit;
@@ -86,7 +86,7 @@ export const onboardingStyles = `
   .ob-btn-primary:active { transform: scale(0.98); }
   .ob-btn-primary:focus-visible { outline: 2px solid #4F46E5; outline-offset: 3px; }
 
-  /* ── Welcome screen ── */
+  
   .ob-welcome-page {
     min-height: 100dvh; background: #fff; display: flex; flex-direction: column;
     align-items: center; justify-content: center; padding: 40px 24px;
@@ -106,7 +106,7 @@ export const onboardingStyles = `
     font-size: 15px; color: #6B7280; line-height: 1.65; margin-bottom: 28px;
   }
 
-  /* ── Reminder step ── */
+  
   .ob-reminder-body { text-align: center; padding: 12px 0; }
   .ob-reminder-icon { font-size: 52px; display: block; margin-bottom: 16px; }
   .ob-reminder-select-wrap {
@@ -139,7 +139,7 @@ export const onboardingStyles = `
   }
   .ob-btn-save:hover { background: #4338CA; }
 
-  /* ── Loading screen ── */
+  
   .ob-loading-page {
     min-height: 100dvh; background: #fff; display: flex; flex-direction: column;
     align-items: center; justify-content: center; padding: 40px 24px; text-align: center;
@@ -155,7 +155,7 @@ export const onboardingStyles = `
   .ob-loading-dots span:nth-child(3) { animation-delay: 0.4s; }
   @keyframes obDot { 0%,80%,100% { opacity:0.3; } 40% { opacity:1; } }
 
-  /* ── Done / Recommendations screen ── */
+  
   .ob-done-wrap {
     display: flex; flex-direction: column; align-items: center;
     text-align: center; padding: 24px 0 8px;
@@ -172,10 +172,22 @@ export const onboardingStyles = `
 
   .ob-error { color: #DC2626; font-size: 13px; text-align: center; margin-bottom: 8px; margin-top: 4px; }
 
-  /* ── Auth styles (unchanged, needed for sign-in/sign-up pages) ── */
+  
+  .ob-btn-secondary {
+    width: 100%; height: 48px; border-radius: 12px; background: transparent; color: #4F46E5;
+    border: 1.5px solid #E5E7EB; font-size: 14px; font-weight: 600; cursor: pointer;
+    font-family: inherit; margin-top: 12px;
+    transition: background 0.15s, border-color 0.15s, transform 0.15s;
+  }
+  .ob-btn-secondary:hover { background: #F5F3FF; border-color: #C7D2FE; }
+  .ob-btn-secondary:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+  .ob-btn-secondary:active { transform: scale(0.98); }
+  .ob-btn-secondary:focus-visible { outline: 2px solid #4F46E5; outline-offset: 3px; }
+
+  
   .auth-brand-name { font-size: 20px; font-weight: 700; color: #111827; letter-spacing: -0.03em; font-family: 'Montserrat', sans-serif; }
 
-  /* ── Responsive ── */
+  
   @media (max-width: 640px) {
     .ob-topbar { padding: 16px 20px 0; gap: 12px; }
     .ob-content { padding: 36px 20px 48px; }
@@ -198,7 +210,7 @@ export const onboardingStyles = `
     .ob-option-icon { width: 36px; height: 36px; min-width: 36px; font-size: 18px; }
   }
 
-  /* ── Dark mode ── */
+  
   .dark .ob-page { background: #0d1424; }
 
   .dark .ob-back-btn { color: #9aa8c6; }
@@ -256,7 +268,7 @@ export const onboardingStyles = `
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%237a72ff' stroke-width='2.5'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
   }
 
-  /* Custom time-picker dropdown list — dark mode */
+  
   .dark [role='listbox'] {
     background: #111b2f !important;
     border-color: #2a3858 !important;
@@ -276,6 +288,12 @@ export const onboardingStyles = `
   .dark .ob-done-sub { color: #9aa8c6; }
 
   .dark .ob-error { color: #f08aa1; }
+
+  .dark .ob-btn-secondary {
+    background: transparent; color: #b3adff; border-color: #2a3858;
+  }
+  .dark .ob-btn-secondary:hover { background: rgba(122, 114, 255, 0.1); border-color: #7a72ff; }
+  .dark .ob-btn-secondary:focus-visible { outline-color: #7a72ff; }
 
   .dark .auth-brand-name { color: #f5f8ff; }
 `;

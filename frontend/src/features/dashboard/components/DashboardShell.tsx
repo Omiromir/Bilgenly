@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { Outlet, useLocation } from "react-router";
 import { cn } from "../../../components/ui/utils";
 import { DashboardHeader } from "./DashboardHeader";
@@ -12,6 +12,10 @@ export function DashboardShell() {
 
   useEffect(() => {
     setIsMobileSidebarOpen(false);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0 });
   }, [location.pathname]);
 
   useEffect(() => {

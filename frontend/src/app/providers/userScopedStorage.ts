@@ -1,26 +1,23 @@
-interface UserStorageScopeInput {
+﻿interface UserStorageScopeInput {
   userId?: string | null;
   email?: string | null;
   role?: string | null;
   token?: string | null;
 }
 
-// ─── All bilgenly keys that should be wiped on logout ──────────────────────
-// Global (unscoped) keys — always cleared:
 const GLOBAL_KEYS_TO_CLEAR = [
-  "bilgenly_notifications",        // unscoped notification cache
-  "bilgenly_reminder_last_shown",  // legacy unscoped reminder date
+  "bilgenly_notifications",
+  "bilgenly_reminder_last_shown",
 ] as const;
 
-// Scoped base-keys — cleared for the current user's scope(s):
 const SCOPED_BASE_KEYS = [
   "bilgenly_user_settings_v1",
   "bilgenly_quiz_library",
   "bilgenly_quiz_sessions",
   "bilgenly_shared_assigned_quiz_sessions",
   "bilgenly_hidden_class_assignments",
-  "bilgenly_notifications",           // also exists scoped (future)
-  "bilgenly_reminder_last_shown",     // also exists scoped (current)
+  "bilgenly_notifications",
+  "bilgenly_reminder_last_shown",
   "bilgenly_quiz_builder_draft:teacher",
   "bilgenly_quiz_builder_draft:student",
 ] as const;
@@ -89,32 +86,22 @@ export function getScopedStorageValue(baseKey: string, scope: string) {
   return legacyValue;
 }
 
-/**
- * clearAllUserStorage
- *
- * Called on logout. Removes all localStorage data belonging to the current
- * user so the next person who logs in on this device starts clean.
- *
- * Strategy:
- *  1. Delete global (unscoped) bilgenly keys that carry per-user state.
- *  2. Delete every scoped key for every possible scope the current user had
- *     (user:{id}, email:{email}, and a full localStorage scan as safety net).
- *
- * We do NOT delete auth keys here — the caller (AuthProvider) handles those.
- */
+
 export function clearAllUserStorage({
   userId,
   email,
+  role,
+  token,
 }: {
   userId?: string | null;
   email?: string | null;
+  role?: string | null;
+  token?: string | null;
 }) {
-  // 1. Remove unscoped global keys
   for (const key of GLOBAL_KEYS_TO_CLEAR) {
     localStorage.removeItem(key);
   }
 
-  // 2. Build the set of scope suffixes for this user
   const userScopes = new Set<string>();
   if (userId?.trim()) {
     userScopes.add(`user:${normalizeStorageSegment(userId)}`);
@@ -122,18 +109,22 @@ export function clearAllUserStorage({
   if (email?.trim()) {
     userScopes.add(`email:${normalizeStorageSegment(email)}`);
   }
+  if (token?.trim()) {
+    const roleSegment = role?.trim().toLowerCase() || "user";
+    userScopes.add(`session:${roleSegment}:${hashValue(token)}`);
+  }
+  if (role?.trim()) {
+    userScopes.add(`role:${normalizeStorageSegment(role)}`);
+  }
 
-  if (userScopes.size === 0) return; // anonymous — nothing user-specific to clear
+  if (userScopes.size === 0) return;
 
-  // 3. Remove known scoped keys explicitly (fast path)
   for (const base of SCOPED_BASE_KEYS) {
     for (const scope of userScopes) {
       localStorage.removeItem(getUserScopedStorageKey(base, scope));
     }
   }
 
-  // 4. Safety-net scan: remove any other bilgenly_ key whose suffix matches
-  //    the user's scope (catches future keys we haven't listed above)
   const keysToRemove: string[] = [];
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i);

@@ -8,4 +8,5 @@ public class QuizQuestionReviewDto
     public string Explanation { get; set; } = string.Empty;
     public int Position { get; set; }
     public List<AnswerReviewDto> Answers { get; set; } = new();
+    public List<string> Tags { get; set; } = new();
 }

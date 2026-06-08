@@ -1,6 +1,7 @@
-import { Link } from "react-router";
+﻿import { Link } from "react-router";
 import {
   Clock3,
+  LoaderCircle,
   RotateCcw,
   Trophy,
 } from "../../../components/icons/AppIcons";
@@ -20,6 +21,8 @@ import {
 interface QuizResultsSummaryProps {
   session: QuizSessionRecord;
   onRetake?: () => void;
+  
+  isRetaking?: boolean;
   returnLink?: {
     path: string;
     label: string;
@@ -34,6 +37,7 @@ interface QuizResultsSummaryProps {
 export function QuizResultsSummary({
   session,
   onRetake,
+  isRetaking = false,
   returnLink,
   secondaryLink,
 }: QuizResultsSummaryProps) {
@@ -56,7 +60,9 @@ export function QuizResultsSummary({
           <p className="mt-3 max-w-3xl text-[15px] leading-7 text-[var(--dashboard-text-soft)]">
             {session.completionReason === "deadline-expired"
               ? "This attempt was submitted automatically when the assignment deadline passed. Review the summary below, then look through each answer to see what still needs attention."
-              : "You finished the quiz. Review the summary below, then look through each answer to understand what went well and what needs more practice."}
+              : session.completionReason === "time-limit-reached"
+                ? "Time ran out — your answered questions were submitted automatically. Unanswered questions count as missed. Review the summary below."
+                : "You finished the quiz. Review the summary below, then look through each answer to understand what went well and what needs more practice."}
           </p>
         </div>
 
@@ -112,9 +118,22 @@ export function QuizResultsSummary({
 
       <div className="flex flex-wrap gap-3">
         {onRetake ? (
-          <DashboardButton type="button" size="lg" onClick={onRetake}>
-            <RotateCcw className="h-4.5 w-4.5" />
-            {session.assignmentContext ? "Open Assigned Quiz" : "Retake Quiz"}
+          <DashboardButton
+            type="button"
+            size="lg"
+            onClick={onRetake}
+            disabled={isRetaking}
+          >
+            {isRetaking ? (
+              <LoaderCircle className="h-4.5 w-4.5 animate-spin" />
+            ) : (
+              <RotateCcw className="h-4.5 w-4.5" />
+            )}
+            {isRetaking
+              ? "Opening…"
+              : session.assignmentContext
+                ? "Open Assigned Quiz"
+                : "Retake Quiz"}
           </DashboardButton>
         ) : null}
 

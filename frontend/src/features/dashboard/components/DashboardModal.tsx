@@ -1,4 +1,4 @@
-import type { ComponentProps, ReactNode } from "react";
+﻿import type { ComponentProps, ReactNode } from "react";
 import { cn } from "../../../components/ui/utils";
 import {
   DialogContent,
@@ -47,8 +47,6 @@ export function DashboardModalHeader({
   return (
     <div
       className={cn(
-        // pr-14 reserves space for the absolutely-positioned dialog close button
-        // (top-3 right-3, 36px wide) so titles never sit cramped against the X.
         "border-b border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-elevated)] px-6 py-5 pr-14",
         className,
       )}

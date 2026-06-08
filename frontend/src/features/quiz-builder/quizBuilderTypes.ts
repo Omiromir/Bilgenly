@@ -1,4 +1,4 @@
-export type InputMethod = "upload" | "paste";
+﻿export type InputMethod = "upload" | "paste";
 export type ParseStatus = "idle" | "processing" | "ready" | "warning" | "error";
 export type GenerationState = "idle" | "running" | "success" | "failed" | "cancelled";
 export type QuestionType = "Multiple choice" | "True/False";
@@ -33,6 +33,7 @@ export interface GeneratedQuestion {
   estimatedMinutes: number;
   answerOrder: QuestionAnswerOrder;
   required: boolean;
+  tags: string[];
   status: QuestionStatus;
 }
 

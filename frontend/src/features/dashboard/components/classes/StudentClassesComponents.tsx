@@ -1,6 +1,11 @@
+﻿import { useMemo, useState } from "react";
 import { BookOpen, CalendarDays, SearchX, UserRound, Users } from "../../../../components/icons/AppIcons";
 import { cn } from "../../../../components/ui/utils";
 import type { StudentClassMembershipRecord } from "../../../../app/providers/TeacherClassesProvider";
+import {
+  matchesAssignedProgress,
+  type AssignedProgressFilter,
+} from "../../../assignments/assignedQuizAvailability";
 import { EmptyStateBlock } from "../EmptyStateBlock";
 import {
   DashboardBadge,
@@ -13,6 +18,16 @@ import { AssignedQuizCard } from "../quiz-library/QuizLibraryComponents";
 import type { StudentAssignedQuizLibraryItem } from "../quiz-library/studentQuizLibrarySources";
 import type { QuizCardAction } from "../quiz-library/quizLibraryTypes";
 import { formatTeacherClassDate } from "./teacherClassesUtils";
+
+const ASSIGNED_PROGRESS_FILTERS: {
+  value: AssignedProgressFilter;
+  label: string;
+}[] = [
+  { value: "all", label: "All" },
+  { value: "ready", label: "Ready" },
+  { value: "in-progress", label: "In progress" },
+  { value: "completed", label: "Completed" },
+];
 
 function getTeacherDisplayName(membershipRecord: StudentClassMembershipRecord) {
   const teacherName = membershipRecord.teacherClass.teacherName?.trim();
@@ -139,6 +154,160 @@ export function StudentClassesSearchEmptyState({
   );
 }
 
+interface ClassAssignedQuizzesSectionProps {
+  assignedItems: StudentAssignedQuizLibraryItem[];
+  getAssignedActions: (item: StudentAssignedQuizLibraryItem) => QuizCardAction[];
+  subjectLabel?: string;
+  onOpenClass?: () => void;
+}
+
+
+function ClassAssignedQuizzesSection({
+  assignedItems,
+  getAssignedActions,
+  subjectLabel,
+  onOpenClass,
+}: ClassAssignedQuizzesSectionProps) {
+  const [progressFilter, setProgressFilter] =
+    useState<AssignedProgressFilter>("all");
+
+  const filterCounts = useMemo(
+    () => ({
+      all: assignedItems.length,
+      ready: assignedItems.filter((item) =>
+        matchesAssignedProgress(item.assignmentState, "ready"),
+      ).length,
+      "in-progress": assignedItems.filter((item) =>
+        matchesAssignedProgress(item.assignmentState, "in-progress"),
+      ).length,
+      completed: assignedItems.filter((item) =>
+        matchesAssignedProgress(item.assignmentState, "completed"),
+      ).length,
+    }),
+    [assignedItems],
+  );
+
+  const visibleItems = useMemo(() => {
+    const matched = assignedItems.filter((item) =>
+      matchesAssignedProgress(item.assignmentState, progressFilter),
+    );
+
+    return [...matched].sort((left, right) => {
+      const leftActionable =
+        left.assignmentState.canStart || left.assignmentState.canResume;
+      const rightActionable =
+        right.assignmentState.canStart || right.assignmentState.canResume;
+
+      if (leftActionable === rightActionable) {
+        return 0;
+      }
+
+      return leftActionable ? -1 : 1;
+    });
+  }, [assignedItems, progressFilter]);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 className="text-lg font-semibold text-[var(--dashboard-text-strong)]">
+            Assigned Quizzes
+          </h3>
+          <p className="mt-1 text-sm leading-6 text-[var(--dashboard-text-soft)]">
+            Assigned quizzes stay separate from public discovery, so it is always clear what belongs to this class.
+          </p>
+        </div>
+        {onOpenClass ? (
+          <DashboardButton
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={onOpenClass}
+          >
+            Open in Library
+          </DashboardButton>
+        ) : null}
+      </div>
+
+      {assignedItems.length ? (
+        <div
+          className="flex flex-wrap gap-2"
+          role="group"
+          aria-label="Filter assigned quizzes by progress"
+        >
+          {ASSIGNED_PROGRESS_FILTERS.map((option) => {
+            const isActive = progressFilter === option.value;
+            const count = filterCounts[option.value];
+
+            return (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => setProgressFilter(option.value)}
+                aria-pressed={isActive}
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--dashboard-brand)] focus-visible:ring-offset-1",
+                  isActive
+                    ? "border-transparent bg-[var(--dashboard-brand)] text-white"
+                    : "border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-elevated)] text-[var(--dashboard-text-soft)] hover:bg-[var(--dashboard-surface-muted)] hover:text-[var(--dashboard-text-strong)]",
+                )}
+              >
+                {option.label}
+                <span
+                  className={cn(
+                    "rounded-full px-1.5 text-xs tabular-nums",
+                    isActive
+                      ? "bg-white/20 text-white"
+                      : "bg-[var(--dashboard-surface-muted)] text-[var(--dashboard-text-soft)]",
+                  )}
+                >
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+
+      {assignedItems.length === 0 ? (
+        <EmptyStateBlock
+          title="No class quizzes available yet"
+          description="You are already in this class, but there are no assigned quizzes available here yet."
+          icon={BookOpen}
+        />
+      ) : visibleItems.length === 0 ? (
+        <EmptyStateBlock
+          title="Nothing in this view"
+          description="No assigned quizzes match this filter right now. Switch back to All to see everything assigned to this class."
+          icon={SearchX}
+          action={
+            <DashboardButton
+              type="button"
+              variant="secondary"
+              size="lg"
+              onClick={() => setProgressFilter("all")}
+            >
+              Show all quizzes
+            </DashboardButton>
+          }
+        />
+      ) : (
+        <div className="space-y-4">
+          {visibleItems.map((item) => (
+            <div key={item.assignmentContext.assignmentId} className="w-full">
+              <AssignedQuizCard
+                item={item}
+                actions={getAssignedActions(item)}
+                badgeLabel={subjectLabel}
+              />
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 interface StudentClassDetailsPanelProps {
   membershipRecord: StudentClassMembershipRecord | null;
   assignedItems: StudentAssignedQuizLibraryItem[];
@@ -217,9 +386,7 @@ export function StudentClassDetailsPanel({
         </div>
       </div>
 
-      {/* Note: the class invite code is intentionally NOT shown to students.
-          Anyone with the code can join the class, so exposing it on the
-          student view turns every student into a potential leak vector. */}
+      
 
       <div className="rounded-[22px] border border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-muted)] px-5 py-4">
         <div className="grid gap-3 md:grid-cols-3">
@@ -238,43 +405,13 @@ export function StudentClassDetailsPanel({
         </div>
       </div>
 
-      <div className="space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h3 className="text-lg font-semibold text-[var(--dashboard-text-strong)]">
-              Assigned Quizzes
-            </h3>
-            <p className="mt-1 text-sm leading-6 text-[var(--dashboard-text-soft)]">
-              Assigned quizzes stay separate from public discovery, so it is always clear what belongs to this class.
-            </p>
-          </div>
-          {onOpenClass ? (
-            <DashboardButton type="button" variant="secondary" size="sm" onClick={onOpenClass}>
-              Open in Library
-            </DashboardButton>
-          ) : null}
-        </div>
-
-        {assignedItems.length ? (
-          <div className="space-y-4">
-            {assignedItems.map((item) => (
-              <div key={item.assignmentContext.assignmentId} className="w-full">
-                <AssignedQuizCard
-                  item={item}
-                  actions={getAssignedActions(item)}
-                  badgeLabel={teacherClass.subject || undefined}
-                />
-              </div>
-            ))}
-          </div>
-        ) : (
-          <EmptyStateBlock
-            title="No class quizzes available yet"
-            description="You are already in this class, but there are no assigned quizzes available here yet."
-            icon={BookOpen}
-          />
-        )}
-      </div>
+      <ClassAssignedQuizzesSection
+        key={teacherClass.id}
+        assignedItems={assignedItems}
+        getAssignedActions={getAssignedActions}
+        subjectLabel={teacherClass.subject || undefined}
+        onOpenClass={onOpenClass}
+      />
     </DashboardSurface>
   );
 }

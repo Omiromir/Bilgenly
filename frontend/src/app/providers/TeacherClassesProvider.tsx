@@ -1,4 +1,4 @@
-import {
+﻿import {
   createContext,
   type ReactNode,
   useCallback,
@@ -30,6 +30,8 @@ import {
   type MockDashboardUser,
 } from "../../features/dashboard/users/dashboardUser";
 import {
+  acceptClassInvitation as acceptClassInvitationRequest,
+  declineClassInvitation as declineClassInvitationRequest,
   archiveClass as archiveClassRequest,
   assignQuizToClass as assignQuizToClassRequest,
   createClass as createClassRequest,
@@ -37,6 +39,7 @@ import {
   getStudentClasses,
   getTeacherClasses,
   joinClassByInviteCode as joinClassByInviteCodeRequest,
+  regenerateInviteCode as regenerateInviteCodeRequest,
   removeClassAssignment as removeClassAssignmentRequest,
   removeStudentFromClass as removeStudentFromClassRequest,
   updateClass as updateClassRequest,
@@ -49,7 +52,7 @@ import {
 import { getRequestErrorMessage, isGuidString } from "../../lib/apiClient";
 import type { UserRole } from "../../features/auth/api";
 import { useAuth } from "./AuthProvider";
-import { revokeClassInvitation, sendClassInvitations } from "../../features/dashboard/api/classInvitationsApi";
+import { revokeClassInvitationByEmail, sendClassInvitations } from "../../features/dashboard/api/classInvitationsApi";
 import { toast } from "sonner";
 import {
   getUserScopedStorageKey,
@@ -77,6 +80,7 @@ interface TeacherClassesContextValue {
     classId: string,
     status: TeacherClassStatus,
   ) => Promise<void>;
+  regenerateInviteCode: (classId: string) => Promise<TeacherClassRecord>;
   addStudentsToClass: (
     classId: string,
     emails: string[],
@@ -111,6 +115,8 @@ interface TeacherClassesContextValue {
     studentIdentity: StudentIdentity,
   ) => StudentClassMembershipRecord[];
   joinClassByInviteCode: (inviteCode: string) => Promise<TeacherClassRecord>;
+  acceptClassInvitation: (classId: string) => Promise<TeacherClassRecord>;
+  declineClassInvitation: (classId: string) => Promise<void>;
 }
 
 const TeacherClassesContext = createContext<
@@ -416,11 +422,8 @@ export function TeacherClassesProvider({
   const [hiddenAssignmentIdsByClass, setHiddenAssignmentIdsByClass] = useState<
     Record<string, string[]>
   >({});
-  // Bump to retrigger the classes/assignments fetch — used by the focus
-  // listener and the `bilgenly:quiz-deleted` event so a quiz removed by
-  // admin disappears from class assignment lists and overview stats
-  // without a hard reload.
   const [refetchTick, setRefetchTick] = useState(0);
+  const seenInvitationResponseIdsRef = useRef<Set<string> | null>(null);
   const {
     notifications,
     removeClassInvitationNotification,
@@ -439,7 +442,6 @@ export function TeacherClassesProvider({
   const classesRef = useRef(classes);
   const hiddenAssignmentsRef = useRef(hiddenAssignmentIdsByClass);
 
-  // Keep teacherActor values up-to-date via ref
   const teacherActorRef = useRef(teacherActor);
   useEffect(() => {
     teacherActorRef.current = teacherActor;
@@ -464,7 +466,6 @@ export function TeacherClassesProvider({
     );
   }, [hiddenAssignmentIdsByClass, hiddenAssignmentsStorageKey]);
 
-  // Auto-refresh classes when authentication is ready
   useEffect(() => {
     if (!token || (role !== "teacher" && role !== "student")) {
       setClasses([]);
@@ -508,10 +509,6 @@ export function TeacherClassesProvider({
     void fetchClasses();
   }, [token, role, refetchTick]);
 
-  // Refetch classes/assignments when the tab regains focus or when another
-  // part of the app broadcasts that a quiz was deleted. This is what makes
-  // an admin-deleted quiz disappear from a teacher's overview cards, class
-  // assignment lists, and student class views without a hard reload.
   useEffect(() => {
     function bump() {
       setRefetchTick((tick) => tick + 1);
@@ -598,6 +595,61 @@ export function TeacherClassesProvider({
       return hasChanges ? nextClasses : current;
     });
   }, [notifications, role, studentEmail, studentUserId]);
+
+  useEffect(() => {
+    if (role !== "teacher") {
+      return;
+    }
+
+    const responseNotifications = notifications.filter(
+      (notification) => notification.type === "invitation_response",
+    );
+
+    if (seenInvitationResponseIdsRef.current === null) {
+      seenInvitationResponseIdsRef.current = new Set(
+        responseNotifications.map((notification) => notification.id),
+      );
+      return;
+    }
+
+    const seen = seenInvitationResponseIdsRef.current;
+    let hasNew = false;
+
+    for (const notification of responseNotifications) {
+      if (seen.has(notification.id)) {
+        continue;
+      }
+
+      seen.add(notification.id);
+      hasNew = true;
+
+      if (
+        notification.status === "declined" &&
+        notification.relatedClassId &&
+        notification.studentEmail
+      ) {
+        const normalizedEmail = normalizeEmail(notification.studentEmail);
+        setClasses((current) =>
+          sortTeacherClasses(
+            current.map((teacherClass) => {
+              if (teacherClass.id !== notification.relatedClassId) {
+                return teacherClass;
+              }
+              return updateTeacherClassStudents(teacherClass, (students) =>
+                students.filter(
+                  (student) => normalizeEmail(student.email) !== normalizedEmail,
+                ),
+              );
+            }),
+          ),
+        );
+      }
+    }
+
+    if (hasNew) {
+      setRefetchTick((tick) => tick + 1);
+    }
+  }, [notifications, role]);
 
   const refreshClasses = useCallback(async () => {
     if (!token || (role !== "teacher" && role !== "student")) {
@@ -714,6 +766,48 @@ export function TeacherClassesProvider({
         await refreshClasses();
         setError(null);
       },
+      regenerateInviteCode: async (classId) => {
+        const existingClass = classes.find((item) => item.id === classId);
+
+        if (!existingClass) {
+          throw new Error("Class not found.");
+        }
+
+        if (existingClass.status !== "active") {
+          throw new Error(
+            "The invite code can only be rotated for an active class.",
+          );
+        }
+
+        const updatedClass = await regenerateInviteCodeRequest(classId);
+        const mappedClass = mapClassDtoToTeacherClassRecord(
+          updatedClass,
+          existingClass.assignedQuizzes.map((assignment) => ({
+            id: assignment.assignmentId,
+            assignmentId: assignment.assignmentId,
+            classId: assignment.classId,
+            quizId: assignment.quizId,
+            title: assignment.title,
+            topic: assignment.topic,
+            questionCount: assignment.questionCount,
+            assignedAt: assignment.assignedAt,
+            deadline: assignment.deadline,
+            maxAttempts: assignment.maxAttempts,
+            allowLateSubmissions: assignment.allowLateSubmissions,
+            assignedBy: assignment.assignedBy,
+            assignedByName: assignment.assignedByName,
+            visibility: assignment.visibility,
+            status: assignment.status,
+          })),
+          existingClass,
+          new Set(hiddenAssignmentIdsByClass[classId] ?? []),
+        );
+
+        await refreshClasses();
+        setError(null);
+
+        return mappedClass;
+      },
       addStudentsToClass: (classId, emails) => {
         const targetClass = classes.find((item) => item.id === classId);
 
@@ -787,11 +881,6 @@ export function TeacherClassesProvider({
         });
 
         if (isGuidString(classId)) {
-          // Properly handle the backend response. Previously, the result was
-          // discarded with `.catch(() => {})`, which let invitations to
-          // non-existent accounts or wrong-role accounts silently land as
-          // local-only ghost students. Now: reconcile local state with the
-          // backend's view of what actually succeeded, and surface failures.
           const emailsToInvite = newStudents.map((s) => s.email);
           const idsByNormalizedEmail = new Map(
             newStudents.map((s) => [normalizeEmail(s.email), s.id]),
@@ -809,9 +898,6 @@ export function TeacherClassesProvider({
                   .filter((id): id is string => Boolean(id)),
               );
 
-              // Strip locally-added students whose backend invite failed —
-              // e.g. emails that don't belong to a registered account, or
-              // belong to a non-student role.
               if (failedStudentIds.size > 0) {
                 setClasses((current) =>
                   current.map((item) => {
@@ -830,9 +916,6 @@ export function TeacherClassesProvider({
                 );
               }
 
-              // Also drop any locally-created student whose email the backend
-              // didn't acknowledge at all (defensive — backend should put
-              // unknown ones in `failed`, but we mirror its truth either way).
               const acknowledgedIds = new Set(
                 Array.from(sentEmails)
                   .map((email) => idsByNormalizedEmail.get(email))
@@ -856,8 +939,6 @@ export function TeacherClassesProvider({
               }
             })
             .catch(() => {
-              // Network error — keep local optimistic state, but flag it so
-              // the teacher knows the invitations didn't reach the server.
               toast.error(
                 "Class invitations were saved locally but could not be sent to the server. Please retry.",
               );
@@ -897,10 +978,8 @@ export function TeacherClassesProvider({
           ),
         );
 
-        // Pending students have no real userId — their "id" is the invitation id.
-        // Use the correct endpoint based on whether the student has joined.
         if (targetStudent.status === "invited") {
-          revokeClassInvitation(classId, studentId).catch(() => {});
+          revokeClassInvitationByEmail(classId, targetStudent.email).catch(() => {});
         } else {
           removeStudentFromClassRequest(classId, studentId).catch(() => {});
         }
@@ -1252,6 +1331,26 @@ export function TeacherClassesProvider({
         setError(null);
 
         return mappedClass;
+      },
+      acceptClassInvitation: async (classId) => {
+        const joinedClass = await acceptClassInvitationRequest(classId);
+        const mappedClass = mapClassDtoToTeacherClassRecord(
+          joinedClass,
+          null,
+          classes.find((teacherClass) => teacherClass.id === joinedClass.id) ??
+            null,
+          new Set(hiddenAssignmentIdsByClass[joinedClass.id] ?? []),
+        );
+
+        await refreshClasses();
+        setError(null);
+
+        return mappedClass;
+      },
+      declineClassInvitation: async (classId) => {
+        await declineClassInvitationRequest(classId);
+        await refreshClasses();
+        setError(null);
       },
     }),
     [

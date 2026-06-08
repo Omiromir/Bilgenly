@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { Bell, Inbox } from "../../../components/icons/AppIcons";
 import { useAuth } from "../../../app/providers/AuthProvider";
 import { useNotifications } from "../../../app/providers/NotificationsProvider";
@@ -23,7 +23,8 @@ export function StudentNotificationsPage() {
     markNotificationRead,
     updateClassInvitationStatus,
   } = useNotifications();
-  const { joinClassByInviteCode, respondToClassInvitation } = useTeacherClasses();
+  const { acceptClassInvitation, declineClassInvitation, respondToClassInvitation } =
+    useTeacherClasses();
   const [feedback, setFeedback] = useState<string | null>(null);
   const studentViewer = currentUser?.role === "student" ? currentUser : null;
   const studentIdentity = {
@@ -68,7 +69,7 @@ export function StudentNotificationsPage() {
 
   const handleAcceptInvitation = async (notification: ClassInvitationNotification) => {
     try {
-      await joinClassByInviteCode(notification.inviteCode);
+      await acceptClassInvitation(notification.relatedClassId);
       updateClassInvitationStatus(notification.id, "accepted");
       respondToClassInvitation(
         notification.relatedClassId,
@@ -86,7 +87,7 @@ export function StudentNotificationsPage() {
     }
   };
 
-  const handleDeclineInvitation = (notification: ClassInvitationNotification) => {
+  const handleDeclineInvitation = async (notification: ClassInvitationNotification) => {
     updateClassInvitationStatus(notification.id, "declined");
     respondToClassInvitation(
       notification.relatedClassId,
@@ -94,7 +95,17 @@ export function StudentNotificationsPage() {
       "declined",
       studentIdentity,
     );
-    setFeedback(`You declined the class invite to ${notification.relatedClassName}.`);
+
+    try {
+      await declineClassInvitation(notification.relatedClassId);
+      setFeedback(`You declined the class invite to ${notification.relatedClassName}.`);
+    } catch (error) {
+      setFeedback(
+        error instanceof Error
+          ? error.message
+          : "Unable to decline that invite right now.",
+      );
+    }
   };
 
   return (
@@ -159,7 +170,9 @@ export function StudentNotificationsPage() {
           onAcceptInvitation={(notification) => {
             void handleAcceptInvitation(notification);
           }}
-          onDeclineInvitation={handleDeclineInvitation}
+          onDeclineInvitation={(notification) => {
+            void handleDeclineInvitation(notification);
+          }}
           onMarkRead={(notification) => markNotificationRead(notification.id)}
         />
       </SectionCard>

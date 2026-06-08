@@ -1,4 +1,4 @@
-export const authStyles = `
+﻿export const authStyles = `
   @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=Syne:wght@600;700;800&display=swap');
   * { box-sizing: border-box; }
   .auth-page {
@@ -226,7 +226,7 @@ export const authStyles = `
   .auth-footer {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    justify-content: center;
     gap: 16px;
     width: 100%;
     margin-top: auto;
@@ -234,12 +234,6 @@ export const authStyles = `
     border-top: 1px solid #d8dfeb;
     font-size: 13px;
     color: #62708b;
-  }
-  .auth-footer-links {
-    display: flex;
-    align-items: center;
-    gap: 28px;
-    flex-wrap: wrap;
   }
   .auth-error {
   margin-top: 6px;
@@ -280,9 +274,6 @@ export const authStyles = `
       padding: 16px 0 18px;
       margin-top: 28px;
     }
-    .auth-footer-links {
-      gap: 18px;
-    }
     .auth-meta-row {
       flex-wrap: wrap;
       gap: 10px;
@@ -316,7 +307,7 @@ export const authStyles = `
     }
   }
 
-  /* ── Dark mode ── */
+  
   .dark .auth-page {
     background: #0d1424;
     color: #dde6f7;

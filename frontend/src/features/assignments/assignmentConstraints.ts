@@ -1,4 +1,4 @@
-import type { TeacherClassAssignedQuiz } from "../dashboard/components/classes/teacherClassesTypes";
+﻿import type { TeacherClassAssignedQuiz } from "../dashboard/components/classes/teacherClassesTypes";
 import type { QuizAssignmentContext } from "../dashboard/components/quiz-library/quizLibraryTypes";
 import type { QuizSessionRecord } from "../quiz-session/quizSessionTypes";
 import { getQuizSessionResultSummary } from "../quiz-session/quizSessionUtils";
@@ -271,7 +271,6 @@ export function buildAssignmentConstraintState(
     relatedSessions.find((session) => session.status === "in-progress") ?? null;
   const latestAttempt = relatedSessions[0] ?? null;
   const latestCompletedAttempt = completedAttempts[0] ?? null;
-  // Use backend attempt count as source of truth if provided, otherwise use local session count
   const attemptsUsed =
     typeof backendAttemptCount === "number" ? backendAttemptCount : completedAttempts.length;
   const hasUnlimitedAttempts = assignment.maxAttempts === null;
@@ -305,9 +304,6 @@ export function buildAssignmentConstraintState(
   const bestScore = completedAttempts.length
     ? Math.max(...completedAttempts.map((session) => getSessionScore(session)))
     : null;
-  // Priority: exhausted beats lingering in-progress sessions. Otherwise a
-  // forgotten session in localStorage would make a finished quiz read as
-  // "In Progress" even after the student has used every available attempt.
   const status: AssignmentProgressStatus = exhaustedAttempts
     ? "attempts_exhausted"
     : deadlinePassed && !hasOnTimeCompletion

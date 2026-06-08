@@ -1,4 +1,4 @@
-namespace Bilgenly.Application.DTOs;
+﻿namespace Bilgenly.Application.DTOs;
 
 public class NotificationDto
 {
@@ -12,7 +12,6 @@ public class NotificationDto
     public string ActionType { get; set; } = string.Empty;
     public string RelatedClassId { get; set; } = string.Empty;
     public string RelatedClassName { get; set; } = string.Empty;
-    public string? InviteCode { get; set; }
     public string SenderName { get; set; } = string.Empty;
     public string SenderEmail { get; set; } = string.Empty;
     public string StudentId { get; set; } = string.Empty;

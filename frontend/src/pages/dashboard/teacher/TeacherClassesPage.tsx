@@ -1,4 +1,4 @@
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
+﻿import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { Archive, BookOpen, Trash2, Users } from "../../../components/icons/AppIcons";
 import { toast } from "sonner";
 import {
@@ -59,6 +59,7 @@ export function TeacherClassesPage() {
     createClass,
     updateClass,
     setClassStatus,
+    regenerateInviteCode,
     addStudentsToClass,
     removeStudentFromClass,
     resendStudentInvite,
@@ -80,7 +81,12 @@ export function TeacherClassesPage() {
   const [statusFilter, setStatusFilter] = useState<"all" | TeacherClassStatus>("all");
   const [classPendingDelete, setClassPendingDelete] =
     useState<TeacherClassRecord | null>(null);
+  const [assignedQuizPendingRemove, setAssignedQuizPendingRemove] =
+    useState<TeacherClassAssignedQuiz | null>(null);
+  const [studentPendingRemove, setStudentPendingRemove] =
+    useState<TeacherClassStudent | null>(null);
   const [membershipFeedback, setMembershipFeedback] = useState<string | null>(null);
+  const [isRegeneratingInviteCode, setIsRegeneratingInviteCode] = useState(false);
   const deferredSearch = useDeferredValue(search);
 
   useEffect(() => {
@@ -196,35 +202,71 @@ export function TeacherClassesPage() {
     );
   };
 
-  const handleRemoveAssignedQuiz = async (quiz: TeacherClassAssignedQuiz) => {
-    if (!selectedClass || selectedClass.status !== "active") {
-      return;
-    }
+  const handleRemoveAssignedQuiz = (quiz: TeacherClassAssignedQuiz) => {
+    if (!selectedClass || selectedClass.status !== "active") return;
+    setAssignedQuizPendingRemove(quiz);
+  };
 
+  const confirmRemoveAssignedQuiz = async () => {
+    if (!assignedQuizPendingRemove || !selectedClass) return;
     try {
-      await removeQuizFromClass(selectedClass.id, quiz.assignmentId);
+      await removeQuizFromClass(selectedClass.id, assignedQuizPendingRemove.assignmentId);
       setMembershipFeedback(
-        `${quiz.title} is no longer visible to joined members of ${selectedClass.name}.`,
+        `${assignedQuizPendingRemove.title} is no longer visible to joined members of ${selectedClass.name}.`,
       );
+      setAssignedQuizPendingRemove(null);
     } catch (nextError) {
       toast.error(
-        nextError instanceof Error
-          ? nextError.message
-          : "Unable to remove assigned quiz.",
+        nextError instanceof Error ? nextError.message : "Unable to remove assigned quiz.",
       );
     }
   };
 
   const handleRemoveStudentFromClass = (student: TeacherClassStudent) => {
     if (!selectedClass || selectedClass.status !== "active") return;
-    removeStudentFromClass(selectedClass.id, student.id);
-    setMembershipFeedback(`${student.fullName} was removed from ${selectedClass.name}.`);
+    setStudentPendingRemove(student);
+  };
+
+  const confirmRemoveStudentFromClass = () => {
+    if (!studentPendingRemove || !selectedClass) return;
+    removeStudentFromClass(selectedClass.id, studentPendingRemove.id);
+    setMembershipFeedback(
+      `${studentPendingRemove.fullName} was removed from ${selectedClass.name}.`,
+    );
+    setStudentPendingRemove(null);
   };
 
   const handleResendStudentInvite = (student: TeacherClassStudent) => {
     if (!selectedClass || selectedClass.status !== "active") return;
     resendStudentInvite(selectedClass.id, student.id);
     setMembershipFeedback(`Class invite refreshed for ${student.fullName}.`);
+  };
+
+  const handleRegenerateInviteCode = async () => {
+    if (
+      !selectedClass ||
+      selectedClass.status !== "active" ||
+      isRegeneratingInviteCode
+    ) {
+      return;
+    }
+
+    try {
+      setIsRegeneratingInviteCode(true);
+      const updatedClass = await regenerateInviteCode(selectedClass.id);
+      setMembershipFeedback(
+        `New invite code for ${updatedClass.name}: ${updatedClass.inviteCode}. The previous code no longer works.`,
+      );
+      toast.success("Invite code regenerated. The previous code no longer works.");
+    } catch (nextError) {
+      toast.error(
+        nextError instanceof Error
+          ? nextError.message
+          : "Unable to regenerate the invite code.",
+      );
+    } finally {
+      setIsRegeneratingInviteCode(false);
+    }
   };
 
   const selectedClass =
@@ -425,6 +467,10 @@ export function TeacherClassesPage() {
           onOpenAssignQuiz={
             isSelectedClassActive ? () => setIsAssignQuizDialogOpen(true) : undefined
           }
+          onRegenerateInviteCode={
+            isSelectedClassActive ? handleRegenerateInviteCode : undefined
+          }
+          isRegeneratingInviteCode={isRegeneratingInviteCode}
           onRemoveAssignedQuiz={isSelectedClassActive ? handleRemoveAssignedQuiz : undefined}
           onRemoveStudent={isSelectedClassActive ? handleRemoveStudentFromClass : undefined}
           onResendStudentInvite={isSelectedClassActive ? handleResendStudentInvite : undefined}
@@ -508,6 +554,62 @@ export function TeacherClassesPage() {
             >
               <Trash2 className="mr-2 h-4 w-4" />
               Delete class
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={Boolean(assignedQuizPendingRemove)}
+        onOpenChange={(open) => {
+          if (!open) setAssignedQuizPendingRemove(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove assigned quiz?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {assignedQuizPendingRemove
+                ? `Remove "${assignedQuizPendingRemove.title}" from ${selectedClass?.name ?? "this class"}. Students will lose access immediately and any in-progress attempts may be affected. This cannot be undone.`
+                : "Remove this quiz from the class."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-[var(--dashboard-danger)] text-white hover:bg-[var(--dashboard-danger)]/90"
+              onClick={() => void confirmRemoveAssignedQuiz()}
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              Remove quiz
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={Boolean(studentPendingRemove)}
+        onOpenChange={(open) => {
+          if (!open) setStudentPendingRemove(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove student?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {studentPendingRemove
+                ? `Remove ${studentPendingRemove.fullName} from ${selectedClass?.name ?? "this class"}. They will lose access to all assigned quizzes for this class. This cannot be undone.`
+                : "Remove this student from the class."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-[var(--dashboard-danger)] text-white hover:bg-[var(--dashboard-danger)]/90"
+              onClick={confirmRemoveStudentFromClass}
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              Remove student
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

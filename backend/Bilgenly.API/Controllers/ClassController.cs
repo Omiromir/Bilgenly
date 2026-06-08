@@ -91,6 +91,19 @@ public class ClassController : ControllerBase
         await _classInvitationService.DeleteInvitationAsync(invitation);
         return Ok(new { message = "Invitation revoked" });
     }
+
+    [HttpDelete("{classId:guid}/invitations")]
+    [Authorize(Roles = "Teacher")]
+    public async Task<IActionResult> RevokeInvitationByEmail(Guid classId, [FromBody] RevokeClassInvitationDto dto)
+    {
+        if (dto is null || string.IsNullOrWhiteSpace(dto.Email))
+            return BadRequest(new { message = "Email is required" });
+
+        var teacherId = Guid.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+        var (success, error) = await _classInvitationService.RevokePendingByEmailAsync(classId, dto.Email, teacherId);
+        if (!success) return BadRequest(new { message = error });
+        return Ok(new { message = "Invitation revoked" });
+    }
     [HttpPost]
     [Authorize(Roles = "Teacher")]
     public async Task<IActionResult> CreateClass(CreateClassDto dto)
@@ -138,6 +151,16 @@ public class ClassController : ControllerBase
         return Ok(new { message = "Class archive status updated" });
     }
 
+    [HttpPost("{classId:guid}/regenerate-invite-code")]
+    [Authorize(Roles = "Teacher")]
+    public async Task<IActionResult> RegenerateInviteCode(Guid classId)
+    {
+        var teacherId = Guid.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+        var (result, error) = await _classService.RegenerateInviteCodeAsync(classId, teacherId);
+        if (result is null) return BadRequest(new { message = error });
+        return Ok(result);
+    }
+
     [HttpDelete("{classId}")]
     [Authorize(Roles = "Teacher")]
     public async Task<IActionResult> DeleteClass(Guid classId)
@@ -153,10 +176,34 @@ public class ClassController : ControllerBase
     public async Task<IActionResult> JoinClass([FromBody] JoinClassRequest dto)
     {
         var studentId = Guid.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
-        var (result, error) = await _classService.JoinClassAsync(dto.InviteCode, studentId); 
+        var (result, error) = await _classService.JoinClassAsync(dto.InviteCode, studentId);
         if (result is null) return BadRequest(new { message = error });
         return Ok(result);
     }
+
+    [HttpPost("{classId:guid}/accept-invitation")]
+    [Authorize(Roles = "Student")]
+    public async Task<IActionResult> AcceptInvitation(Guid classId)
+    {
+        var studentId = Guid.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+        var email = User.FindFirst(ClaimTypes.Email)?.Value ?? string.Empty;
+        var name = User.FindFirst(ClaimTypes.Name)?.Value ?? string.Empty;
+        var (result, error) = await _classService.AcceptInvitationAsync(classId, studentId, email, name);
+        if (result is null) return BadRequest(new { message = error });
+        return Ok(result);
+    }
+
+    [HttpPost("{classId:guid}/decline-invitation")]
+    [Authorize(Roles = "Student")]
+    public async Task<IActionResult> DeclineInvitation(Guid classId)
+    {
+        var email = User.FindFirst(ClaimTypes.Email)?.Value ?? string.Empty;
+        var name = User.FindFirst(ClaimTypes.Name)?.Value ?? string.Empty;
+        var (success, error) = await _classService.DeclineInvitationAsync(classId, email, name);
+        if (!success) return BadRequest(new { message = error });
+        return Ok(new { message = "Invitation declined" });
+    }
+
     [HttpDelete("{classId}/assignments/{assignmentId}")]
     [Authorize(Roles = "Teacher")]
     public async Task<IActionResult> RemoveAssignment(Guid classId, Guid assignmentId)
@@ -167,11 +214,6 @@ public class ClassController : ControllerBase
         return Ok(new { message = "Assignment removed" });
     }
 
-    /// <summary>
-    /// Grants one extra attempt to all students for the given assignment by
-    /// incrementing its MaxAttempts cap. If the assignment has no cap
-    /// (unlimited attempts) the endpoint returns a success with unlimited=true.
-    /// </summary>
     [HttpPatch("{classId}/assignments/{assignmentId}/grant-attempt")]
     [Authorize(Roles = "Teacher")]
     public async Task<IActionResult> GrantExtraAttempt(Guid classId, Guid assignmentId)

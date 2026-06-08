@@ -1,16 +1,4 @@
-/**
- * useStudyReminder
- *
- * Schedules a browser notification (and in-app toast fallback) for the user's
- * daily study reminder time.  Fires at most once per calendar day.
- *
- * How it works:
- *  1. On mount (or when reminderTime / auth changes), parse the target time.
- *  2. Set a setTimeout for "milliseconds until that time today".
- *  3. When the timer fires, show the notification and mark today as done in
- *     localStorage so we don't repeat until tomorrow.
- *  4. If the time has already passed today, skip until tomorrow.
- */
+﻿
 
 import { useEffect, useRef } from "react";
 import { toast } from "sonner";
@@ -18,7 +6,7 @@ import { getUserScopedStorageKey } from "../providers/userScopedStorage";
 
 const REMINDER_BASE_KEY = "bilgenly_reminder_last_shown";
 
-/** Parse "8:00 AM" / "10:00 PM" → ms from now (negative means already passed). */
+
 function msUntilTime(timeStr: string): number {
   const match = timeStr.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
   if (!match) return -1;
@@ -38,13 +26,13 @@ function msUntilTime(timeStr: string): number {
 }
 
 function todayKey(): string {
-  return new Date().toISOString().slice(0, 10); // "2026-05-21"
+  return new Date().toISOString().slice(0, 10);
 }
 
 function getReminderKey(userId?: string | null): string {
   return userId
     ? getUserScopedStorageKey(REMINDER_BASE_KEY, `user:${userId.trim().toLowerCase()}`)
-    : REMINDER_BASE_KEY; // fallback for unauthenticated edge cases
+    : REMINDER_BASE_KEY;
 }
 
 function alreadyShownToday(userId?: string | null): boolean {
@@ -59,17 +47,14 @@ function markShownToday(userId?: string | null): void {
   try {
     localStorage.setItem(getReminderKey(userId), todayKey());
   } catch {
-    /* ignore */
   }
 }
 
-// userId is passed through a ref so fireReminder() doesn't need it as a param
 let _currentUserId: string | null = null;
 
 async function fireReminder(): Promise<void> {
   markShownToday(_currentUserId);
 
-  // Try browser Notification API first
   if ("Notification" in window) {
     if (Notification.permission === "granted") {
       new Notification("⏰ Time to study!", {
@@ -93,7 +78,6 @@ async function fireReminder(): Promise<void> {
     }
   }
 
-  // Fallback: in-app toast
   toast("⏰ Time to study!", {
     description: "Your daily study reminder. Keep your streak going!",
     duration: 10_000,
@@ -119,7 +103,6 @@ export function useStudyReminder(
     const ms = msUntilTime(reminderTime);
 
     if (ms < 0) {
-      // Already passed today — schedule for tomorrow (same time = ms + 24h)
       const msUntilTomorrow = ms + 24 * 60 * 60 * 1000;
       timerRef.current = setTimeout(() => {
         void fireReminder();

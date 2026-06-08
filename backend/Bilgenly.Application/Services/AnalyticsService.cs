@@ -210,10 +210,6 @@ public class AnalyticsService
             .Where(cs => cs.Student != null)
             .ToList();
         var studentIds = students.Select(cs => cs.StudentId).ToHashSet();
-        // Scope to this assignment only — excludes attempts from a previous
-        // assignment that was removed and recreated for the same quiz.
-        // Attempts created before the AssignmentId field existed (null) are
-        // excluded so stale data from old assignments doesn't bleed through.
         var allAttempts = (await _attemptRepository.GetByQuizIdAsync(quiz.Id))
             .Where(a => studentIds.Contains(a.UserId) && a.AssignmentId == assignment.Id)
             .OrderByDescending(a => a.DateTaken)
@@ -281,6 +277,7 @@ public class AnalyticsService
                             CorrectAnswerId = correctAnswer?.Id,
                             CorrectAnswerText = correctAnswer?.Text,
                             IsCorrect = selectedAttemptAnswer?.IsCorrect ?? false,
+                            Tags = question.Tags ?? new(),
                             AnswerOptions = question.Answers
                                 .Select(answer => new MyAttemptAnswerOptionDto
                                 {

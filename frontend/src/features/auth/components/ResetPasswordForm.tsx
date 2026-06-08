@@ -1,4 +1,4 @@
-import { type FormEvent, useState } from "react";
+﻿import { type FormEvent, useState } from "react";
 import { Link } from "react-router";
 import { requestPasswordReset } from "../api";
 import type {
@@ -6,6 +6,7 @@ import type {
   ResetPasswordFormValues,
 } from "../types";
 import {
+  EMAIL_MAX_LENGTH,
   normalizeEmail,
   validateEmail,
   validateResetPasswordForm,
@@ -55,6 +56,7 @@ export function ResetPasswordForm() {
           className="auth-input"
           type="email"
           placeholder="you@example.com"
+          maxLength={EMAIL_MAX_LENGTH}
           value={values.email}
           onChange={(event) => {
             const nextEmail = event.target.value;

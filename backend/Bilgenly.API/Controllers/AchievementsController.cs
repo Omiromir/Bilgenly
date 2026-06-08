@@ -18,10 +18,10 @@ public class AchievementsController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetAchievements()
+    public async Task<IActionResult> GetAchievements([FromQuery] Guid? classId = null)
     {
         var studentId = Guid.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
-        var result = await _achievementsService.GetAchievementsAsync(studentId);
+        var result = await _achievementsService.GetAchievementsAsync(studentId, classId);
         return Ok(result);
     }
 }

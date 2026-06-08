@@ -1,4 +1,4 @@
-using Bilgenly.Application.DTOs;
+﻿using Bilgenly.Application.DTOs;
 using Bilgenly.Application.Interfaces;
 using Bilgenly.Domain.Entities;
 namespace Bilgenly.Application.Services;
@@ -38,6 +38,7 @@ public class QuizService
                 Points = q.Points > 0 ? q.Points : 1,
                 EstimatedMinutes = q.EstimatedMinutes > 0 ? q.EstimatedMinutes : 1,
                 ImageUrl = q.ImageUrl,
+                Tags = NormalizeTags(q.Tags),
                 Answers = q.Answers.Select(a => new Answer
                 {
                     Id = Guid.NewGuid(),
@@ -53,11 +54,16 @@ public class QuizService
         return MapToDto(quiz, username);
     }
 
-    public async Task<QuizDto?> GetQuizAsync(Guid id)
+    public async Task<QuizDto?> GetQuizAsync(Guid id, Guid? requesterId = null, string? requesterRole = null)
     {
         var quiz = await _quizRepository.GetByIdAsync(id);
         if (quiz is null) return null;
-        return MapToDto(quiz, quiz.User?.Username ?? "Unknown");
+
+        var isOwner = requesterId.HasValue && quiz.UserId == requesterId.Value;
+        var isPrivileged = requesterRole == "Teacher" || requesterRole == "Moderator";
+        var includeAnswerKey = isOwner || isPrivileged || quiz.IsPublic;
+
+        return MapToDto(quiz, quiz.User?.Username ?? "Unknown", includeAnswerKey);
     }
 
     public async Task<IEnumerable<QuizDto>> GetPublicQuizzesAsync()
@@ -86,9 +92,6 @@ public class QuizService
     public async Task<(QuizDto? Result, string? Error)> UpdateQuizAsync(
         Guid quizId, UpdateQuizDto dto, Guid userId)
     {
-        // Load quiz WITHOUT questions so EF Core never tracks the old Question
-        // entities. Bypassing the navigation collection prevents EF Core from
-        // re-attaching detached entities during SaveChanges graph walk.
         var quiz = await _quizRepository.GetByIdShallowAsync(quizId);
         if (quiz is null) return (null, "Quiz not found");
         if (quiz.UserId != userId) return (null, "Access denied");
@@ -106,20 +109,10 @@ public class QuizService
         quiz.Description = dto.Description.Trim();
         quiz.IsPublic = dto.IsPublic;
 
-        // Delete all attempts for this quiz before replacing its questions.
-        // Attempt rows carry AttemptAnswer FKs that point to the old Question/Answer
-        // GUIDs. Once DeleteQuizQuestionsAsync runs, those GUIDs no longer exist and
-        // the DB cascade would silently destroy the AttemptAnswer rows anyway —
-        // leaving Attempt shells with no answer data and broken analytics.
-        // Explicitly removing attempts first keeps the data consistent and ensures
-        // analytics starts clean after a quiz edit.
         await _attemptRepository.DeleteByQuizIdAsync(quizId);
 
-        // Wipe existing questions/answers via raw SQL (no EF change tracker involved).
         await _quizRepository.DeleteQuizQuestionsAsync(quizId);
 
-        // Build and insert new questions directly into the DbSet — never assign
-        // to quiz.Questions so EF Core graph walk never sees the old entities.
         var newQuestions = new List<Question>();
         for (var i = 0; i < dto.Questions.Count; i++)
         {
@@ -135,6 +128,7 @@ public class QuizService
                 Points = q.Points > 0 ? q.Points : 1,
                 EstimatedMinutes = q.EstimatedMinutes > 0 ? q.EstimatedMinutes : 1,
                 ImageUrl = q.ImageUrl,
+                Tags = NormalizeTags(q.Tags),
                 Answers = q.Answers.Select(a => new Answer
                 {
                     Id = Guid.NewGuid(),
@@ -147,13 +141,19 @@ public class QuizService
         await _quizRepository.AddQuestionsRangeAsync(newQuestions);
         await _quizRepository.SaveChangesAsync();
 
-        // Build DTO from what we already have — no second query needed.
         quiz.Questions = newQuestions;
         var username = quiz.User?.Username ?? "";
         return (MapToDto(quiz, username), null);
     }
 
-    private QuizDto MapToDto(Quiz quiz, string username) => new()
+    private static List<string> NormalizeTags(IEnumerable<string>? tags) =>
+        (tags ?? Enumerable.Empty<string>())
+            .Select(tag => tag?.Trim() ?? string.Empty)
+            .Where(tag => tag.Length > 0)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+    private QuizDto MapToDto(Quiz quiz, string username, bool includeAnswerKey = true) => new()
     {
         Id = quiz.Id,
         Title = quiz.Title,
@@ -171,11 +171,12 @@ public class QuizService
             Points = q.Points,
             EstimatedMinutes = q.EstimatedMinutes,
             ImageUrl = q.ImageUrl,
+            Tags = q.Tags ?? new(),
             Answers = q.Answers.Select(a => new AnswerDto
             {
                 Id = a.Id,
                 Text = a.Text,
-                IsCorrect = a.IsCorrect,
+                IsCorrect = includeAnswerKey && a.IsCorrect,
             }).ToList()
         }).OrderBy(q => q.Position).ToList()
     };

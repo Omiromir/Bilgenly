@@ -1,4 +1,4 @@
-import { useDeferredValue, useMemo, useState } from "react";
+﻿import { useCallback, useDeferredValue, useMemo, useState } from "react";
 import { Link } from "react-router";
 import {
   Award,
@@ -29,6 +29,13 @@ import {
   dashboardPageClassName,
   dashboardStatsGridClassName,
 } from "../../../features/dashboard/components/DashboardPrimitives";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../../../components/ui/select";
 import { EmptyStateBlock } from "../../../features/dashboard/components/EmptyStateBlock";
 import { SectionCard } from "../../../features/dashboard/components/SectionCard";
 import { StatCard } from "../../../features/dashboard/components/StatCard";
@@ -78,6 +85,7 @@ export function StudentResultsPage() {
   const completedSessions = getCompletedSessionsForRole("student");
   const isLoading = analyticsState.isLoading || attemptsLoading;
   const [search, setSearch] = useState("");
+  const [classFilter, setClassFilter] = useState<string>("all");
   const deferredSearch = useDeferredValue(search);
   const attemptSummaries = analyticsState.data?.attempts ?? [];
   const completedAttempts = useMemo(
@@ -91,11 +99,7 @@ export function StudentResultsPage() {
     [attempts],
   );
 
-  /**
-   * Look up `maxAttempts` for each assignment from the classes provider.
-   * Needed so we can decide whether the detailed review is locked for an
-   * assigned-quiz result row.
-   */
+  
   const assignmentMaxAttemptsById = useMemo(() => {
     const map = new Map<string, number | null>();
     for (const teacherClass of classes) {
@@ -106,10 +110,7 @@ export function StudentResultsPage() {
     return map;
   }, [classes]);
 
-  /**
-   * Count completed attempts per assignment. Used to compute whether the
-   * student has exhausted their attempts for a given assignment.
-   */
+  
   const completedAttemptsByAssignmentId = useMemo(() => {
     const map = new Map<string, number>();
     for (const attempt of completedAttempts) {
@@ -119,9 +120,6 @@ export function StudentResultsPage() {
     return map;
   }, [completedAttempts]);
 
-  // Map backendAttemptId → points-based percentage from local session.
-  // Used to override the backend's (correctAnswers/totalQuestions)-based score
-  // with the accurate (earnedPoints/totalPoints)-based score wherever possible.
   const sessionPercentageByAttemptId = useMemo(() => {
     const map = new Map<string, number>();
     for (const session of completedSessions) {
@@ -132,8 +130,57 @@ export function StudentResultsPage() {
     return map;
   }, [completedSessions]);
 
+  const classByAssignmentId = useMemo(() => {
+    const map = new Map<string, { id: string; name: string }>();
+    for (const teacherClass of classes) {
+      for (const assignment of teacherClass.assignedQuizzes) {
+        map.set(assignment.assignmentId, { id: teacherClass.id, name: teacherClass.name });
+      }
+    }
+    return map;
+  }, [classes]);
+
+  const classIdByAttemptId = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const attempt of completedAttempts) {
+      if (!attempt.assignmentId) continue;
+      const cls = classByAssignmentId.get(attempt.assignmentId);
+      if (cls) map.set(attempt.id, cls.id);
+    }
+    return map;
+  }, [completedAttempts, classByAssignmentId]);
+
+  const classFilterOptions = useMemo(() => {
+    const seen = new Map<string, string>();
+    for (const attempt of completedAttempts) {
+      if (!attempt.assignmentId) continue;
+      const cls = classByAssignmentId.get(attempt.assignmentId);
+      if (cls && !seen.has(cls.id)) seen.set(cls.id, cls.name);
+    }
+    return Array.from(seen, ([id, name]) => ({ id, name }));
+  }, [completedAttempts, classByAssignmentId]);
+
+  const effectiveClassFilter =
+    classFilter === "all" || classFilterOptions.some((option) => option.id === classFilter)
+      ? classFilter
+      : "all";
+
+  const matchesClassFilter = useCallback(
+    (attemptId: string) => {
+      if (effectiveClassFilter === "all") return true;
+      return classIdByAttemptId.get(attemptId) === effectiveClassFilter;
+    },
+    [effectiveClassFilter, classIdByAttemptId],
+  );
+
+  const filteredAttemptSummaries = useMemo(
+    () => attemptSummaries.filter((attempt) => matchesClassFilter(attempt.attemptId)),
+    [attemptSummaries, matchesClassFilter],
+  );
+
   const summary = useMemo(() => {
-    if (!attemptSummaries.length) {
+    const summaries = filteredAttemptSummaries;
+    if (!summaries.length) {
       return [
         {
           label: "Average Score",
@@ -158,9 +205,7 @@ export function StudentResultsPage() {
       ];
     }
 
-    // Prefer session-based percentage (points-accurate) over backend score
-    // (which uses correctAnswers/totalQuestions instead of earnedPoints/totalPoints).
-    const percentages = attemptSummaries.map((attempt) =>
+    const percentages = summaries.map((attempt) =>
       sessionPercentageByAttemptId.get(attempt.attemptId) ?? attempt.score,
     );
     const latestScore = percentages[0];
@@ -168,9 +213,6 @@ export function StudentResultsPage() {
       percentages.reduce((sum, p) => sum + p, 0) / percentages.length,
     );
 
-    // Best score: pick the actual attempt to also surface which quiz/when —
-    // a bare lifetime max becomes meaningless once a student has ever scored
-    // 100% on any quiz (it just sits there forever with no context).
     let bestScore = percentages[0];
     let bestAttemptIndex = 0;
     for (let i = 1; i < percentages.length; i += 1) {
@@ -179,8 +221,8 @@ export function StudentResultsPage() {
         bestAttemptIndex = i;
       }
     }
-    const bestAttempt = attemptSummaries[bestAttemptIndex];
-    const completedCount = attemptSummaries.length;
+    const bestAttempt = summaries[bestAttemptIndex];
+    const completedCount = summaries.length;
 
     return [
       {
@@ -196,8 +238,6 @@ export function StudentResultsPage() {
       {
         label: "Best Score",
         value: formatQuizScore(bestScore),
-        // Show the quiz title + date so it's clear WHERE the personal best
-        // came from, instead of a fossilised lifetime number with no context.
         note: bestAttempt
           ? `${bestAttempt.quizTitle} · ${formatQuizAttemptDate(bestAttempt.dateTaken)}`
           : bestScore === 100
@@ -207,14 +247,14 @@ export function StudentResultsPage() {
       {
         label: "Latest Score",
         value: formatQuizScore(latestScore),
-        note: `Recorded ${formatQuizAttemptDate(attemptSummaries[0]?.dateTaken ?? new Date().toISOString())}`,
+        note: `Recorded ${formatQuizAttemptDate(summaries[0]?.dateTaken ?? new Date().toISOString())}`,
       },
     ];
-  }, [attemptSummaries, sessionPercentageByAttemptId]);
+  }, [filteredAttemptSummaries, sessionPercentageByAttemptId]);
 
   const progressData = useMemo(
     () =>
-      attemptSummaries
+      filteredAttemptSummaries
         .slice(0, 10)
         .reverse()
         .map((attempt, index) => ({
@@ -223,7 +263,7 @@ export function StudentResultsPage() {
           quizTitle: attempt.quizTitle,
           date: attempt.dateTaken ? new Date(attempt.dateTaken).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "",
         })),
-    [attemptSummaries, sessionPercentageByAttemptId],
+    [filteredAttemptSummaries, sessionPercentageByAttemptId],
   );
 
   const recentResults = useMemo(
@@ -232,6 +272,10 @@ export function StudentResultsPage() {
 
       return completedAttempts
         .filter((attempt) => {
+          if (!matchesClassFilter(attempt.id)) {
+            return false;
+          }
+
           const query = deferredSearch.trim().toLowerCase();
 
           if (!query) {
@@ -264,18 +308,9 @@ export function StudentResultsPage() {
                 correctCount: attempt.correctAnswers,
                 incorrectCount: Math.max(attempt.totalQuestions - attempt.correctAnswers, 0),
                 totalQuestions: attempt.totalQuestions,
-                // Use correct/total as a reasonable proxy when the local session
-                // is not available (e.g. after a hard refresh or on a new device).
-                // This keeps the Score row visible so the user sees meaningful data.
                 earnedPoints: attempt.correctAnswers,
                 totalPoints: attempt.totalQuestions,
               };
-          const hasDetailedReview =
-            Boolean(matchedSession) || attempt.questions.length > 0;
-
-          // Detailed review for assigned quizzes is locked until the student
-          // has used all attempts. For self-practice quizzes the review is
-          // always open.
           const assignmentId =
             matchedSession?.assignmentContext?.assignmentId ?? attempt.assignmentId ?? null;
           const isAssigned = Boolean(assignmentId);
@@ -294,6 +329,11 @@ export function StudentResultsPage() {
             hasInProgressAttempt: false,
           });
           const reviewUnlocked = reviewPolicy.showDetailedReview;
+
+          const hasDetailedReview =
+            Boolean(matchedSession) ||
+            attempt.questions.length > 0 ||
+            (isAssigned && !reviewUnlocked);
 
           return {
             attempt,
@@ -317,8 +357,10 @@ export function StudentResultsPage() {
           };
         });
     },
-    [completedAttempts, completedSessions, deferredSearch],
+    [completedAttempts, completedSessions, deferredSearch, matchesClassFilter],
   );
+
+  const isFiltering = Boolean(search.trim()) || effectiveClassFilter !== "all";
 
   if ((analyticsState.error || attemptsError) && !completedAttempts.length) {
     return (
@@ -344,6 +386,30 @@ export function StudentResultsPage() {
         title={meta?.title ?? "My Results"}
         subtitle="Track real quiz attempts, review what you missed, and jump back into practice from one place."
       />
+
+      {classFilterOptions.length > 0 ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-[18px] border border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-elevated)] px-4 py-3">
+          <div>
+            <p className="text-sm font-semibold text-[var(--dashboard-text-strong)]">Filter by class</p>
+            <p className="text-xs text-[var(--dashboard-text-soft)]">
+              Scope your scores, trend, and recent results to a single class.
+            </p>
+          </div>
+          <Select value={effectiveClassFilter} onValueChange={setClassFilter}>
+            <SelectTrigger className="min-w-[200px]" aria-label="Filter results by class">
+              <SelectValue placeholder="All classes" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All classes</SelectItem>
+              {classFilterOptions.map((option) => (
+                <SelectItem key={option.id} value={option.id}>
+                  {option.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      ) : null}
 
       <div className={dashboardStatsGridClassName}>
         {isLoading
@@ -382,7 +448,7 @@ export function StudentResultsPage() {
           <div className="h-[300px] animate-pulse rounded-2xl bg-[var(--dashboard-surface-muted)]" />
         ) : progressData.length ? (
           <>
-            {/* Score band legend */}
+            
             <div className="mb-4 flex items-center gap-4 text-xs text-[var(--dashboard-text-faint)]">
               <span className="flex items-center gap-1.5">
                 <span className="inline-block h-2.5 w-2.5 rounded-full bg-emerald-500" />
@@ -406,10 +472,10 @@ export function StudentResultsPage() {
                       <stop offset="0%" stopColor="#6366f1" stopOpacity={0.35} />
                       <stop offset="100%" stopColor="#6366f1" stopOpacity={0.02} />
                     </linearGradient>
-                    {/* Reference zones via stop colours */}
+                    
                   </defs>
 
-                  {/* Horizontal reference bands */}
+                  
                   <CartesianGrid stroke="var(--dashboard-border-soft)" strokeDasharray="4 4" vertical={false} />
 
                   <XAxis
@@ -453,7 +519,7 @@ export function StudentResultsPage() {
                               {grade}
                             </span>
                           </div>
-                          {/* Mini progress bar */}
+                          
                           <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-[var(--dashboard-border-soft)]">
                             <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: color }} />
                           </div>
@@ -638,14 +704,14 @@ export function StudentResultsPage() {
         ) : (
           <div className="rounded-[18px] border border-dashed border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-muted)] px-5 py-6">
             <p className="font-semibold text-[var(--dashboard-text-strong)]">
-              {search.trim() ? "No quiz results match this search" : "No completed quiz attempts yet"}
+              {isFiltering ? "No quiz results match your filters" : "No completed quiz attempts yet"}
             </p>
             <p className="mt-2 text-sm leading-6 text-[var(--dashboard-text-soft)]">
-              {search.trim()
-                ? "Try a different title, topic, or source keyword to find the result you need."
+              {isFiltering
+                ? "Try a different class or search keyword to find the result you need."
                 : "Start a quiz from your library or classes, finish it, and the full results history will appear here."}
             </p>
-            {!search.trim() ? (
+            {!isFiltering ? (
               <DashboardButton asChild type="button" size="lg" className="mt-5">
                 <Link to="/dashboard/student/quiz-library">Open Quiz Library</Link>
               </DashboardButton>

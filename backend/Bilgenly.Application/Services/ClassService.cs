@@ -9,12 +9,53 @@ public class ClassService
     private readonly IClassRepository _classRepository;
     private readonly IQuizRepository _quizRepository;
     private readonly IClassInvitationRepository _invitationRepository;
+    private readonly INotificationRepository _notificationRepository;
+    private readonly IUserRepository _userRepository;
 
-    public ClassService(IClassRepository classRepository, IQuizRepository quizRepository, IClassInvitationRepository invitationRepository)
+    public ClassService(
+        IClassRepository classRepository,
+        IQuizRepository quizRepository,
+        IClassInvitationRepository invitationRepository,
+        INotificationRepository notificationRepository,
+        IUserRepository userRepository)
     {
         _classRepository = classRepository;
         _quizRepository = quizRepository;
         _invitationRepository = invitationRepository;
+        _notificationRepository = notificationRepository;
+        _userRepository = userRepository;
+    }
+
+    private async Task NotifyTeacherOfInvitationResponseAsync(
+        Class classEntity, string studentName, string studentEmail, string status)
+    {
+        var teacher = await _userRepository.GetByIdAsync(classEntity.TeacherId);
+        var verb = status == "accepted" ? "accepted" : "declined";
+        var displayName = string.IsNullOrWhiteSpace(studentName) ? studentEmail : studentName;
+
+        var notification = new Notification
+        {
+            Id = Guid.NewGuid(),
+            Type = "invitation_response",
+            RecipientUserId = classEntity.TeacherId,
+            RecipientEmail = teacher?.Email ?? string.Empty,
+            Title = $"Invitation {verb}",
+            Message = $"{displayName} {verb} your invitation to join {classEntity.Name}.",
+            ActionType = string.Empty,
+            RelatedClassId = classEntity.Id.ToString(),
+            RelatedClassName = classEntity.Name,
+            SenderName = displayName,
+            SenderEmail = studentEmail,
+            StudentName = displayName,
+            StudentEmail = studentEmail,
+            Status = status,
+            Read = false,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow,
+        };
+
+        await _notificationRepository.AddAsync(notification);
+        await _notificationRepository.SaveChangesAsync();
     }
 
     private static string GenerateInviteCode()
@@ -50,7 +91,6 @@ public class ClassService
     {
         var classes = (await _classRepository.GetByTeacherIdAsync(teacherId)).ToList();
 
-        // Load pending invitations sequentially — DbContext is not thread-safe
         var invitationsByClassId = new Dictionary<Guid, IEnumerable<ClassInvitation>>();
         foreach (var c in classes)
             invitationsByClassId[c.Id] = await _invitationRepository.GetByClassIdAsync(c.Id);
@@ -87,6 +127,31 @@ public class ClassService
         classEntity.Name = dto.Name;
         classEntity.Subject = dto.Subject;
         classEntity.Description = dto.Description;
+        classEntity.UpdatedAt = DateTime.UtcNow;
+
+        await _classRepository.SaveChangesAsync();
+        var refreshedClass = await _classRepository.GetByIdAsync(classEntity.Id);
+        return (MapToDto(refreshedClass ?? classEntity), null);
+    }
+
+    public async Task<(ClassDto? Result, string? Error)> RegenerateInviteCodeAsync(
+        Guid classId, Guid teacherId)
+    {
+        var classEntity = await _classRepository.GetByIdAsync(classId);
+        if (classEntity is null) return (null, "Class not found");
+        if (classEntity.TeacherId != teacherId) return (null, "Access denied");
+        if (classEntity.IsArchived)
+            return (null, "Cannot rotate the invite code of an archived class");
+
+        var newCode = GenerateInviteCode();
+        for (var attempt = 0; attempt < 10; attempt++)
+        {
+            var existing = await _classRepository.GetByInviteCodeAsync(newCode);
+            if (existing is null || existing.Id == classEntity.Id) break;
+            newCode = GenerateInviteCode();
+        }
+
+        classEntity.InviteCode = newCode;
         classEntity.UpdatedAt = DateTime.UtcNow;
 
         await _classRepository.SaveChangesAsync();
@@ -160,6 +225,77 @@ public class ClassService
         await _classRepository.SaveChangesAsync();
         return (MapToDto(classEntity), null);
     }
+
+    public async Task<(ClassDto? Result, string? Error)> AcceptInvitationAsync(
+        Guid classId, Guid studentId, string studentEmail, string studentName = "")
+    {
+        var classEntity = await _classRepository.GetByIdAsync(classId);
+        if (classEntity is null) return (null, "Class not found");
+        if (classEntity.IsArchived) return (null, "Class is archived");
+
+        var invitation = await _invitationRepository.GetPendingAsync(classId, studentEmail);
+        var alreadyJoined = classEntity.ClassStudents.Any(cs => cs.StudentId == studentId);
+
+        if (invitation is null)
+        {
+            return alreadyJoined
+                ? (MapToDto(classEntity), null)
+                : (null, "No pending invitation for your account in this class.");
+        }
+
+        if (!alreadyJoined)
+        {
+            classEntity.ClassStudents.Add(new ClassStudent
+            {
+                ClassId = classEntity.Id,
+                StudentId = studentId,
+                JoinedAt = DateTime.UtcNow
+            });
+            classEntity.UpdatedAt = DateTime.UtcNow;
+        }
+
+        invitation.Status = "accepted";
+        invitation.RespondedAt = DateTime.UtcNow;
+
+        await _classRepository.SaveChangesAsync();
+
+        try
+        {
+            await NotifyTeacherOfInvitationResponseAsync(
+                classEntity, studentName, studentEmail, "accepted");
+        }
+        catch
+        {
+        }
+
+        return (MapToDto(classEntity), null);
+    }
+
+    public async Task<(bool Success, string? Error)> DeclineInvitationAsync(
+        Guid classId, string studentEmail, string studentName = "")
+    {
+        var classEntity = await _classRepository.GetByIdAsync(classId);
+        if (classEntity is null) return (false, "Class not found");
+
+        var invitation = await _invitationRepository.GetPendingAsync(classId, studentEmail);
+        if (invitation is null) return (true, null);
+
+        invitation.Status = "declined";
+        invitation.RespondedAt = DateTime.UtcNow;
+        await _invitationRepository.SaveChangesAsync();
+
+        try
+        {
+            await NotifyTeacherOfInvitationResponseAsync(
+                classEntity, studentName, studentEmail, "declined");
+        }
+        catch
+        {
+        }
+
+        return (true, null);
+    }
+
     public async Task<(AssignmentDto? Result, string? Error)> AssignQuizAsync(
         Guid classId, AssignQuizDto dto, Guid teacherId, string teacherName)
     {
@@ -214,11 +350,6 @@ public class ClassService
         return (true, null);
     }
 
-    /// <summary>
-    /// Increments the MaxAttempts cap on an assignment by one, giving every
-    /// student in the class one extra opportunity to retake the quiz.
-    /// If MaxAttempts was null (unlimited), it stays unlimited.
-    /// </summary>
     public async Task<(int? NewMaxAttempts, string? Error)> GrantExtraAttemptAsync(
         Guid classId, Guid assignmentId, Guid teacherId)
     {
@@ -229,9 +360,8 @@ public class ClassService
         var assignment = classEntity.Assignments.FirstOrDefault(a => a.Id == assignmentId);
         if (assignment is null) return (null, "Assignment not found");
 
-        // If attempts are already unlimited, there is nothing to grant.
         if (assignment.MaxAttempts is null)
-            return (null, null); // success — unlimited means student can always retry
+            return (null, null);
 
         assignment.MaxAttempts += 1;
         await _classRepository.SaveChangesAsync();

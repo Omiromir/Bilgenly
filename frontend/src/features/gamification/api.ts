@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+﻿import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "../../app/providers/AuthProvider";
 import { apiRequest, getRequestErrorMessage } from "../../lib/apiClient";
 
@@ -30,22 +30,22 @@ export interface AchievementsDto {
   leaderboard: LeaderboardEntryDto[];
 }
 
-export function getAchievements() {
-  return apiRequest<AchievementsDto>("/api/achievements", {
+export function getAchievements(classId?: string) {
+  const url = classId
+    ? `/api/achievements?classId=${encodeURIComponent(classId)}`
+    : "/api/achievements";
+  return apiRequest<AchievementsDto>(url, {
     fallbackErrorMessage: "Unable to load achievements.",
   });
 }
 
-// React Query hook — result is shared across StudentBadgesPage and useProfile.
-// Navigating between either page within the stale window hits the in-memory
-// cache instantly instead of issuing a second network request.
-export function useAchievementsQuery() {
+export function useAchievementsQuery(classId?: string) {
   const { currentUser, token, role } = useAuth();
   const userId = currentUser?.id ?? null;
 
   const query = useQuery({
-    queryKey: ["achievements", userId],
-    queryFn: getAchievements,
+    queryKey: ["achievements", userId, classId ?? "all"],
+    queryFn: () => getAchievements(classId),
     enabled: role === "student" && Boolean(token && userId),
     staleTime: 2 * 60 * 1000,
     retry: 1,

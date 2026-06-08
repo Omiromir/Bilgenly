@@ -1,4 +1,4 @@
-import { apiRequest, getRequestErrorMessage } from "../../lib/apiClient";
+﻿import { apiRequest, getRequestErrorMessage } from "../../lib/apiClient";
 import type {
   AuthResponse,
   CompleteRegistrationPayload,
@@ -49,6 +49,28 @@ export async function signIn(data: SignInFormValues & { rememberMe: boolean }) {
     return result;
   } catch (error) {
     throw new Error(getRequestErrorMessage(error, "Login failed"));
+  }
+}
+
+export async function checkEmailAvailability(email: string): Promise<void> {
+  try {
+    await apiRequest<void>("/api/auth/check-email", {
+      method: "POST",
+      body: { email },
+      skipAuth: true,
+      fallbackErrorMessage: "Unable to check email availability",
+    });
+  } catch (error) {
+    const message = getRequestErrorMessage(error, "");
+    const lower = message.toLowerCase();
+    if (
+      lower.includes("taken") ||
+      lower.includes("exist") ||
+      lower.includes("registered") ||
+      lower.includes("already")
+    ) {
+      throw new Error(message);
+    }
   }
 }
 

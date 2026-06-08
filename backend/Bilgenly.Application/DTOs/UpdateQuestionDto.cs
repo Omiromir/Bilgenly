@@ -8,4 +8,5 @@ public class UpdateQuestionDto
     public string Explanation { get; set; } = string.Empty;
     public int Position { get; set; }
     public List<UpdateAnswerDto> Answers { get; set; } = new();
+    public List<string> Tags { get; set; } = new();
 }

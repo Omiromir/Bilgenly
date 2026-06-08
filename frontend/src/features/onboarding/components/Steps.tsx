@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect, type Dispatch, type SetStateAction } from "react";
+﻿import { useRef, useState, useEffect, type Dispatch, type SetStateAction } from "react";
 import logoPng from "../../../assets/logo.png";
 import {
   experienceOptions,
@@ -26,7 +26,6 @@ interface LoadingStepProps {
   loadingPct: number;
 }
 
-// Auto-advancing choice list — selects then advances after brief delay
 function ChoiceList({
   options,
   selectedValue,
@@ -164,7 +163,6 @@ function TimePickerDropdown({
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
 
-  // Close on outside click
   useEffect(() => {
     if (!open) return;
     const handler = (e: MouseEvent) => {
@@ -176,7 +174,6 @@ function TimePickerDropdown({
     return () => document.removeEventListener("mousedown", handler);
   }, [open]);
 
-  // Scroll selected item into view when opening
   const listRef = useRef<HTMLUListElement>(null);
   useEffect(() => {
     if (open && listRef.current) {
@@ -192,7 +189,7 @@ function TimePickerDropdown({
       ref={wrapRef}
       style={{ position: "relative", display: "inline-block" }}
     >
-      {/* Trigger button */}
+      
       <button
         type="button"
         className="ob-reminder-select-wrap"
@@ -211,7 +208,7 @@ function TimePickerDropdown({
         </svg>
       </button>
 
-      {/* Dropdown list — always opens upward */}
+      
       {open && (
         <ul
           ref={listRef}
@@ -225,8 +222,8 @@ function TimePickerDropdown({
             minWidth: 180,
             maxHeight: 260,
             overflowY: "auto",
-            background: "#fff",
-            border: "1.5px solid #E5E7EB",
+            background: "var(--card)",
+            border: "1.5px solid var(--border)",
             borderRadius: 14,
             boxShadow: "0 8px 32px rgba(0,0,0,0.13)",
             padding: "6px 0",
@@ -247,13 +244,13 @@ function TimePickerDropdown({
                   padding: "9px 18px",
                   fontSize: 14,
                   fontWeight: isSelected ? 700 : 500,
-                  color: isSelected ? "#4F46E5" : "#111827",
-                  background: isSelected ? "#EEF2FF" : "transparent",
+                  color: isSelected ? "#4F46E5" : "var(--foreground)",
+                  background: isSelected ? "rgba(79, 70, 229, 0.15)" : "transparent",
                   cursor: "pointer",
                   transition: "background 0.1s",
                 }}
                 onMouseEnter={(e) => {
-                  if (!isSelected) (e.currentTarget as HTMLElement).style.background = "#F5F3FF";
+                  if (!isSelected) (e.currentTarget as HTMLElement).style.background = "rgba(79, 70, 229, 0.08)";
                 }}
                 onMouseLeave={(e) => {
                   if (!isSelected) (e.currentTarget as HTMLElement).style.background = "transparent";
@@ -312,11 +309,12 @@ export function LoadingStep({ loadingPct: _ }: LoadingStepProps) {
 
 interface RecommendationsStepProps {
   onContinue: () => void;
+  onExit?: () => void;
   isLoading?: boolean;
   error?: string | null;
 }
 
-export function RecommendationsStep({ onContinue, isLoading, error }: RecommendationsStepProps) {
+export function RecommendationsStep({ onContinue, onExit, isLoading, error }: RecommendationsStepProps) {
   return (
     <div className="ob-done-wrap">
       <div className="ob-done-icon">🎉</div>
@@ -334,6 +332,17 @@ export function RecommendationsStep({ onContinue, isLoading, error }: Recommenda
       >
         {isLoading ? "Creating account…" : "Go to my dashboard"}
       </button>
+      
+      {error && onExit && (
+        <button
+          className="ob-btn-secondary"
+          type="button"
+          onClick={onExit}
+          disabled={isLoading}
+        >
+          Back to sign in
+        </button>
+      )}
     </div>
   );
 }

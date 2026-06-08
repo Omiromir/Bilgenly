@@ -1,30 +1,17 @@
-/**
- * Feedback policy for quiz attempts.
- *
- * In assigned quizzes a student shouldn't see correct answers until they've
- * burned through every attempt — otherwise a 3-attempt assignment is really a
- * 1-attempt assignment with two retries against a known answer key.
- *
- * Self-practice (no assignment context) is unchanged: feedback is always
- * immediate, because the point of practice is to learn from each question
- * right away.
- *
- * Teachers reviewing a student's attempt always see the answer key — they
- * already know it.
- */
+﻿
 
 import type { QuizSessionSourceType } from "./quizSessionTypes";
 
 export interface FeedbackPolicy {
-  /** Show the green "Correct answer" highlight on the option immediately after submit. */
+  
   showImmediateCorrectAnswer: boolean;
-  /** Show the explanation panel after each question during the quiz. */
+  
   showImmediateExplanation: boolean;
-  /** Show the full per-question review (Your answer / Correct answer / Explanation) after the quiz ends. */
+  
   showDetailedReview: boolean;
-  /** Show only the score summary, no per-question review. */
+  
   showSummaryOnly: boolean;
-  /** Reason the policy is locked, surfaced in the UI when review is hidden. */
+  
   lockReason: string | null;
 }
 
@@ -68,16 +55,7 @@ const LOCKED_POLICY = (
   };
 };
 
-/**
- * Resolve the feedback policy for a quiz attempt.
- *
- * Rules:
- * - Teachers always see everything (`OPEN_POLICY`).
- * - Self-practice (not assigned) always gets `OPEN_POLICY`.
- * - Assigned quiz with unlimited attempts (`maxAttempts == null`) keeps `OPEN_POLICY`,
- *   since there's no "final attempt" to gate on.
- * - Assigned quiz with a finite cap: locked until `attemptsUsed >= maxAttempts`.
- */
+
 export function getQuizFeedbackPolicy(input: FeedbackPolicyInput): FeedbackPolicy {
   if (input.viewerRole !== "student") {
     return OPEN_POLICY;
@@ -92,7 +70,6 @@ export function getQuizFeedbackPolicy(input: FeedbackPolicyInput): FeedbackPolic
       ? input.maxAttempts
       : null;
 
-  // Unlimited attempts → no meaningful "final attempt", treat as open.
   if (max === null) {
     return OPEN_POLICY;
   }

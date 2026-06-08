@@ -1,4 +1,4 @@
-import type { QuizRecord } from "../../dashboard/components/quiz-library/quizLibraryTypes";
+﻿import type { QuizRecord } from "../../dashboard/components/quiz-library/quizLibraryTypes";
 import type { QuizSessionRecord } from "../quizSessionTypes";
 import type {
   MyAttemptDto,
@@ -31,11 +31,6 @@ export function mergeQuizWithStartedAttempt(
       .map((backendQuestion) => {
         const existingQuestion = questionById.get(backendQuestion.id);
 
-        // CRITICAL: the backend may return `answers` in a different order than
-        // the cached `existingQuestion.options` (e.g. shuffled per-attempt).
-        // Carrying over the cached `correctIndexes` verbatim would then point
-        // at the WRONG options. Re-resolve correctness by stable option ID
-        // (falling back to text), then map back to indexes in the NEW order.
         const cachedCorrectPositions =
           existingQuestion?.selectionMode === "multiple" &&
           existingQuestion.correctIndexes?.length
@@ -61,9 +56,6 @@ export function mergeQuizWithStartedAttempt(
           )
           .filter((index) => index >= 0);
 
-        // Defensive: if remapping yields nothing (e.g. brand-new question
-        // with no cached entry), fall back to the cached positions so we
-        // don't show a question with zero correct answers.
         const correctIndexes = remappedCorrectIndexes.length
           ? remappedCorrectIndexes
           : cachedCorrectPositions;
@@ -145,11 +137,18 @@ export function applyBackendAttemptResult(
     result.questions.map((questionResult) => [questionResult.questionId, questionResult]),
   );
 
-  const earnedPoints = session.quiz.questions.reduce((total, question) => {
-    const questionResult = resultByQuestionId.get(question.id);
-    const isCorrect = questionResult?.isCorrect ?? false;
-    return total + (isCorrect ? Math.max(1, Math.round(question.points ?? 1)) : 0);
-  }, 0);
+  const totalPoints = session.quiz.questions.reduce(
+    (sum, question) => sum + Math.max(1, Math.round(question.points ?? 1)),
+    0,
+  );
+  const earnedPoints =
+    result.questions.length === 0
+      ? Math.round((result.score / 100) * totalPoints)
+      : session.quiz.questions.reduce((total, question) => {
+          const questionResult = resultByQuestionId.get(question.id);
+          const isCorrect = questionResult?.isCorrect ?? false;
+          return total + (isCorrect ? Math.max(1, Math.round(question.points ?? 1)) : 0);
+        }, 0);
 
   return {
     ...session,
@@ -203,10 +202,17 @@ export function buildCompletedSessionFromAttempt(
     attempt.questions.map((question) => [question.questionId, question]),
   );
   const correctCount = attempt.correctAnswers;
-  const earnedPoints = quiz.questions.reduce((total, question) => {
-    const review = questionReviewById.get(question.id);
-    return total + (review?.isCorrect ? Math.max(1, Math.round(question.points ?? 1)) : 0);
-  }, 0);
+  const totalPoints = quiz.questions.reduce(
+    (sum, question) => sum + Math.max(1, Math.round(question.points ?? 1)),
+    0,
+  );
+  const earnedPoints =
+    attempt.questions.length === 0
+      ? Math.round((attempt.score / 100) * totalPoints)
+      : quiz.questions.reduce((total, question) => {
+          const review = questionReviewById.get(question.id);
+          return total + (review?.isCorrect ? Math.max(1, Math.round(question.points ?? 1)) : 0);
+        }, 0);
 
   return {
     id: attempt.id,

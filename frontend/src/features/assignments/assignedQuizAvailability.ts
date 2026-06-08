@@ -1,5 +1,6 @@
-import type { MyAttemptDto } from "../quiz-session/api/attemptsApi";
+﻿import type { MyAttemptDto } from "../quiz-session/api/attemptsApi";
 import type { QuizSessionRecord } from "../quiz-session/quizSessionTypes";
+import { getQuizSessionResultSummary } from "../quiz-session/quizSessionUtils";
 
 export type AssignedQuizAvailabilityStatus =
   | "active"
@@ -32,6 +33,29 @@ export interface AssignedQuizAvailability {
   activeAttempt: QuizSessionRecord | null;
   latestAttemptSession: QuizSessionRecord | null;
   latestCompletedSession: QuizSessionRecord | null;
+  latestScorePercent: number | null;
+}
+
+export type AssignedProgressFilter =
+  | "all"
+  | "ready"
+  | "in-progress"
+  | "completed";
+
+export function matchesAssignedProgress(
+  state: AssignedQuizAvailability,
+  filter: string,
+) {
+  switch (filter) {
+    case "ready":
+      return state.status === "active";
+    case "in-progress":
+      return state.status === "in_progress";
+    case "completed":
+      return state.hasCompletedAttempt;
+    default:
+      return true;
+  }
 }
 
 interface BuildAssignedQuizAvailabilityInput {
@@ -65,15 +89,10 @@ function matchesAssignmentAttempt(
     return false;
   }
 
-  // When we know which assignment we're checking, match strictly by assignmentId.
-  // Attempts that have no assignmentId (created before the AssignmentId field was
-  // introduced, or from a previous reassignment) must NOT count against the current
-  // assignment's cap — that is the exact bug this scoping fix addresses.
   if (assignmentId) {
     return attempt.assignmentId === assignmentId;
   }
 
-  // No assignment context (e.g. public quiz library view) — match on quizId alone.
   return true;
 }
 
@@ -237,15 +256,12 @@ export function buildAssignedQuizAvailability({
     getTimestamp(deadline) > 0 &&
     now > getTimestamp(deadline);
   const hasCompletedAttempt = completedAttempts.length > 0;
-  // hasInProgressAttempt reflects any in-progress state (local or backend) for display/chips
   const hasInProgressAttempt = Boolean(activeAttempt || inProgressAttempt);
   const hasAttemptsLeft =
     normalizedMaxAttempts === null || (attemptsRemaining ?? 0) > 0;
   const exhaustedAttempts = normalizedMaxAttempts !== null && !hasAttemptsLeft;
   const canResume = Boolean(activeAttempt) && !deadlinePassed && !isLoading;
   const canResolveNewAttempt = !isLoading && !error;
-  // Only a LOCAL in-progress session blocks canStart — orphaned backend attempts do not,
-  // because partial answers live only in localStorage and can't be recovered without a local session.
   const canStart =
     canResolveNewAttempt &&
     !deadlinePassed &&
@@ -255,11 +271,27 @@ export function buildAssignedQuizAvailability({
     Boolean(latestCompletedSession) ||
     Boolean(latestCompletedAttempt?.questions?.length);
 
+  const sessionForLatestCompleted = latestCompletedAttempt
+    ? relatedSessions.find(
+        (session) =>
+          session.backendAttemptId === latestCompletedAttempt.id &&
+          session.status === "completed",
+      ) ?? null
+    : null;
+  let latestScorePercent: number | null = null;
+  if (sessionForLatestCompleted) {
+    latestScorePercent = getQuizSessionResultSummary(sessionForLatestCompleted).percentage;
+  } else if (
+    latestCompletedAttempt &&
+    typeof latestCompletedAttempt.score === "number" &&
+    Number.isFinite(latestCompletedAttempt.score)
+  ) {
+    latestScorePercent = Math.round(latestCompletedAttempt.score);
+  } else if (latestCompletedSession) {
+    latestScorePercent = getQuizSessionResultSummary(latestCompletedSession).percentage;
+  }
+
   let status: AssignedQuizAvailabilityStatus;
-  // Priority: exhausted/completed beats lingering in-progress flags. A stale
-  // backend in-progress attempt should never make a finished quiz read as
-  // "In Progress" — the student has used all their attempts (or has completed
-  // it) and that is the truth we surface in the UI.
   if (exhaustedAttempts) {
     status = "attempts_exhausted";
   } else if (deadlinePassed && !hasCompletedAttempt) {
@@ -304,6 +336,7 @@ export function buildAssignedQuizAvailability({
     activeAttempt,
     latestAttemptSession,
     latestCompletedSession,
+    latestScorePercent,
   };
 }
 

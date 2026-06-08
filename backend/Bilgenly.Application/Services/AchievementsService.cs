@@ -23,7 +23,7 @@ public class AchievementsService
         _userRepository = userRepository;
     }
 
-    public async Task<AchievementsDto> GetAchievementsAsync(Guid studentId)
+    public async Task<AchievementsDto> GetAchievementsAsync(Guid studentId, Guid? classId = null)
     {
         var attempts = (await _attemptRepository.GetByUserIdAsync(studentId))
             .Where(a => a.IsCompleted)
@@ -33,13 +33,13 @@ public class AchievementsService
         var averageScore = attempts.Any()
             ? Math.Round(attempts.Average(a => a.Score), 1)
             : 0;
-        
+
         await CheckAndAwardBadgesAsync(studentId, quizzesDone, averageScore, attempts);
 
         var userBadges = (await _badgeRepository.GetByUserIdAsync(studentId)).ToList();
         var allBadges = (await _badgeRepository.GetAllAsync()).ToList();
-        
-        var leaderboard = await BuildLeaderboardAsync(studentId);
+
+        var leaderboard = await BuildLeaderboardAsync(studentId, classId);
         
         var rank = leaderboard.FindIndex(e => e.IsCurrentUser) + 1;
         if (rank == 0) rank = leaderboard.Count + 1;
@@ -69,18 +69,25 @@ public class AchievementsService
         };
     }
 
-    private async Task<List<LeaderboardEntryDto>> BuildLeaderboardAsync(Guid studentId)
+    private async Task<List<LeaderboardEntryDto>> BuildLeaderboardAsync(Guid studentId, Guid? classId = null)
     {
-        
         var classes = (await _classRepository.GetByStudentIdAsync(studentId)).ToList();
 
-        var allStudentIds = classes
+        var targetClasses = classId.HasValue
+            ? classes.Where(c => c.Id == classId.Value).ToList()
+            : classes;
+
+        var sharedAssignmentIds = new HashSet<Guid>(
+            targetClasses.SelectMany(c => c.Assignments).Select(a => a.Id)
+        );
+
+        var allStudentIds = targetClasses
             .SelectMany(c => c.ClassStudents)
             .Select(cs => cs.StudentId)
             .Distinct()
             .ToList();
 
-        if (!allStudentIds.Any())
+        if (!allStudentIds.Contains(studentId))
             allStudentIds.Add(studentId);
 
         var entries = new List<LeaderboardEntryDto>();
@@ -88,7 +95,9 @@ public class AchievementsService
         foreach (var id in allStudentIds)
         {
             var studentAttempts = (await _attemptRepository.GetByUserIdAsync(id))
-                .Where(a => a.IsCompleted)
+                .Where(a => a.IsCompleted
+                         && a.AssignmentId.HasValue
+                         && sharedAssignmentIds.Contains(a.AssignmentId.Value))
                 .ToList();
 
             var avg = studentAttempts.Any()

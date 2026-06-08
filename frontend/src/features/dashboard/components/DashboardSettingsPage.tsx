@@ -1,4 +1,4 @@
-import {
+﻿import {
   Bell,
   ChevronDown,
   Lock,
@@ -517,11 +517,19 @@ function ReadOnlyField({
         className={cn(
           "w-full rounded-[18px] border border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-elevated)] text-[var(--dashboard-text-strong)] shadow-none",
           multiline
-            ? "min-h-[106px] whitespace-pre-wrap px-4 py-4 text-[15px] leading-7"
+            ? "min-h-[106px] px-4 py-4 text-[15px] leading-7"
             : "flex min-h-[56px] items-center px-4 py-3 text-base",
         )}
       >
-        {value || "Not provided"}
+        
+        <span
+          className={cn(
+            "min-w-0",
+            multiline ? "whitespace-pre-wrap break-words" : "break-all",
+          )}
+        >
+          {value || "Not provided"}
+        </span>
       </div>
     </div>
   );
@@ -567,9 +575,6 @@ function FieldRenderer({
           onChange={onChange}
           onBlur={onBlur}
           aria-invalid={Boolean(error)}
-          // Email cannot be changed once an account is created — the backend
-          // does not support an email-change verification flow, so we render
-          // it as a non-editable display in the settings page.
           disabled={field.id === "email"}
           readOnly={field.id === "email"}
           className={cn(

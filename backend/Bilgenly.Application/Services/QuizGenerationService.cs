@@ -83,9 +83,6 @@ public class QuizGenerationService
         if (quiz is null) return (null, "Quiz not found");
         if (quiz.UserId != userId) return (null, "Access denied");
 
-        // Regeneration is only possible when the original source text was captured.
-        // PDF-sourced quizzes and manually-created quizzes cannot be regenerated
-        // server-side because the binary content is not stored.
         if (string.IsNullOrWhiteSpace(quiz.SourceText))
             return (null, "Regeneration is not available for this quiz — the original source text was not stored. Please generate a new quiz from your notes.");
 
@@ -101,7 +98,6 @@ public class QuizGenerationService
                 "MCQ",
                 string.Empty);
 
-            // Replace questions in-place: remove old ones, add new batch.
             quiz.Questions.Clear();
             quiz.Status = "generated";
             await _quizRepository.SaveChangesAsync();
@@ -142,9 +138,6 @@ public class QuizGenerationService
     public async Task<(GenerateQuizResultDto? Result, string? Error)> UpdateAfterReviewAsync(
         Guid quizId, UpdateGeneratedQuizDto dto, Guid userId)
     {
-        // Load metadata only — questions are rebuilt from scratch below
-        // to avoid EF Core cascade-delete conflicts with the DB-level
-        // ON DELETE CASCADE constraint on Answer.QuestionId.
         var quiz = await _quizRepository.GetByIdShallowAsync(quizId);
         if (quiz is null) return (null, "Quiz not found");
         if (quiz.UserId != userId) return (null, "Access denied");
@@ -167,21 +160,13 @@ public class QuizGenerationService
                 return (null, "Every question must include exactly one correct answer");
         }
 
-        // 1. Update quiz-level metadata
         quiz.Title = dto.Title.Trim();
         quiz.Description = dto.Description.Trim();
         quiz.IsPublic = dto.IsPublic;
         quiz.Status = dto.IsPublic ? "published-public" : "published-private";
 
-        // 2. Wipe all existing questions + answers via raw SQL.
-        //    Using EF Core collection manipulation here triggers
-        //    DbUpdateConcurrencyException because EF Core also marks child
-        //    entities as Deleted while the DB's ON DELETE CASCADE has already
-        //    removed them, leaving 0 rows affected for the explicit DELETE.
         await _quizRepository.DeleteQuizQuestionsAsync(quizId);
 
-        // 3. Re-create every question and its answers as fresh entities.
-        //    All IDs are regenerated so there is no stale-ID confusion.
         var newQuestions = dto.Questions.Select((q, index) =>
         {
             var question = new Question
@@ -192,6 +177,7 @@ public class QuizGenerationService
                 QuestionType = q.QuestionType,
                 Explanation = q.Explanation.Trim(),
                 Position = q.Position > 0 ? q.Position : index + 1,
+                Tags = NormalizeTags(q.Tags),
             };
 
             question.Answers = q.Answers.Select(a => new Answer
@@ -208,7 +194,6 @@ public class QuizGenerationService
         await _quizRepository.AddQuestionsRangeAsync(newQuestions);
         await _quizRepository.SaveChangesAsync();
 
-        // 4. Reload with full hierarchy so the response includes the new IDs.
         var reloadedQuiz = await _quizRepository.GetByIdAsync(quizId);
         return (MapToResult(reloadedQuiz!, "Saved", 0), null);
     }
@@ -229,9 +214,6 @@ public class QuizGenerationService
             Topic = config.Topic,
             TopicFocus = config.TopicFocus,
             SourceType = sourceType,
-            // Persist the original source text so RegenerateAsync can re-call
-            // the AI without requiring the user to resubmit their document.
-            // Only stored for text-based generation; PDF bytes are not retained.
             SourceText = sourceType == "text" ? config.Text : null,
             Status = "generated",
             UserId = userId,
@@ -247,6 +229,7 @@ public class QuizGenerationService
                 Points = q.Points > 0 ? q.Points : 1,
                 EstimatedMinutes = q.EstimatedMinutes > 0 ? q.EstimatedMinutes : 1,
                 ImageUrl = q.ImageUrl,
+                Tags = NormalizeTags(q.Tags),
                 Answers = q.Answers.Select(a => new Answer
                 {
                     Id = Guid.NewGuid(),
@@ -278,6 +261,7 @@ public class QuizGenerationService
                 QuestionType = q.QuestionType,
                 Explanation = q.Explanation,
                 Position = q.Position,
+                Tags = q.Tags ?? new(),
                 Answers = q.Answers.Select(a => new AnswerReviewDto
                 {
                     Id = a.Id,
@@ -287,4 +271,10 @@ public class QuizGenerationService
             }).OrderBy(q => q.Position).ToList()
         };
 
+    private static List<string> NormalizeTags(IEnumerable<string>? tags) =>
+        (tags ?? Enumerable.Empty<string>())
+            .Select(tag => tag?.Trim() ?? string.Empty)
+            .Where(tag => tag.Length > 0)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
 }

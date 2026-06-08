@@ -1,11 +1,10 @@
-import { apiRequest } from "../../../lib/apiClient";
+﻿import { apiRequest } from "../../../lib/apiClient";
 
 export interface ClassInvitationDto {
   id: string;
   classId: string;
   className: string;
   recipientEmail: string;
-  inviteCode: string;
   status: "pending" | "accepted" | "declined";
   createdAt: string;
 }
@@ -37,4 +36,13 @@ export function revokeClassInvitation(classId: string, invitationId: string) {
       fallbackErrorMessage: "Unable to revoke invitation.",
     },
   );
+}
+
+
+export function revokeClassInvitationByEmail(classId: string, email: string) {
+  return apiRequest<{ message: string }>(`/api/classes/${classId}/invitations`, {
+    method: "DELETE",
+    body: { email },
+    fallbackErrorMessage: "Unable to revoke invitation.",
+  });
 }

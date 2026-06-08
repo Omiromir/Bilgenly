@@ -45,9 +45,18 @@ public class UserRepository : IUserRepository
             .ToListAsync();
     }
 
-    public Task DeleteAsync(User user)
+    public async Task DeleteAsync(User user)
     {
+        var sentInvitations = await _context.ClassInvitations
+            .Where(i => i.TeacherId == user.Id)
+            .ToListAsync();
+        _context.ClassInvitations.RemoveRange(sentInvitations);
+
+        var filedReports = await _context.Reports
+            .Where(r => r.ReporterId == user.Id)
+            .ToListAsync();
+        _context.Reports.RemoveRange(filedReports);
+
         _context.Users.Remove(user);
-        return Task.CompletedTask;
     }
 }

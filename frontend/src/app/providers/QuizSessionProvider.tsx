@@ -1,4 +1,4 @@
-import {
+﻿import {
   applyBackendAttemptResult,
   buildSubmitAttemptPayload,
   canSubmitSessionToBackend,
@@ -147,7 +147,9 @@ function sanitizeQuizSessionRecord(
       value.status === "completed"
         ? value.completionReason === "deadline-expired"
           ? "deadline-expired"
-          : "submitted"
+          : value.completionReason === "time-limit-reached"
+            ? "time-limit-reached"
+            : "submitted"
         : undefined,
     sourceType:
       typeof value.sourceType === "string" ? value.sourceType : "quiz-library",
@@ -485,10 +487,6 @@ export function QuizSessionProvider({ children }: QuizSessionProviderProps) {
   >([]);
   const [attemptRefreshKey, setAttemptRefreshKey] = useState(0);
 
-  // When a quiz is deleted anywhere in the app, prune local session state
-  // immediately. Without this, a finished session whose quiz no longer
-  // exists would still appear in "Recent Results" and crash on click. Also
-  // bump the remote attempt refresh so the next pass strips the gone quiz.
   useEffect(() => {
     function onQuizDeleted(event: Event) {
       const detail = (event as CustomEvent<{ quizId?: string }>).detail;
@@ -528,10 +526,6 @@ export function QuizSessionProvider({ children }: QuizSessionProviderProps) {
   );
   const hydratedStorageScopeRef = useRef<string | null>(null);
   const syncedPracticeSummaryRef = useRef<Record<string, string>>({});
-  // Tracks sessions that are currently being completed (submitAttempt in
-  // flight). Synchronous check + set in completeSession prevents the
-  // "rapid double-click Finish Quiz" race condition where two API submits
-  // both pass the not-completed-yet state check.
   const completionInFlightRef = useRef<Set<string>>(new Set());
   const userId = currentUser?.id ?? null;
   const userEmail = currentUser?.email ?? null;
@@ -593,7 +587,6 @@ export function QuizSessionProvider({ children }: QuizSessionProviderProps) {
   }, [attemptRefreshKey, role, token]);
 
   useEffect(() => {
-    // Only hydrate when storageScope actually changes to prevent loops
     if (hydratedStorageScopeRef.current === storageScope) {
       return;
     }
@@ -609,9 +602,6 @@ export function QuizSessionProvider({ children }: QuizSessionProviderProps) {
     );
 
     if (!savedValue) {
-      // No existing sessions — mark hydration complete and unlock persistence.
-      // hydratedStorageKey must be set so the persistence effect can write new
-      // sessions to localStorage (the guard requires hydratedStorageKey === storageKey).
       setHydratedStorageKey(storageKey);
       setIsHydrated(true);
       return;
@@ -960,10 +950,6 @@ export function QuizSessionProvider({ children }: QuizSessionProviderProps) {
         return;
       }
 
-      // Teacher's own test runs must NOT contribute to the quiz's public
-      // analytics (attemptCount / averageScore). Those metrics are for
-      // student attempts only — otherwise a draft quiz would falsely show
-      // "1 attempt, 0%" the moment the teacher tries it once.
       const safeSummary =
         viewerRole === "teacher"
           ? {
@@ -1094,7 +1080,6 @@ export function QuizSessionProvider({ children }: QuizSessionProviderProps) {
           ),
         ),
       createSession: async (quiz, context) => {
-        // Primary guard: check React state (fast path, works after hydration)
         const existingSession = getLatestQuizSession(sessions, {
           quizId: quiz.id,
           viewerRole: context.viewerRole,
@@ -1106,10 +1091,6 @@ export function QuizSessionProvider({ children }: QuizSessionProviderProps) {
           return existingSession;
         }
 
-        // Secondary guard: read localStorage directly in case React state hasn't
-        // hydrated yet (race condition on page refresh). Prevents a second
-        // startAttempt() call when the session is still in storage but not yet
-        // reflected in the sessions array.
         try {
           const rawStored = getScopedStorageValue(
             QUIZ_SESSIONS_STORAGE_KEY,
@@ -1134,7 +1115,6 @@ export function QuizSessionProvider({ children }: QuizSessionProviderProps) {
               if (storedInProgress) {
                 const sanitized = sanitizeQuizSessionRecord(storedInProgress);
                 if (sanitized) {
-                  // Re-hydrate into React state and return without creating a new attempt
                   setSessions((current) => {
                     const alreadyPresent = current.some((s) => s.id === sanitized.id);
                     return alreadyPresent
@@ -1147,7 +1127,6 @@ export function QuizSessionProvider({ children }: QuizSessionProviderProps) {
             }
           }
         } catch {
-          // localStorage read failure is non-fatal — continue with normal creation
         }
 
         let nextQuiz = quiz;
@@ -1377,11 +1356,6 @@ export function QuizSessionProvider({ children }: QuizSessionProviderProps) {
           return;
         }
 
-        // Race-condition guard: if a submitAttempt is already in flight for
-        // this session, ignore the duplicate call. The local `status ===
-        // "completed"` check above is insufficient because setSessions only
-        // resolves AFTER the backend responds, so two rapid clicks would
-        // both pass this check and fire two API requests.
         if (completionInFlightRef.current.has(sessionId)) {
           return;
         }

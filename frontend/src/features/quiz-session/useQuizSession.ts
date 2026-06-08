@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+﻿import { useMemo } from "react";
 import { useQuizSessions } from "../../app/providers/QuizSessionProvider";
 import {
   getCurrentQuestionState,
@@ -6,6 +6,12 @@ import {
   getQuizSessionResultSummary,
   getSubmittedQuestionCount,
 } from "./quizSessionUtils";
+import type { QuizSessionRecord } from "./quizSessionTypes";
+
+type CompleteSessionOptions = {
+  completionReason?: QuizSessionRecord["completionReason"];
+  finishedAt?: string;
+};
 
 export function useQuizSession(sessionId?: string | null) {
   const {
@@ -32,7 +38,7 @@ export function useQuizSession(sessionId?: string | null) {
         submitAnswer: (_questionId: string) => undefined,
         setCurrentQuestion: (_questionIndex: number) => undefined,
         goToNextQuestion: () => undefined,
-        completeSession: async () => undefined,
+        completeSession: async (_options?: CompleteSessionOptions) => undefined,
       };
     }
 
@@ -54,7 +60,8 @@ export function useQuizSession(sessionId?: string | null) {
         selectAnswer(session.id, questionId, selectedIndex),
       submitAnswer: (questionId: string) => submitAnswer(session.id, questionId),
       goToNextQuestion: () => goToNextQuestion(session.id),
-      completeSession: () => completeSession(session.id),
+      completeSession: (options?: CompleteSessionOptions) =>
+        completeSession(session.id, options),
     };
   }, [
     completeSession,

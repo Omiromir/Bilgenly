@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+﻿import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   AlertCircle,
   ArrowRight,
@@ -253,6 +253,10 @@ interface StudentQuizResultRowProps {
   isSelected: boolean;
   onSelect: () => void;
   actionMenu: ReactNode;
+  
+  displayScore: number | null;
+  
+  scoreMode: "latest" | "best" | "average";
 }
 
 export function StudentQuizResultRow({
@@ -260,6 +264,8 @@ export function StudentQuizResultRow({
   isSelected,
   onSelect,
   actionMenu,
+  displayScore,
+  scoreMode,
 }: StudentQuizResultRowProps) {
   return (
     <TableRow
@@ -292,11 +298,11 @@ export function StudentQuizResultRow({
           <DashboardBadge tone={getStudentStatusTone(row.status)}>
             {getStudentStatusLabel(row.status)}
           </DashboardBadge>
-          {/* Only show "Missed deadline" when the status isn't already "Expired" — otherwise it's redundant */}
+          
           {row.missedDeadline && row.status !== "expired" ? (
             <DashboardBadge tone="danger">Missed deadline</DashboardBadge>
           ) : null}
-          {/* Show only "At Risk" — skip "Needs Review" (not implemented) */}
+          
           {row.flags.filter((f) => f === "At Risk").map((flag) => (
             <DashboardBadge key={`${row.rowId}-${flag}`} tone="danger">
               {flag}
@@ -307,10 +313,14 @@ export function StudentQuizResultRow({
       <TableCell className="px-3 py-4">
         <div>
           <p className="font-semibold text-[var(--dashboard-text-strong)]">
-            {row.latestScore === null ? "--" : `${row.latestScore}%`}
+            {displayScore === null ? "--" : `${displayScore}%`}
           </p>
           <p className="text-xs text-[var(--dashboard-text-soft)]">
-            Best {row.bestScore === null ? "--" : `${row.bestScore}%`} | {row.attemptsUsed} attempts
+            {scoreMode === "best"
+              ? `Latest ${row.latestScore === null ? "--" : `${row.latestScore}%`}`
+              : `Best ${row.bestScore === null ? "--" : `${row.bestScore}%`}`}
+            {" | "}
+            {row.attemptsUsed} {row.attemptsUsed === 1 ? "attempt" : "attempts"}
           </p>
         </div>
       </TableCell>
@@ -353,9 +363,6 @@ export function QuizSummaryPanel({
   analytics,
   onExportCsv,
 }: QuizSummaryPanelProps) {
-  // Only show questions that students actually got wrong, ranked worst-first.
-  // The previous slice(0, 3) took the first 3 by question-number order, so
-  // questions with 0% miss rate appeared in the "most frequently missed" list.
   const mostMissed = [...analytics.questionAnalytics]
     .filter((q) => q.missRate > 0)
     .sort((a, b) => b.missRate - a.missRate)
@@ -527,8 +534,6 @@ export function QuestionAnalyticsPanel({ questions }: QuestionAnalyticsPanelProp
     );
   }
 
-  // Chart: keep original question-number order so the X-axis reads Q1, Q2, Q3…
-  // and teachers can spot which part of the quiz caused trouble.
   const chartData = questions.map((question) => ({
     label: `Q${question.questionNumber}`,
     missRate: question.missRate,
@@ -536,8 +541,6 @@ export function QuestionAnalyticsPanel({ questions }: QuestionAnalyticsPanelProp
     missed: question.missCount,
   }));
 
-  // Cards: sort worst-first so the highest-miss questions are immediately visible.
-  // Filter out questions with 0 attempts AND 0 misses — there's nothing to surface.
   const topMissed = [...questions]
     .filter((q) => q.attemptCount > 0)
     .sort((a, b) => b.missRate - a.missRate)
@@ -723,11 +726,11 @@ export function StudentQuizInsightsPanel({
               <DashboardBadge tone={getStudentStatusTone(row.status)}>
                 {getStudentStatusLabel(row.status)}
               </DashboardBadge>
-              {/* Only show "Missed deadline" when the status isn't already "Expired" */}
+              
               {row.missedDeadline && row.status !== "expired" ? (
                 <DashboardBadge tone="danger">Missed deadline</DashboardBadge>
               ) : null}
-              {/* Show only "At Risk" — skip "Needs Review" (not implemented) */}
+              
               {row.flags.filter((f) => f === "At Risk").map((flag) => (
                 <DashboardBadge key={`${row.rowId}-${flag}`} tone="danger">
                   {flag}

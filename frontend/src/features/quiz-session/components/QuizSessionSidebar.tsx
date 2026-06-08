@@ -1,7 +1,7 @@
-import {
-  BookOpen,
+﻿import {
   CheckCircle2,
   Clock3,
+  TrendingUp,
 } from "../../../components/icons/AppIcons";
 import {
   AttemptProgressIndicator,
@@ -17,6 +17,7 @@ import {
   dashboardIconTextRowClassName,
 } from "../../dashboard/components/DashboardPrimitives";
 import type { QuizSessionRecord } from "../quizSessionTypes";
+import { formatCountdown } from "../useQuizTimer";
 
 interface QuizSessionSidebarProps {
   session: QuizSessionRecord;
@@ -24,6 +25,16 @@ interface QuizSessionSidebarProps {
   answeredCount: number;
   currentQuestionIndex: number;
   onJumpToQuestion: (questionIndex: number) => void;
+  
+  revealAnswerKey?: boolean;
+  
+  timeRemainingSeconds?: number;
+  
+  totalDurationSeconds?: number;
+  
+  isTimerWarning?: boolean;
+  
+  isTimerDanger?: boolean;
 }
 
 export function QuizSessionSidebar({
@@ -32,11 +43,24 @@ export function QuizSessionSidebar({
   answeredCount,
   currentQuestionIndex,
   onJumpToQuestion,
+  revealAnswerKey = true,
+  timeRemainingSeconds,
+  totalDurationSeconds,
+  isTimerWarning = false,
+  isTimerDanger = false,
 }: QuizSessionSidebarProps) {
   const unlockedIndex = Math.min(
     answeredCount,
     Math.max(session.quiz.questions.length - 1, 0),
   );
+
+  const answeredCorrectCount = session.questionStates.filter(
+    (questionState) => questionState.submitted && questionState.isCorrect,
+  ).length;
+  const liveAccuracy =
+    answeredCount === 0
+      ? 0
+      : Math.round((answeredCorrectCount / answeredCount) * 100);
 
   return (
     <aside className="space-y-4 xl:sticky xl:top-6">
@@ -73,19 +97,88 @@ export function QuizSessionSidebar({
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--dashboard-text-faint)]">
             Time guide
           </p>
-          <div className="mt-3 flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-[16px] bg-[var(--dashboard-brand-soft-alt)] text-[var(--dashboard-brand-bright)]">
-              <Clock3 className="h-5 w-5" />
+
+          {timeRemainingSeconds !== undefined && totalDurationSeconds !== undefined && totalDurationSeconds > 0 ? (
+            
+            <div className="mt-3 space-y-3">
+              <div className="flex items-center gap-3">
+                <div
+                  className={cn(
+                    "flex h-11 w-11 items-center justify-center rounded-[16px] transition-colors",
+                    isTimerDanger
+                      ? "bg-red-500/15 text-red-500"
+                      : isTimerWarning
+                        ? "bg-amber-500/15 text-amber-500"
+                        : "bg-[var(--dashboard-brand-soft-alt)] text-[var(--dashboard-brand-bright)]",
+                  )}
+                >
+                  <Clock3 className="h-5 w-5" />
+                </div>
+                <div>
+                  <p
+                    className={cn(
+                      "text-[1.35rem] font-semibold tabular-nums tracking-tight transition-colors",
+                      isTimerDanger
+                        ? "text-red-500"
+                        : isTimerWarning
+                          ? "text-amber-500"
+                          : "text-[var(--dashboard-text-strong)]",
+                    )}
+                  >
+                    {formatCountdown(timeRemainingSeconds)}
+                  </p>
+                  <p
+                    className={cn(
+                      "text-sm transition-colors",
+                      isTimerDanger
+                        ? "font-medium text-red-500"
+                        : isTimerWarning
+                          ? "font-medium text-amber-500"
+                          : "text-[var(--dashboard-text-soft)]",
+                    )}
+                  >
+                    {isTimerDanger
+                      ? "Hurry up!"
+                      : isTimerWarning
+                        ? "Time running low"
+                        : "Time remaining"}
+                  </p>
+                </div>
+              </div>
+
+              
+              <div className="h-1.5 overflow-hidden rounded-full bg-[var(--dashboard-border-soft)]">
+                <div
+                  className={cn(
+                    "h-full rounded-full transition-[width,background-color] duration-500",
+                    isTimerDanger
+                      ? "bg-red-500"
+                      : isTimerWarning
+                        ? "bg-amber-500"
+                        : "bg-[var(--dashboard-brand)]",
+                  )}
+                  style={{
+                    width: `${Math.round((timeRemainingSeconds / totalDurationSeconds) * 100)}%`,
+                  }}
+                />
+              </div>
             </div>
-            <div>
-              <p className="text-[1.2rem] font-semibold text-[var(--dashboard-text-strong)]">
-                {session.quiz.durationMinutes} min
-              </p>
-              <p className="text-sm text-[var(--dashboard-text-soft)]">
-                Suggested completion time
-              </p>
+          ) : (
+            
+            <div className="mt-3 flex items-center gap-3">
+              <div className="flex h-11 w-11 items-center justify-center rounded-[16px] bg-[var(--dashboard-brand-soft-alt)] text-[var(--dashboard-brand-bright)]">
+                <Clock3 className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-[1.2rem] font-semibold text-[var(--dashboard-text-strong)]">
+                  {session.quiz.durationMinutes} min
+                </p>
+                <p className="text-sm text-[var(--dashboard-text-soft)]">
+                  Suggested completion time
+                </p>
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
         <div className="rounded-[20px] border border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-muted)] px-4 py-4">
@@ -110,6 +203,24 @@ export function QuizSessionSidebar({
             />
           </div>
         </div>
+
+        
+        {revealAnswerKey && answeredCount > 0 ? (
+          <div className="rounded-[20px] border border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-muted)] px-4 py-4">
+            <div className="flex items-center justify-between gap-3">
+              <span className={dashboardIconTextRowClassName}>
+                <TrendingUp className="h-4 w-4 text-[var(--dashboard-brand)]" />
+                Accuracy
+              </span>
+              <span className="text-[1.05rem] font-semibold text-[var(--dashboard-text-strong)]">
+                {liveAccuracy}%
+              </span>
+            </div>
+            <p className="mt-2 text-sm text-[var(--dashboard-text-soft)]">
+              {answeredCorrectCount} of {answeredCount} correct so far
+            </p>
+          </div>
+        ) : null}
 
         {assignmentConstraints ? (
           <div className="space-y-3 rounded-[20px] border border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-elevated)] px-4 py-4">
@@ -154,9 +265,12 @@ export function QuizSessionSidebar({
                   isCurrent
                     ? "border border-[var(--dashboard-brand-bright)] bg-[var(--dashboard-surface-elevated)] text-[var(--dashboard-brand-bright)] shadow-[0_10px_24px_rgba(33,145,246,0.18)]"
                     : questionState.submitted
-                      ? questionState.isCorrect
-                        ? "bg-[linear-gradient(180deg,var(--dashboard-success)_0%,#228a57_100%)] text-white"
-                        : "bg-[var(--dashboard-danger)] text-white"
+                      ? revealAnswerKey
+                        ? questionState.isCorrect
+                          ? "bg-[linear-gradient(180deg,var(--dashboard-success)_0%,#228a57_100%)] text-white"
+                          : "bg-[var(--dashboard-danger)] text-white"
+                        :
+                          "bg-[var(--dashboard-brand)] text-white"
                       : isUnlocked
                         ? "bg-[var(--dashboard-brand-soft-alt)] text-[var(--dashboard-brand-bright)] hover:bg-[var(--dashboard-surface-accent)]"
                         : "bg-[var(--dashboard-surface-muted)] text-[var(--dashboard-text-faint)]",

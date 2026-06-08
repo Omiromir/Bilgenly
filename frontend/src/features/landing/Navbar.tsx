@@ -59,7 +59,7 @@ export function Navbar() {
             { href: "#features", label: "Features" },
             { href: "#how-it-works", label: "How it works" },
             { href: "#pricing", label: "Pricing" },
-            { href: "#faqs", label: "FAQs" },
+            { href: "#faqs", label: "FAQ" },
           ].map(({ href, label }) => (
             <a
               key={href}
@@ -150,7 +150,7 @@ export function Navbar() {
               { href: "#features", label: "Features" },
               { href: "#how-it-works", label: "How it works" },
               { href: "#pricing", label: "Pricing" },
-              { href: "#faqs", label: "FAQs" },
+              { href: "#faqs", label: "FAQ" },
             ].map(({ href, label }) => (
               <a
                 key={href}

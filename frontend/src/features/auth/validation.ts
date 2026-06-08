@@ -1,4 +1,4 @@
-import type {
+﻿import type {
   ResetPasswordFormErrors,
   ResetPasswordFormValues,
   SignInFormErrors,
@@ -9,6 +9,8 @@ import type {
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+export const EMAIL_MAX_LENGTH = 254;
+
 export function normalizeEmail(value: string) {
   return value.trim().toLowerCase();
 }
@@ -17,6 +19,8 @@ export function validateEmail(value: string) {
   const email = value.trim();
 
   if (!email) return "Email address is required.";
+  if (email.length > EMAIL_MAX_LENGTH)
+    return `Email must be ${EMAIL_MAX_LENGTH} characters or fewer.`;
   if (!EMAIL_REGEX.test(email)) return "Enter a valid email address.";
 
   return undefined;
