@@ -236,29 +236,16 @@ public class ModerationService
 
     public async Task<string?> DeleteQuizAsync(Guid quizId, Guid moderatorId)
     {
-        // Cheap existence probe — saves us from running a transaction for a
-        // quiz that's already gone and lets us surface a clear 404-style error.
-        // GetByIdShallowAsync also includes the owning User which we need for
-        // the deletion notification, so we don't pay a second round-trip.
+     
         var quiz = await _quizRepository.GetByIdShallowAsync(quizId);
         if (quiz is null) return "Quiz not found.";
 
-        // Capture owner + title BEFORE the cascade — once the row is gone
-        // we can't recover them from the now-detached entity.
         var ownerId = quiz.UserId;
         var ownerEmail = quiz.User?.Email ?? string.Empty;
         var quizTitle = quiz.Title;
 
-        // Cascade through every table that holds a FK to this quiz
-        // (AttemptAnswers, Attempts, Assignments, Answers, Questions) inside
-        // a single transaction so a mid-cascade failure leaves the DB clean.
         var deleted = await _quizRepository.DeleteQuizCascadeAsync(quizId);
         if (!deleted) return "Quiz could not be deleted.";
-
-        // Notify the owner. Failing to write the notification must not
-        // resurrect the deleted quiz, so we swallow notification-side
-        // errors and just log via the empty catch — the moderation action
-        // already succeeded.
         try
         {
             var moderator = await _userRepository.GetByIdAsync(moderatorId);
@@ -289,8 +276,7 @@ public class ModerationService
         }
         catch
         {
-            // Notification failure is best-effort — don't propagate, the
-            // quiz is already deleted and the admin shouldn't see a 500.
+          
         }
 
         return null;
@@ -302,9 +288,8 @@ public class ModerationService
         var quizzes = (await _quizRepository.GetAllForModerationAsync()).ToList();
 
         var today = DateTime.UtcNow.Date;
-        var startDate = today.AddDays(-29); // last 30 days inclusive
+        var startDate = today.AddDays(-29);
 
-        // Pre-build a bucket per day so missing days still render as zero.
         var usersByDay = Enumerable.Range(0, 30)
             .ToDictionary(offset => startDate.AddDays(offset), _ => 0);
         var quizzesByDay = Enumerable.Range(0, 30)

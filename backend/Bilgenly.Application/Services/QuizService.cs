@@ -86,9 +86,7 @@ public class QuizService
     public async Task<(QuizDto? Result, string? Error)> UpdateQuizAsync(
         Guid quizId, UpdateQuizDto dto, Guid userId)
     {
-        // Load quiz WITHOUT questions so EF Core never tracks the old Question
-        // entities. Bypassing the navigation collection prevents EF Core from
-        // re-attaching detached entities during SaveChanges graph walk.
+      
         var quiz = await _quizRepository.GetByIdShallowAsync(quizId);
         if (quiz is null) return (null, "Quiz not found");
         if (quiz.UserId != userId) return (null, "Access denied");
@@ -106,20 +104,11 @@ public class QuizService
         quiz.Description = dto.Description.Trim();
         quiz.IsPublic = dto.IsPublic;
 
-        // Delete all attempts for this quiz before replacing its questions.
-        // Attempt rows carry AttemptAnswer FKs that point to the old Question/Answer
-        // GUIDs. Once DeleteQuizQuestionsAsync runs, those GUIDs no longer exist and
-        // the DB cascade would silently destroy the AttemptAnswer rows anyway —
-        // leaving Attempt shells with no answer data and broken analytics.
-        // Explicitly removing attempts first keeps the data consistent and ensures
-        // analytics starts clean after a quiz edit.
+      
         await _attemptRepository.DeleteByQuizIdAsync(quizId);
 
-        // Wipe existing questions/answers via raw SQL (no EF change tracker involved).
         await _quizRepository.DeleteQuizQuestionsAsync(quizId);
 
-        // Build and insert new questions directly into the DbSet — never assign
-        // to quiz.Questions so EF Core graph walk never sees the old entities.
         var newQuestions = new List<Question>();
         for (var i = 0; i < dto.Questions.Count; i++)
         {
