@@ -3,16 +3,9 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Bilgenly.Infrastructure.Data;
 
-/// <summary>
-/// Ensures the Badges table always reflects the canonical definitions.
-/// Run on every startup — safe to re-run (upsert by Title).
-/// Also revokes UserBadge rows that were awarded when RequiredValue was wrong.
-/// </summary>
 public static class BadgeSeeder
 {
-    // Single source of truth for every badge.
-    // Changing RequiredValue here will correct the DB on next startup AND
-    // revoke UserBadge rows for users who no longer meet the threshold.
+   
     private static readonly BadgeDefinition[] Definitions =
     [
         new("First Step",     "Complete your first quiz",       "first_quiz",        1,  "🚀"),
@@ -26,7 +19,6 @@ public static class BadgeSeeder
 
     public static async Task SeedAsync(AppDbContext db)
     {
-        // Add Icon column if it doesn't exist yet (handles DB that predate this migration).
         await db.Database.ExecuteSqlRawAsync(@"
             ALTER TABLE ""Badges""
             ADD COLUMN IF NOT EXISTS ""Icon"" text NOT NULL DEFAULT '';
@@ -63,15 +55,11 @@ public static class BadgeSeeder
 
         await db.SaveChangesAsync();
 
-        // Reload after upsert so IDs are accurate for revocation.
         existingBadges = await db.Badges.ToListAsync();
         await RevokeInvalidAwardsAsync(db, existingBadges);
     }
 
-    /// <summary>
-    /// Removes UserBadge rows where the user's current stats no longer meet
-    /// the badge's (now-corrected) threshold.
-    /// </summary>
+    
     private static async Task RevokeInvalidAwardsAsync(AppDbContext db, List<Badge> badges)
     {
         var userBadges = await db.UserBadges.Include(ub => ub.Badge).ToListAsync();

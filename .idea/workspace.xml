@@ -5,18 +5,20 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="37e77280-3310-410b-8349-e976186d2718" name="Changes" comment="Profile page">
-      <change afterPath="$PROJECT_DIR$/backend/Bilgenly.Application/DTOs/UpdateRoleDto.cs" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/frontend/src/assets/avatars/avatar_10.jpg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/frontend/src/assets/avatars/avatar_11.jpg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/frontend/src/assets/avatars/avatar_12.jpg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/frontend/src/assets/avatars/avatar_5.jpg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/frontend/src/assets/avatars/avatar_6.jpg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/frontend/src/assets/avatars/avatar_7.jpg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/frontend/src/assets/avatars/avatar_8.jpg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/frontend/src/assets/avatars/avatar_9.jpg" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/Bilgenly.API/Controllers/AttemptController.cs" beforeDir="false" afterPath="$PROJECT_DIR$/backend/Bilgenly.API/Controllers/AttemptController.cs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/backend/Bilgenly.API/Controllers/AuthController.cs" beforeDir="false" afterPath="$PROJECT_DIR$/backend/Bilgenly.API/Controllers/AuthController.cs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/Bilgenly.Application/Interfaces/IUserRepository.cs" beforeDir="false" afterPath="$PROJECT_DIR$/backend/Bilgenly.Application/Interfaces/IUserRepository.cs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/backend/Bilgenly.Application/Services/AuthService.cs" beforeDir="false" afterPath="$PROJECT_DIR$/backend/Bilgenly.Application/Services/AuthService.cs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/Bilgenly.Infrastructure/Repositories/UserRepository.cs" beforeDir="false" afterPath="$PROJECT_DIR$/backend/Bilgenly.Infrastructure/Repositories/UserRepository.cs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/frontend/src/features/auth/api.ts" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/features/auth/api.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/frontend/src/features/auth/components/SignUpForm.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/features/auth/components/SignUpForm.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/frontend/src/features/auth/types.ts" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/features/auth/types.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/frontend/src/features/onboarding/components/BilgenlyOnboarding.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/features/onboarding/components/BilgenlyOnboarding.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/frontend/src/features/onboarding/components/Steps.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/features/onboarding/components/Steps.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/frontend/src/pages/auth/OnboardingPage.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/pages/auth/OnboardingPage.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/src/features/dashboard/components/DashboardSettingsPage.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/features/dashboard/components/DashboardSettingsPage.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/src/features/profile/avatars.ts" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/features/profile/avatars.ts" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -26,7 +28,7 @@
   <component name="Git.Settings">
     <option name="RECENT_BRANCH_BY_REPOSITORY">
       <map>
-        <entry key="$PROJECT_DIR$" value="main" />
+        <entry key="$PROJECT_DIR$" value="frontend/features" />
       </map>
     </option>
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
@@ -50,6 +52,9 @@
   &quot;associatedIndex&quot;: 2
 }</component>
   <component name="ProjectId" id="3BTxev3sz6MPBUqcssTouXK3T5j" />
+  <component name="ProjectLevelVcsManager">
+    <ConfirmationsSetting value="2" id="Add" />
+  </component>
   <component name="ProjectViewState">
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
@@ -58,11 +63,12 @@
   &quot;keyToString&quot;: {
     &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
     &quot;Node.js.assignmentConstraints.ts.executor&quot;: &quot;Run&quot;,
+    &quot;Node.js.avatars.ts.executor&quot;: &quot;Run&quot;,
     &quot;Node.js.types.ts.executor&quot;: &quot;Run&quot;,
     &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
     &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
     &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
-    &quot;git-widget-placeholder&quot;: &quot;frontend/features&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;main&quot;,
     &quot;ignore.virus.scanning.warn.message&quot;: &quot;true&quot;,
     &quot;last_opened_file_path&quot;: &quot;C:/BilgenlyMerged/Bilgenly&quot;,
     &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
@@ -74,6 +80,11 @@
     &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
   }
 }</component>
+  <component name="RecentsManager">
+    <key name="MoveFile.RECENT_KEYS">
+      <recent name="C:\BilgenlyMerged\Bilgenly\frontend\src\assets\avatars" />
+    </key>
+  </component>
   <component name="SharedIndexes">
     <attachedChunks>
       <set>
@@ -98,6 +109,7 @@
       <workItem from="1777822198325" duration="2089000" />
       <workItem from="1778580682152" duration="270000" />
       <workItem from="1778676256791" duration="3880000" />
+      <workItem from="1781064342152" duration="308000" />
     </task>
     <task id="LOCAL-00001" summary="Integration with back">
       <option name="closed" value="true" />

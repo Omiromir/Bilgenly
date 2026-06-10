@@ -26,10 +26,6 @@ public class AttemptController : ControllerBase
         var (result, error) = await _attemptService.StartAttemptAsync(quizId, userId, assignmentId);
         if (result is null)
         {
-            // Route to the most semantically correct HTTP status:
-            //   404 — quiz genuinely does not exist
-            //   403 — quiz exists but is hidden/inaccessible
-            //   409 — business-rule conflict (attempts exhausted, stale in-progress, etc.)
             if (error == "Quiz not found")
                 return NotFound(new { message = error });
 
