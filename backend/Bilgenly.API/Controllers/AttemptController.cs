@@ -19,11 +19,11 @@ public class AttemptController : ControllerBase
     }
 
     [HttpPost("quizzes/{quizId}/attempt")]
-    public async Task<IActionResult> StartAttempt(Guid quizId)
+    public async Task<IActionResult> StartAttempt(Guid quizId, [FromQuery] Guid? assignmentId)
     {
         var userId = Guid.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
 
-        var (result, error) = await _attemptService.StartAttemptAsync(quizId, userId);
+        var (result, error) = await _attemptService.StartAttemptAsync(quizId, userId, assignmentId);
         if (result is null)
         {
             // Route to the most semantically correct HTTP status:

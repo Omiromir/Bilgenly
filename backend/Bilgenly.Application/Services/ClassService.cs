@@ -322,7 +322,7 @@ public class ClassService
             QuizId = dto.QuizId,
             AssignedAt = DateTime.UtcNow,
             Deadline = dto.Deadline,
-            MaxAttempts = dto.MaxAttempts,
+            MaxAttempts = dto.MaxAttempts is int max && max > 0 ? max : null,
             AllowLateSubmissions = dto.AllowLateSubmissions,
             AssignedBy = teacherId.ToString(),
             AssignedByName = teacherName,
@@ -360,7 +360,7 @@ public class ClassService
         var assignment = classEntity.Assignments.FirstOrDefault(a => a.Id == assignmentId);
         if (assignment is null) return (null, "Assignment not found");
 
-        if (assignment.MaxAttempts is null)
+        if (assignment.MaxAttempts is not int current || current <= 0)
             return (null, null);
 
         assignment.MaxAttempts += 1;

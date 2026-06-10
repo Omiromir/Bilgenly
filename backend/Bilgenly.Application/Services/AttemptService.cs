@@ -99,7 +99,8 @@ public class AttemptService
             };
         });
     }
-    public async Task<(StartAttemptDto? Result, string? Error)> StartAttemptAsync(Guid quizId, Guid userId)
+    public async Task<(StartAttemptDto? Result, string? Error)> StartAttemptAsync(
+        Guid quizId, Guid userId, Guid? assignmentId = null)
     {
         var quiz = await _quizRepository.GetByIdAsync(quizId);
         if (quiz is null)
@@ -108,21 +109,30 @@ public class AttemptService
             return (null, "This quiz is not available.");
 
         var classes = await _classRepository.GetByStudentIdAsync(userId);
-        var targetAssignment = classes
+        var activeAssignments = classes
             .SelectMany(c => c.Assignments ?? Enumerable.Empty<Assignment>())
             .Where(a => a.QuizId == quizId && a.Status == "active")
             .OrderByDescending(a => a.AssignedAt)
-            .FirstOrDefault();
+            .ToList();
 
-        if (targetAssignment is not null && targetAssignment.MaxAttempts.HasValue)
+        var targetAssignment = assignmentId.HasValue
+            ? activeAssignments.FirstOrDefault(a => a.Id == assignmentId.Value)
+            : null;
+
+        if (activeAssignments.Count > 0)
         {
-            var cap = targetAssignment.MaxAttempts.Value;
             var userAttempts = (await _attemptRepository.GetByUserIdAsync(userId)).ToList();
 
-            var completedForAssignment = userAttempts
-                .Count(a => a.AssignmentId == targetAssignment.Id && a.IsCompleted);
+            bool HasAttemptsLeft(Assignment a) =>
+                a.MaxAttempts is not int cap || cap <= 0 ||
+                userAttempts.Count(at => at.AssignmentId == a.Id && at.IsCompleted) < cap;
 
-            if (completedForAssignment >= cap)
+            // The same quiz can be assigned in several of the student's classes;
+            // without an explicit assignmentId, prefer one that still has attempts left.
+            targetAssignment ??= activeAssignments.FirstOrDefault(HasAttemptsLeft)
+                ?? activeAssignments[0];
+
+            if (!HasAttemptsLeft(targetAssignment))
                 return (null, "You have used all attempts for this assignment.");
         }
 
@@ -193,7 +203,7 @@ public class AttemptService
         if (attempt.AssignmentId.HasValue)
         {
             var assignment = await _classRepository.GetAssignmentByIdAsync(attempt.AssignmentId.Value);
-            if (assignment?.MaxAttempts is int cap)
+            if (assignment?.MaxAttempts is int cap && cap > 0)
             {
                 var alreadyCompleted = (await _attemptRepository.GetByUserIdAsync(userId))
                     .Count(a => a.AssignmentId == attempt.AssignmentId

@@ -89,11 +89,17 @@ export interface QuizAttemptDto {
   dateTaken: string;
 }
 
-export function startAttempt(quizId: string) {
-  return apiRequest<StartAttemptResponseDto>(`/api/quizzes/${quizId}/attempt`, {
-    method: "POST",
-    fallbackErrorMessage: "Unable to start quiz attempt.",
-  });
+export function startAttempt(quizId: string, assignmentId?: string | null) {
+  const query = assignmentId
+    ? `?assignmentId=${encodeURIComponent(assignmentId)}`
+    : "";
+  return apiRequest<StartAttemptResponseDto>(
+    `/api/quizzes/${quizId}/attempt${query}`,
+    {
+      method: "POST",
+      fallbackErrorMessage: "Unable to start quiz attempt.",
+    },
+  );
 }
 
 export function submitAttempt(

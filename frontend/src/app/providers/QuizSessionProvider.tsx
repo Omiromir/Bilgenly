@@ -1142,8 +1142,14 @@ export function QuizSessionProvider({ children }: QuizSessionProviderProps) {
 
         if (isGuidString(quiz.id)) {
           try {
+            const contextAssignmentId = context.assignmentContext?.assignmentId;
             const quizAttempts = await getAttemptsByQuiz(quiz.id);
-            const startedAttempt = await startAttempt(quiz.id);
+            const startedAttempt = await startAttempt(
+              quiz.id,
+              contextAssignmentId && isGuidString(contextAssignmentId)
+                ? contextAssignmentId
+                : null,
+            );
 
             attemptNumber = quizAttempts.length + 1;
             syncMode = "backend";
