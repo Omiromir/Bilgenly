@@ -10,6 +10,7 @@ import avatar9 from "../../assets/avatars/avatar_9.jpg";
 import avatar10 from "../../assets/avatars/avatar_10.jpg";
 import avatar11 from "../../assets/avatars/avatar_11.jpg";
 import avatar12 from "../../assets/avatars/avatar_12.jpg";
+import avatar13 from "../../assets/avatars/avatar_13.jpg";
 
 export interface StaticAvatarOption {
   id: string;
@@ -30,6 +31,7 @@ export const STATIC_AVATAR_OPTIONS: StaticAvatarOption[] = [
     { id: "avatar_10", label: "Avatar 10", src: avatar10 },
     { id: "avatar_11", label: "Avatar 11", src: avatar11 },
     { id: "avatar_12", label: "Avatar 12", src: avatar12 },
+    { id: "avatar_13", label: "Avatar 13", src: avatar13 },
 ];
 
 export function resolveAvatarUrl(value: string | null | undefined): string | null {
