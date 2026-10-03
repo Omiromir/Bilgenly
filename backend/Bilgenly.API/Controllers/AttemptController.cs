@@ -32,6 +32,8 @@ public class AttemptController : ControllerBase
             //   409 — business-rule conflict (attempts exhausted, stale in-progress, etc.)
             if (error == "Quiz not found")
                 return NotFound(new { message = error });
+            if (error == "Quiz not found")
+                return NotFound(new { message = error });
 
             if (error == "This quiz is not available.")
                 return StatusCode(403, new { message = error });

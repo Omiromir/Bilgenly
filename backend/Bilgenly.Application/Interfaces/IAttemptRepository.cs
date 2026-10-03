@@ -15,4 +15,5 @@ public interface IAttemptRepository
     /// AttemptAnswer FKs never ghost the analytics.
     /// </summary>
     Task DeleteByQuizIdAsync(Guid quizId);
+    Task DeleteByQuizIdAsync(Guid quizId);
 }

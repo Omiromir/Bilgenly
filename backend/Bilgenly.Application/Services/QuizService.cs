@@ -90,6 +90,7 @@ public class QuizService
         // entities. Bypassing the navigation collection prevents EF Core from
         // re-attaching detached entities during SaveChanges graph walk.
         var quiz = await _quizRepository.GetByIdShallowAsync(quizId);
+        var quiz = await _quizRepository.GetByIdShallowAsync(quizId);
         if (quiz is null) return (null, "Quiz not found");
         if (quiz.UserId != userId) return (null, "Access denied");
 

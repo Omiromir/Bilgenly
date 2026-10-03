@@ -88,6 +88,8 @@ public class QuizGenerationService
         // server-side because the binary content is not stored.
         if (string.IsNullOrWhiteSpace(quiz.SourceText))
             return (null, "Regeneration is not available for this quiz — the original source text was not stored. Please generate a new quiz from your notes.");
+        if (string.IsNullOrWhiteSpace(quiz.SourceText))
+            return (null, "Regeneration is not available for this quiz — the original source text was not stored. Please generate a new quiz from your notes.");
 
         var startTime = DateTime.UtcNow;
 
@@ -102,6 +104,9 @@ public class QuizGenerationService
                 string.Empty);
 
             // Replace questions in-place: remove old ones, add new batch.
+            quiz.Questions.Clear();
+            quiz.Status = "generated";
+            await _quizRepository.SaveChangesAsync();
             quiz.Questions.Clear();
             quiz.Status = "generated";
             await _quizRepository.SaveChangesAsync();
@@ -146,6 +151,7 @@ public class QuizGenerationService
         // to avoid EF Core cascade-delete conflicts with the DB-level
         // ON DELETE CASCADE constraint on Answer.QuestionId.
         var quiz = await _quizRepository.GetByIdShallowAsync(quizId);
+        var quiz = await _quizRepository.GetByIdShallowAsync(quizId);
         if (quiz is null) return (null, "Quiz not found");
         if (quiz.UserId != userId) return (null, "Access denied");
         if (string.IsNullOrWhiteSpace(dto.Title))
@@ -168,6 +174,9 @@ public class QuizGenerationService
         }
 
         // 1. Update quiz-level metadata
+        quiz.Title = dto.Title.Trim();
+        quiz.Description = dto.Description.Trim();
+        quiz.IsPublic = dto.IsPublic;
         quiz.Title = dto.Title.Trim();
         quiz.Description = dto.Description.Trim();
         quiz.IsPublic = dto.IsPublic;
@@ -211,6 +220,8 @@ public class QuizGenerationService
         // 4. Reload with full hierarchy so the response includes the new IDs.
         var reloadedQuiz = await _quizRepository.GetByIdAsync(quizId);
         return (MapToResult(reloadedQuiz!, "Saved", 0), null);
+        var reloadedQuiz = await _quizRepository.GetByIdAsync(quizId);
+        return (MapToResult(reloadedQuiz!, "Saved", 0), null);
     }
 
     private async Task<(GenerateQuizResultDto? Result, string? Error)> SaveGeneratedQuiz(
@@ -232,6 +243,8 @@ public class QuizGenerationService
             // Persist the original source text so RegenerateAsync can re-call
             // the AI without requiring the user to resubmit their document.
             // Only stored for text-based generation; PDF bytes are not retained.
+            SourceText = sourceType == "text" ? config.Text : null,
+            Status = "generated",
             SourceText = sourceType == "text" ? config.Text : null,
             Status = "generated",
             UserId = userId,

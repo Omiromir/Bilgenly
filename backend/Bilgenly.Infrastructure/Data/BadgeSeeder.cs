@@ -30,6 +30,9 @@ public static class BadgeSeeder
         await db.Database.ExecuteSqlRawAsync(@"
             ALTER TABLE ""Badges""
             ADD COLUMN IF NOT EXISTS ""Icon"" text NOT NULL DEFAULT '';
+        await db.Database.ExecuteSqlRawAsync(@"
+            ALTER TABLE ""Badges""
+            ADD COLUMN IF NOT EXISTS ""Icon"" text NOT NULL DEFAULT '';
         ");
 
         var existingBadges = await db.Badges.ToListAsync();
@@ -66,12 +69,15 @@ public static class BadgeSeeder
         // Reload after upsert so IDs are accurate for revocation.
         existingBadges = await db.Badges.ToListAsync();
         await RevokeInvalidAwardsAsync(db, existingBadges);
+        existingBadges = await db.Badges.ToListAsync();
+        await RevokeInvalidAwardsAsync(db, existingBadges);
     }
 
     /// <summary>
     /// Removes UserBadge rows where the user's current stats no longer meet
     /// the badge's (now-corrected) threshold.
     /// </summary>
+    private static async Task RevokeInvalidAwardsAsync(AppDbContext db, List<Badge> badges)
     private static async Task RevokeInvalidAwardsAsync(AppDbContext db, List<Badge> badges)
     {
         var userBadges = await db.UserBadges.Include(ub => ub.Badge).ToListAsync();

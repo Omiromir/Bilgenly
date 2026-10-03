@@ -51,5 +51,7 @@ public class AttemptRepository : IAttemptRepository
         // is removed (configured via EF Core's HasMany/WithOne in AppDbContext).
         await _context.Database.ExecuteSqlRawAsync(
             "DELETE FROM \"Attempts\" WHERE \"QuizId\" = {0}", quizId);
+        await _context.Database.ExecuteSqlRawAsync(
+            "DELETE FROM \"Attempts\" WHERE \"QuizId\" = {0}", quizId);
     }
 }

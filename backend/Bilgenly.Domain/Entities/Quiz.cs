@@ -16,6 +16,7 @@ public class Quiz
     /// Null for PDF-sourced quizzes and manually-created quizzes.
     /// </summary>
     public string? SourceText { get; set; }
+    public string? SourceText { get; set; }
     public string Status { get; set; } = "draft";
     public int DurationMinutes { get; set; } = 0;
     public bool IsHidden { get; set; }

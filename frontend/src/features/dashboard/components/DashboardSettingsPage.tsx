@@ -23,9 +23,7 @@ import {
   AlertDialogTitle,
 } from "../../../components/ui/alert-dialog";
 import { Input } from "../../../components/ui/input";
-import { Textarea } from "../../../components/ui/textarea";
 import { cn } from "../../../components/ui/utils";
-import { useSettings } from "../../../app/providers/SettingsProvider";
 import { DashboardPageHeader } from "./DashboardPageHeader";
 import type {
   SettingsFieldMetadata,
@@ -124,11 +122,10 @@ function validatePasswordForm(values: PasswordFormValues): PasswordFormErrors {
 function hasErrors(errors: Record<string, string | undefined>) {
   return Object.values(errors).some(Boolean);
 }
-
 export function DashboardSettingsPage({
   title,
   subtitle,
-  metadata,
+  data,
 }: DashboardSettingsPageProps) {
   const navigate = useNavigate();
   const { role, signOut } = useAuth();
@@ -237,21 +234,21 @@ export function DashboardSettingsPage({
         <DashboardSurface asChild radius="md" padding="none">
           <aside className="p-2">
             <nav className="space-y-1.5">
-              {tabs.map((tab) => {
-                const Icon = tab.icon;
+            {tabs.map((tab) => {
+              const Icon = tab.icon;
 
-                return (
-                  <button
-                    key={tab.id}
-                    type="button"
-                    onClick={() => setActiveTab(tab.id)}
-                    className={dashboardTabVariants({ active: activeTab === tab.id })}
-                  >
-                    <Icon className="h-4 w-4" />
-                    {tab.label}
-                  </button>
-                );
-              })}
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setActiveTab(tab.id)}
+                  className={dashboardTabVariants({ active: activeTab === tab.id })}
+                >
+                  <Icon className="h-4 w-4" />
+                  {tab.label}
+                </button>
+              );
+            })}
             </nav>
           </aside>
         </DashboardSurface>
@@ -277,6 +274,18 @@ export function DashboardSettingsPage({
                   />
                 </div>
               </SettingsPanel>
+
+              <SettingsPanel title="Location & Time Zone">
+                <div className="space-y-5">
+                  {data.account.location.map((field) => (
+                    <SelectLikeField
+                      key={field.label}
+                      label={field.label}
+                      value={field.value}
+                    />
+                  ))}
+                </div>
+              </SettingsPanel>
             </>
           ) : null}
 
@@ -284,31 +293,10 @@ export function DashboardSettingsPage({
             <>
               <SettingsPanel title="Change Password">
                 <div className="space-y-5">
-                  {metadata.security.passwordFields.map((field) => (
-                    <FieldRenderer
-                      key={field.id}
-                      field={field}
-                      password
-                      value={passwordValues[field.id as keyof PasswordFormValues]}
-                      error={
-                        passwordTouched[field.id as keyof PasswordFormValues]
-                          ? passwordErrors[field.id as keyof PasswordFormErrors]
-                          : undefined
-                      }
-                      onBlur={handlePasswordFieldBlur(
-                        field.id as keyof PasswordFormValues,
-                      )}
-                      onChange={handlePasswordFieldChange(
-                        field.id as keyof PasswordFormValues,
-                      )}
-                    />
+                  {data.security.passwordFields.map((field) => (
+                    <FieldRenderer key={field.label} field={field} password />
                   ))}
-                  <DashboardButton
-                    type="button"
-                    size="lg"
-                    onClick={handlePasswordSubmit}
-                    disabled={!canUpdatePassword}
-                  >
+                  <DashboardButton type="button" size="lg">
                     Update Password
                   </DashboardButton>
                 </div>
@@ -341,48 +329,18 @@ export function DashboardSettingsPage({
 
           {activeTab === "notifications" ? (
             <>
-              <SettingsPanel title="Notification Categories">
+              <SettingsPanel title="Email Notifications">
                 <div className="space-y-3">
-                  {metadata.notifications.email.map((item) => (
-                    <ToggleRow
-                      key={item.id}
-                      item={item}
-                      enabled={
-                        settings.notifications.email[
-                          item.id as EmailNotificationPreferenceKey
-                        ]
-                      }
-                      onToggle={(enabled) =>
-                        updateNotificationPreference(
-                          "email",
-                          item.id as EmailNotificationPreferenceKey,
-                          enabled,
-                        )
-                      }
-                    />
+                  {data.notifications.email.map((item) => (
+                    <ToggleRow key={item.label} item={item} />
                   ))}
                 </div>
               </SettingsPanel>
 
-              <SettingsPanel title="In-App Delivery">
+              <SettingsPanel title="Push Notifications">
                 <div className="space-y-3">
-                  {metadata.notifications.push.map((item) => (
-                    <ToggleRow
-                      key={item.id}
-                      item={item}
-                      enabled={
-                        settings.notifications.push[
-                          item.id as PushNotificationPreferenceKey
-                        ]
-                      }
-                      onToggle={(enabled) =>
-                        updateNotificationPreference(
-                          "push",
-                          item.id as PushNotificationPreferenceKey,
-                          enabled,
-                        )
-                      }
-                    />
+                  {data.notifications.push.map((item) => (
+                    <ToggleRow key={item.label} item={item} />
                   ))}
                 </div>
               </SettingsPanel>
@@ -394,23 +352,17 @@ export function DashboardSettingsPage({
               <SettingsPanel title="Appearance">
                 <div className="space-y-4">
                   <div className="space-y-2">
-                    <p className="text-sm font-medium text-[var(--dashboard-text-strong)]">
-                      Theme
-                    </p>
+                    <p className="text-sm font-medium text-[var(--dashboard-text-strong)]">Theme</p>
                     <div className="grid gap-3 lg:grid-cols-3">
-                      {metadata.preferences.themes.map((theme) => (
+                      {data.preferences.themes.map((theme) => (
                         <button
-                          key={theme.value}
+                          key={theme.label}
                           type="button"
-                          onClick={() => {
-                            updateThemeMode(theme.value as ThemeMode);
-                            toast.success(`Theme set to ${theme.label.toLowerCase()}.`);
-                          }}
                           className={cn(
                             "rounded-[16px] border p-4 text-center transition",
-                            settings.appearance.themeMode === theme.value
+                            theme.selected
                               ? "border-[var(--dashboard-brand)] bg-[var(--dashboard-surface-muted)]"
-                              : "border-[var(--dashboard-border-soft)] bg-[var(--dashboard-surface-elevated)] hover:bg-[var(--dashboard-surface-muted)]",
+                              : "border-[var(--dashboard-border-soft)] bg-white hover:bg-[var(--dashboard-surface-muted)]"
                           )}
                         >
                           <div
@@ -427,23 +379,22 @@ export function DashboardSettingsPage({
                 </div>
               </SettingsPanel>
 
-              <SettingsPanel title="Regional Format">
-                <div className="grid gap-5 lg:grid-cols-2">
-                  {metadata.preferences.region.map((field) => (
+              <SettingsPanel title="Language & Region">
+                <div className="space-y-5">
+                  {data.preferences.region.map((field) => (
                     <SelectLikeField
-                      key={field.id}
-                      field={field}
-                      value={settings.profile[field.id as "dateFormat"]}
-                      onChange={(event) => {
-                        updatePreferenceField(
-                          field.id as "dateFormat",
-                          event.target.value,
-                        );
-                        toast.success(
-                          "Date format preference saved.",
-                        );
-                      }}
+                      key={field.label}
+                      label={field.label}
+                      value={field.value}
                     />
+                  ))}
+                </div>
+              </SettingsPanel>
+
+              <SettingsPanel title="Privacy">
+                <div className="space-y-4">
+                  {data.preferences.privacy.map((item) => (
+                    <ToggleRow key={item.label} item={item} />
                   ))}
                 </div>
               </SettingsPanel>
@@ -529,32 +480,18 @@ function ReadOnlyField({
 
 function FieldRenderer({
   field,
-  value,
-  error,
   password = false,
-  onChange,
-  onBlur,
 }: {
-  field: SettingsFieldMetadata;
-  value: string;
-  error?: string;
+  field: SettingsField;
   password?: boolean;
-  onChange: (
-    event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
-  ) => void;
-  onBlur?: () => void;
 }) {
   return (
     <label className="block space-y-2">
-      <span className="text-sm font-medium text-[var(--dashboard-text-strong)]">
-        {field.label}
-      </span>
+      <span className="text-sm font-medium text-[var(--dashboard-text-strong)]">{field.label}</span>
       {field.kind === "textarea" ? (
         <Textarea
-          value={value}
-          onChange={onChange}
-          onBlur={onBlur}
-          aria-invalid={Boolean(error)}
+          readOnly
+          value={field.value}
           className={cn(
             dashboardTextareaVariants({ size: "md" }),
             "min-h-[106px] border-0 shadow-none focus-visible:ring-0",
@@ -580,87 +517,44 @@ function FieldRenderer({
           )}
         />
       )}
-      {error ? (
-        <p className="text-sm text-[var(--dashboard-danger)]" role="alert">
-          {error}
-        </p>
-      ) : null}
     </label>
   );
 }
 
-function SelectLikeField({
-  field,
-  value,
-  onChange,
-  onBlur,
-}: {
-  field: SettingsSelectMetadata;
-  value: string;
-  onChange: (event: ChangeEvent<HTMLSelectElement>) => void;
-  onBlur?: () => void;
-}) {
+function SelectLikeField({ label, value }: { label: string; value: string }) {
   return (
     <div className="space-y-2">
-      <p className="text-sm font-medium text-[var(--dashboard-text-strong)]">
-        {field.label}
-      </p>
-      <div className="relative">
-        <select
-          value={value}
-          onChange={onChange}
-          onBlur={onBlur}
-          className={cn(
-            dashboardInputVariants({ size: "lg" }),
-            "w-full appearance-none border-0 pr-10 shadow-none focus-visible:ring-0",
-          )}
-        >
-          {field.options.map((option) => (
-            <option key={option} value={option}>
-              {option}
-            </option>
-          ))}
-        </select>
-        <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--dashboard-text-faint)]" />
+      <p className="text-sm font-medium text-[var(--dashboard-text-strong)]">{label}</p>
+      <div
+        className={cn(
+          dashboardInputVariants({ size: "lg" }),
+          "flex items-center justify-between border-0",
+        )}
+      >
+        <span>{value}</span>
+        <ChevronDown className="h-4 w-4 text-[var(--dashboard-text-faint)]" />
       </div>
     </div>
   );
 }
 
-function ToggleRow({
-  item,
-  enabled,
-  onToggle,
-}: {
-  item: SettingsToggleMetadata;
-  enabled: boolean;
-  onToggle: (enabled: boolean) => void;
-}) {
+function ToggleRow({ item }: { item: SettingsToggleItem }) {
   return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={enabled}
-      onClick={() => onToggle(!enabled)}
-      className="flex w-full items-center justify-between gap-4 rounded-[16px] border border-[var(--dashboard-border-soft)] px-4 py-4 text-left"
-    >
+    <div className="flex items-center justify-between gap-4 rounded-[16px] border border-[var(--dashboard-border-soft)] px-4 py-4">
       <div>
-        <p className="text-[15px] font-semibold text-[var(--dashboard-text-strong)]">
-          {item.label}
-        </p>
+        <p className="text-[15px] font-semibold text-[var(--dashboard-text-strong)]">{item.label}</p>
         <p className={dashboardMetaTextClassName}>{item.description}</p>
       </div>
       <div
         className={cn(
           "flex h-7 w-10 items-center rounded-full p-1 transition",
-          enabled
+          item.enabled
             ? "justify-end bg-[var(--dashboard-brand)]"
-            : "justify-start bg-[var(--dashboard-border)]",
+            : "justify-start bg-[var(--dashboard-border)]"
         )}
       >
-        <span className="h-5 w-5 rounded-full bg-[var(--dashboard-surface-elevated)] shadow-sm" />
-        <span className="sr-only">{enabled ? "Enabled" : "Disabled"}</span>
+        <span className="h-5 w-5 rounded-full bg-white shadow-sm" />
       </div>
-    </button>
+    </div>
   );
 }

@@ -242,9 +242,6 @@ public class ModerationService
         // the deletion notification, so we don't pay a second round-trip.
         var quiz = await _quizRepository.GetByIdShallowAsync(quizId);
         if (quiz is null) return "Quiz not found.";
-
-        // Capture owner + title BEFORE the cascade — once the row is gone
-        // we can't recover them from the now-detached entity.
         var ownerId = quiz.UserId;
         var ownerEmail = quiz.User?.Email ?? string.Empty;
         var quizTitle = quiz.Title;
@@ -254,11 +251,6 @@ public class ModerationService
         // a single transaction so a mid-cascade failure leaves the DB clean.
         var deleted = await _quizRepository.DeleteQuizCascadeAsync(quizId);
         if (!deleted) return "Quiz could not be deleted.";
-
-        // Notify the owner. Failing to write the notification must not
-        // resurrect the deleted quiz, so we swallow notification-side
-        // errors and just log via the empty catch — the moderation action
-        // already succeeded.
         try
         {
             var moderator = await _userRepository.GetByIdAsync(moderatorId);
@@ -287,6 +279,8 @@ public class ModerationService
             await _notificationRepository.AddAsync(notification);
             await _notificationRepository.SaveChangesAsync();
         }
+        catch
+        {
         catch
         {
             // Notification failure is best-effort — don't propagate, the

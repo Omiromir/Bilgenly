@@ -46,6 +46,8 @@ public class AuthController  : ControllerBase
         // that boots a suspended/deleted user out of their live session.
         if (user is null) return Unauthorized(new { message = "Account not found." });
         if (user.IsSuspended)
+        if (user is null) return Unauthorized(new { message = "Account not found." });
+        if (user.IsSuspended)
         {
             var reason = string.IsNullOrWhiteSpace(user.SuspensionReason)
                 ? "Your account has been suspended."

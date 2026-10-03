@@ -21,4 +21,5 @@ public interface IQuizRepository
     /// already, so they survive with a null target.
     /// </summary>
     Task<bool> DeleteQuizCascadeAsync(Guid quizId);
+    Task<bool> DeleteQuizCascadeAsync(Guid quizId);
 }

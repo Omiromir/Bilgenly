@@ -84,15 +84,6 @@ public class QuizRepository : IQuizRepository
         // SaveChangesAsync calls later in the request don't try to re-insert
         // or update phantom rows.
         await using var tx = await _context.Database.BeginTransactionAsync();
-
-        // Order matters — child rows first, then parents. Each DELETE walks
-        // the FK graph one level deeper toward the Quiz row itself.
-        //
-        // 1) AttemptAnswers can be reached three different ways. The Attempt
-        //    path covers the broadest set (any answer on any attempt of this
-        //    quiz), so we lead with it. The Question / Answer paths catch
-        //    orphaned attempt-answers that somehow exist without a parent
-        //    Attempt — defensive cleanup that costs nothing on a healthy DB.
         await _context.Database.ExecuteSqlAsync(
             $"""DELETE FROM "AttemptAnswers" WHERE "AttemptId" IN (SELECT "Id" FROM "Attempts" WHERE "QuizId" = {quizId})""");
         await _context.Database.ExecuteSqlAsync(
@@ -112,10 +103,14 @@ public class QuizRepository : IQuizRepository
         await _context.Database.ExecuteSqlAsync(
             $"""DELETE FROM "Answer" WHERE "QuestionId" IN (SELECT "Id" FROM "Question" WHERE "QuizId" = {quizId})""");
         await _context.Database.ExecuteSqlAsync(
+            $"""DELETE FROM "Answer" WHERE "QuestionId" IN (SELECT "Id" FROM "Question" WHERE "QuizId" = {quizId})""");
+        await _context.Database.ExecuteSqlAsync(
             $"""DELETE FROM "Question" WHERE "QuizId" = {quizId}""");
 
         // 5) The Quiz itself. Reports.ReportedQuizId has OnDelete(SetNull) in
         //    the model, so Postgres will null those out automatically.
+        var rowsAffected = await _context.Database.ExecuteSqlAsync(
+            $"""DELETE FROM "Quizzes" WHERE "Id" = {quizId}""");
         var rowsAffected = await _context.Database.ExecuteSqlAsync(
             $"""DELETE FROM "Quizzes" WHERE "Id" = {quizId}""");
 
@@ -124,6 +119,9 @@ public class QuizRepository : IQuizRepository
         // Drop any tracked entities for this quiz so subsequent code paths
         // (e.g. SaveChangesAsync from another service in the same scope)
         // don't try to operate on the now-gone rows.
+        foreach (var entry in _context.ChangeTracker.Entries<AttemptAnswer>().ToList())
+            entry.State = Microsoft.EntityFrameworkCore.EntityState.Detached;
+        foreach (var entry in _context.ChangeTracker.Entries<Attempt>().ToList())
         foreach (var entry in _context.ChangeTracker.Entries<AttemptAnswer>().ToList())
             entry.State = Microsoft.EntityFrameworkCore.EntityState.Detached;
         foreach (var entry in _context.ChangeTracker.Entries<Attempt>().ToList())
